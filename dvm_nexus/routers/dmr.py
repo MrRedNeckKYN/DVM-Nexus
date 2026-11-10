@@ -20,13 +20,16 @@ router = APIRouter()
 
 @router.get("/dmr", response_class=HTMLResponse)
 async def dmr_page(request: Request):
-    """Render the DMR management interface."""
+    """Render the DMR management interface with protocol standby awareness."""
     conf = dvm_config_manager.load_config_dict()
     dmr_conf = conf.get("protocols", {}).get("dmr", {})
     sys_conf = conf.get("system", {}).get("config", {})
     modem_conf = conf.get("system", {}).get("modem", {})
     hotspot_conf = modem_conf.get("hotspot", {})
     net_conf = conf.get("network", {})
+
+    active_proto = dvm_config_manager.get_active_protocol()
+    is_standby = (active_proto == "p25")
 
     talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
@@ -37,6 +40,8 @@ async def dmr_page(request: Request):
         {
             "title": "DMR Management",
             "active_tab": "dmr",
+            "active_protocol": active_proto,
+            "is_standby": is_standby,
             "dmr": dmr_conf,
             "sys": sys_conf,
             "modem": modem_conf,
@@ -66,7 +71,7 @@ async def dmr_save(
     dmr_disc_bw: int = Form(0),
     dmr_post_bw: int = Form(0),
 ):
-    """Save DMR parameters to config.yml safely."""
+    """Save DMR parameters safely, preserving profile settings without breaking standby mode."""
     errors = validate_dmr_settings({"colorCode": color_code, "dmrNetId": dmr_net_id, "siteId": site_id})
     if errors:
         return render_template(
@@ -75,39 +80,61 @@ async def dmr_save(
             {"type": "error", "message": "; ".join(errors)}
         )
 
+    active_proto = dvm_config_manager.get_active_protocol()
+    is_standby = (active_proto == "p25")
+
+    def apply_dmr_fields(c: Dict[str, Any]):
+        c.setdefault("protocols", {}).setdefault("dmr", {})
+        c["protocols"]["dmr"]["callHang"] = call_hang
+        c["protocols"]["dmr"]["txHang"] = tx_hang
+        c["protocols"]["dmr"].setdefault("beacons", {})
+        c["protocols"]["dmr"]["beacons"]["enable"] = beacon_enable
+        c["protocols"]["dmr"]["beacons"]["interval"] = beacon_interval
+        c["protocols"]["dmr"]["beacons"]["duration"] = beacon_duration
+
+        c.setdefault("system", {}).setdefault("config", {})
+        c["system"]["config"]["colorCode"] = color_code
+        c["system"]["config"]["dmrNetId"] = dmr_net_id
+        c["system"]["config"]["siteId"] = site_id
+
+        c.setdefault("network", {})
+        c["network"]["slot1"] = slot1
+        c["network"]["slot2"] = slot2
+
+        c.setdefault("system", {}).setdefault("modem", {})
+        c["system"]["modem"]["dmrRxDelay"] = dmr_rx_delay
+        c["system"]["modem"].setdefault("hotspot", {})
+        c["system"]["modem"]["hotspot"]["dmrDiscBWAdj"] = dmr_disc_bw
+        c["system"]["modem"]["hotspot"]["dmrPostBWAdj"] = dmr_post_bw
+
     conf = dvm_config_manager.load_config_dict()
-    conf.setdefault("protocols", {}).setdefault("dmr", {})
-    conf["protocols"]["dmr"]["enable"] = enable
-    conf["protocols"]["dmr"]["callHang"] = call_hang
-    conf["protocols"]["dmr"]["txHang"] = tx_hang
-
-    conf["protocols"]["dmr"].setdefault("beacons", {})
-    conf["protocols"]["dmr"]["beacons"]["enable"] = beacon_enable
-    conf["protocols"]["dmr"]["beacons"]["interval"] = beacon_interval
-    conf["protocols"]["dmr"]["beacons"]["duration"] = beacon_duration
-
-    conf.setdefault("system", {}).setdefault("config", {})
-    conf["system"]["config"]["colorCode"] = color_code
-    conf["system"]["config"]["dmrNetId"] = dmr_net_id
-    conf["system"]["config"]["siteId"] = site_id
-
-    conf.setdefault("network", {})
-    conf["network"]["slot1"] = slot1
-    conf["network"]["slot2"] = slot2
-
-    conf.setdefault("system", {}).setdefault("modem", {})
-    conf["system"]["modem"]["dmrRxDelay"] = dmr_rx_delay
-    conf["system"]["modem"].setdefault("hotspot", {})
-    conf["system"]["modem"]["hotspot"]["dmrDiscBWAdj"] = dmr_disc_bw
-    conf["system"]["modem"]["hotspot"]["dmrPostBWAdj"] = dmr_post_bw
+    apply_dmr_fields(conf)
+    if is_standby:
+        # Keep DMR disabled in active configuration so live P25 is undisturbed
+        conf["protocols"]["dmr"]["enable"] = False
+        conf["protocols"].setdefault("p25", {})["enable"] = True
+    else:
+        conf["protocols"]["dmr"]["enable"] = enable
+        if enable:
+            conf["protocols"].setdefault("p25", {})["enable"] = False
 
     dvm_config_manager.save_config_dict(conf, summary=f"Update DMR settings (Color Code {color_code})")
-    log_audit("DMR", "SAVE_CONFIG", f"Updated DMR parameters: CC={color_code}, NetID={dmr_net_id}")
+
+    # Persist directly into DMR profile so settings are preserved when switching
+    from dvm_nexus.config_engine.profile_manager import profile_manager
+    profile_manager.sync_protocol_settings("dmr", apply_dmr_fields)
+
+    log_audit("DMR", "SAVE_CONFIG", f"Updated DMR parameters: CC={color_code}, NetID={dmr_net_id} (Standby: {is_standby})")
+
+    if is_standby:
+        msg = "DMR standby settings saved to profile! Radio remains on P25. Settings will apply when you switch to DMR."
+    else:
+        msg = "DMR settings saved successfully! Restart radio service to apply."
 
     return render_template(
         request,
         "components/toast.html",
-        {"type": "success", "message": "DMR settings saved successfully! Restart service to apply."}
+        {"type": "success", "message": msg}
     )
 
 

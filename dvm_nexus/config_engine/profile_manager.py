@@ -302,5 +302,108 @@ class ProfileManager:
             "message": f"Successfully activated profile '{prof['name']}' ({prof['protocol'].upper()})"
         }
 
+    def get_profile_by_protocol(self, protocol: str) -> Optional[Dict[str, Any]]:
+        """Find the most appropriate profile for a protocol (dmr or p25)."""
+        protocol = protocol.lower().strip()
+        profiles = self.list_profiles()
+        # Look for matching active profile first
+        for p in profiles:
+            if p["protocol"].lower() == protocol and p.get("is_active"):
+                return p
+        # Look for default named profile
+        default_id = f"default_{protocol}"
+        for p in profiles:
+            if p["id"] == default_id:
+                return p
+        # Look for any matching profile
+        for p in profiles:
+            if p["protocol"].lower() == protocol:
+                return p
+        return None
+
+    def sync_protocol_settings(self, protocol: str, updater_fn) -> bool:
+        """
+        Safely update a protocol profile's config.yml on disk without affecting
+        the live radio if that protocol is currently in standby.
+        updater_fn receives conf dict and modifies it in place.
+        """
+        import yaml
+        protocol = protocol.lower().strip()
+        prof = self.get_profile_by_protocol(protocol)
+        prof_id = prof["id"] if prof else f"default_{protocol}"
+        prof_dir = self.profiles_dir / prof_id
+        prof_config = prof_dir / "config.yml"
+
+        if not prof_config.exists():
+            # If profile dir doesn't exist yet, seed it
+            if protocol == "dmr":
+                self.create_default_dmr_profile()
+            elif protocol == "p25":
+                self.create_default_p25_profile()
+
+        if prof_config.exists():
+            try:
+                conf = yaml.safe_load(prof_config.read_text(encoding="utf-8")) or {}
+                updater_fn(conf)
+                # Enforce that inside its own profile, this protocol is enabled and the other is disabled
+                conf.setdefault("protocols", {})
+                if protocol == "dmr":
+                    conf["protocols"].setdefault("dmr", {})["enable"] = True
+                    conf["protocols"].setdefault("p25", {})["enable"] = False
+                elif protocol == "p25":
+                    conf["protocols"].setdefault("p25", {})["enable"] = True
+                    conf["protocols"].setdefault("dmr", {})["enable"] = False
+                backup_manager.atomic_write(prof_config, yaml.dump(conf, default_flow_style=False, sort_keys=False))
+                return True
+            except Exception:
+                return False
+        return False
+
+    def switch_protocol_mode(self, target_protocol: str) -> Dict[str, Any]:
+        """
+        High-level safe protocol switcher between DMR and P25:
+        1. Auto-saves current active protocol parameters into current profile.
+        2. Activates the target protocol's profile atomically with rollback guard.
+        """
+        target = target_protocol.lower().strip()
+        if target not in ["dmr", "p25"]:
+            return {"success": False, "error": f"Invalid radio protocol '{target_protocol}'. Must be 'dmr' or 'p25'."}
+
+        active_proto = dvm_config_manager.get_active_protocol()
+        if active_proto == target:
+            return {"success": True, "message": f"Radio is already actively running {target.upper()}."}
+
+        # Step 1: Save current active config to its matching profile first
+        curr_prof = self.get_profile_by_protocol(active_proto)
+        if curr_prof:
+            curr_dir = self.profiles_dir / curr_prof["id"]
+            if curr_dir.exists():
+                for fname in ["config.yml", "iden_table.dat", "talkgroup_rules.yml", "rid_acl.dat"]:
+                    src = self.dvm_dir / fname
+                    if src.exists():
+                        try:
+                            shutil.copy2(src, curr_dir / fname)
+                        except Exception:
+                            pass
+
+        # Step 2: Identify target profile
+        target_prof = self.get_profile_by_protocol(target)
+        if not target_prof:
+            # Create default if missing
+            if target == "dmr":
+                self.create_default_dmr_profile()
+            elif target == "p25":
+                self.create_default_p25_profile()
+            target_prof = self.get_profile_by_protocol(target)
+
+        if not target_prof:
+            return {"success": False, "error": f"Could not find or create a profile for {target.upper()}."}
+
+        # Step 3: Activate target profile
+        res = self.activate_profile(target_prof["id"])
+        if res.get("success"):
+            log_audit("PROTOCOL_SWITCH", "SUCCESS", f"Switched radio protocol from {active_proto.upper()} to {target.upper()}")
+        return res
+
 
 profile_manager = ProfileManager()

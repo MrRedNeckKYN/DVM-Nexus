@@ -122,3 +122,37 @@ async def profiles_delete(request: Request, profile_id: str):
                 "toast": {"type": "error", "message": str(e)}
             }
         )
+
+
+@router.post("/api/protocol/switch")
+async def protocol_switch_endpoint(
+    request: Request,
+    target: str = Form(None),
+):
+    """
+    Switch active radio protocol between DMR and P25.
+    Accepts target protocol via Form data or JSON body.
+    """
+    from fastapi.responses import JSONResponse
+    target_proto = target
+    if not target_proto:
+        try:
+            body = await request.json()
+            target_proto = body.get("target") or body.get("protocol")
+        except Exception:
+            pass
+
+    if not target_proto:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Target protocol ('dmr' or 'p25') required"})
+
+    result = await asyncio.to_thread(profile_manager.switch_protocol_mode, target_proto)
+    status_code = 200 if result.get("success") else 500
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": result.get("success", False),
+            "message": result.get("message") or result.get("error"),
+            "target": target_proto.lower(),
+            "redirect": f"/{target_proto.lower()}"
+        }
+    )

@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>{{ title }} - DVM Nexus</title>
-  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.3') }}">
+  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.4') }}">
   <script src="/static/js/htmx.min.js"></script>
   <script>
     // Immediate Device Detection (executes before paint to prevent layout flashes)
@@ -60,12 +60,24 @@
         </li>
         <li class="nav-item">
           <a href="/dmr" class="nav-link {% if active_tab == 'dmr' %}active{% endif %}">
-            <span class="nav-icon">📻</span> <span class="nav-label">DMR Management</span>
+            <span class="nav-icon">📻</span>
+            <span class="nav-label">DMR Management</span>
+            {% if active_protocol == 'dmr' %}
+              <span class="nav-pill nav-pill-active" title="DMR Duplex is Active">ACTIVE</span>
+            {% else %}
+              <span class="nav-pill nav-pill-standby" title="DMR in Standby">STANDBY</span>
+            {% endif %}
           </a>
         </li>
         <li class="nav-item">
           <a href="/p25" class="nav-link {% if active_tab == 'p25' %}active{% endif %}">
-            <span class="nav-icon">⚡</span> <span class="nav-label">P25 Management</span>
+            <span class="nav-icon">⚡</span>
+            <span class="nav-label">P25 Management</span>
+            {% if active_protocol == 'p25' %}
+              <span class="nav-pill nav-pill-active" title="P25 Phase 1 is Active">ACTIVE</span>
+            {% else %}
+              <span class="nav-pill nav-pill-standby" title="P25 in Standby">STANDBY</span>
+            {% endif %}
           </a>
         </li>
         <li class="nav-item">
@@ -97,7 +109,7 @@
       <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v1.0.3</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.4') }}</div>
       </div>
     </aside>
 
@@ -116,6 +128,31 @@
           <h1 class="page-title">{{ title }}</h1>
         </div>
         <div class="header-right">
+          <!-- Protocol Mode Switcher Capsule -->
+          <div class="protocol-header-capsule" id="header-protocol-capsule">
+            {% if active_protocol == 'dmr' %}
+              <div class="protocol-tag protocol-tag-active" title="Current Mode: DMR Duplex">
+                <span class="pulse-dot"></span>
+                <span class="tag-title">DMR ACTIVE</span>
+              </div>
+              <button type="button" class="btn btn-switch-mode" onclick="openModeSwitchModal('p25', 'P25 Phase 1')" title="Switch radio to P25 Phase 1">
+                <span class="switch-arrow">⇄</span> Switch to P25
+              </button>
+            {% elif active_protocol == 'p25' %}
+              <div class="protocol-tag protocol-tag-active" title="Current Mode: P25 Phase 1">
+                <span class="pulse-dot"></span>
+                <span class="tag-title">P25 ACTIVE</span>
+              </div>
+              <button type="button" class="btn btn-switch-mode" onclick="openModeSwitchModal('dmr', 'DMR Duplex')" title="Switch radio to DMR Duplex">
+                <span class="switch-arrow">⇄</span> Switch to DMR
+              </button>
+            {% else %}
+              <div class="protocol-tag" title="Multi-Mode">
+                <span class="tag-title">{{ active_protocol|upper }}</span>
+              </div>
+            {% endif %}
+          </div>
+
           <div id="service-badge-container" hx-get="/components/service-badge" hx-trigger="every 5s">
             {% include "components/status_badge.html" %}
           </div>
@@ -143,10 +180,16 @@
     <a href="/dmr" class="mobile-nav-link {% if active_tab == 'dmr' %}active{% endif %}">
       <span class="mobile-nav-icon">📻</span>
       <span class="mobile-nav-text">DMR</span>
+      {% if active_protocol == 'dmr' %}
+        <span class="mobile-active-pip" title="Active"></span>
+      {% endif %}
     </a>
     <a href="/p25" class="mobile-nav-link {% if active_tab == 'p25' %}active{% endif %}">
       <span class="mobile-nav-icon">⚡</span>
       <span class="mobile-nav-text">P25</span>
+      {% if active_protocol == 'p25' %}
+        <span class="mobile-active-pip" title="Active"></span>
+      {% endif %}
     </a>
     <a href="/meshtastic" class="mobile-nav-link {% if active_tab == 'meshtastic' %}active{% endif %}">
       <span class="mobile-nav-icon">🌐</span>
@@ -157,6 +200,38 @@
       <span class="mobile-nav-text">Menu</span>
     </button>
   </nav>
+
+  <!-- Safe Radio Mode Switch Modal -->
+  <div class="nexus-modal-overlay" id="mode-switch-modal" style="display:none;">
+    <div class="nexus-modal">
+      <div class="nexus-modal-header">
+        <div class="nexus-modal-title" id="mode-modal-title">Switch Radio Protocol</div>
+        <button type="button" class="nexus-modal-close" onclick="closeModeSwitchModal()">&times;</button>
+      </div>
+      <div class="nexus-modal-body">
+        <p id="mode-modal-desc" style="color:var(--text-main); font-size:0.95rem; line-height:1.6; margin-bottom:1rem;"></p>
+        <div class="switch-safety-box">
+          <div class="safety-icon">🛡️</div>
+          <div class="safety-content">
+            <div style="font-weight:600; color:var(--text-main); font-size:0.875rem;">Automatic Hardware & Config Safeguards:</div>
+            <ul style="font-size:0.8rem; color:var(--text-dim); margin-top:0.35rem; padding-left:1.15rem; line-height:1.5;">
+              <li>Creates a full configuration snapshot of current settings.</li>
+              <li>Gracefully releases MMDVM Duplex modem hardware serial locks.</li>
+              <li>Loads target profile and restarts DVMHost with verified status check.</li>
+            </ul>
+          </div>
+        </div>
+        <div id="switch-modal-spinner" style="display:none; text-align:center; padding:1.25rem 1rem;">
+          <div class="spinner"></div>
+          <div style="font-size:0.9rem; color:var(--accent-cyan); margin-top:0.75rem; font-weight:600;">Switching radio protocol and restarting DVMHost...</div>
+        </div>
+      </div>
+      <div class="nexus-modal-footer" id="mode-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModeSwitchModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="mode-switch-confirm-btn" onclick="executeModeSwitch()">Confirm Switch</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast Notification Container -->
   <div id="toast-container"></div>
@@ -205,6 +280,66 @@
         }, 4000);
       });
     });
+
+    // Protocol Mode Switch Modal & Execution Handler
+    let targetProtocolToSwitch = null;
+
+    function openModeSwitchModal(targetProto, label) {
+      targetProtocolToSwitch = targetProto;
+      const modal = document.getElementById('mode-switch-modal');
+      const title = document.getElementById('mode-modal-title');
+      const desc = document.getElementById('mode-modal-desc');
+      const spinner = document.getElementById('switch-modal-spinner');
+      const footer = document.getElementById('mode-modal-footer');
+      const confirmBtn = document.getElementById('mode-switch-confirm-btn');
+
+      if (spinner) spinner.style.display = 'none';
+      if (footer) footer.style.display = 'flex';
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.innerText = `Confirm Switch to ${label}`;
+      }
+
+      if (title) title.innerText = `Switch Radio to ${label}`;
+      if (desc) desc.innerHTML = `Are you sure you want to transition active radio operation to <strong>${label}</strong>? Current active configuration parameters will be safely saved in your profile.`;
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeModeSwitchModal() {
+      const modal = document.getElementById('mode-switch-modal');
+      if (modal) modal.style.display = 'none';
+      targetProtocolToSwitch = null;
+    }
+
+    async function executeModeSwitch() {
+      if (!targetProtocolToSwitch) return;
+      const spinner = document.getElementById('switch-modal-spinner');
+      const footer = document.getElementById('mode-modal-footer');
+      const confirmBtn = document.getElementById('mode-switch-confirm-btn');
+
+      if (spinner) spinner.style.display = 'block';
+      if (footer) footer.style.display = 'none';
+      if (confirmBtn) confirmBtn.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('target', targetProtocolToSwitch);
+        const resp = await fetch('/api/protocol/switch', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+        if (data.success) {
+          window.location.href = data.redirect || `/${targetProtocolToSwitch}`;
+        } else {
+          alert('Mode switch failed: ' + (data.message || data.error));
+          closeModeSwitchModal();
+        }
+      } catch (err) {
+        alert('Network or server error during mode switch: ' + err.message);
+        closeModeSwitchModal();
+      }
+    }
   </script>
 </body>
 </html>

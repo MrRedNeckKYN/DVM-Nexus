@@ -26,6 +26,33 @@ def is_mobile_request(request: Request) -> bool:
     return bool(MOBILE_UA_REGEX.search(ua))
 
 
+def get_global_template_context() -> Dict[str, Any]:
+    """Retrieve global template variables including protocol status and version."""
+    try:
+        from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+        proto = dvm_config_manager.get_active_protocol()
+    except Exception:
+        proto = "dmr"
+
+    try:
+        from dvm_nexus.config_engine.profile_manager import profile_manager
+        prof = profile_manager.get_active_profile()
+    except Exception:
+        prof = None
+
+    try:
+        from dvm_nexus.core.config import settings
+        ver = settings.app_version
+    except Exception:
+        ver = "1.0.4"
+
+    return {
+        "active_protocol": proto,
+        "active_profile": prof,
+        "app_version": ver,
+    }
+
+
 def render_template(
     request: Request,
     name: str,
@@ -33,9 +60,10 @@ def render_template(
     status_code: int = 200
 ) -> Response:
     """Render a Jinja2 template with explicit device detection context and cache busting."""
-    ctx = context or {}
+    ctx = get_global_template_context()
+    if context:
+        ctx.update(context)
     ctx.setdefault("is_mobile", is_mobile_request(request))
-    ctx.setdefault("app_version", "1.0.1")
     return jinja_templates.TemplateResponse(
         request=request,
         name=name,

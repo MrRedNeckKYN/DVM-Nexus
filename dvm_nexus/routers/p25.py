@@ -27,12 +27,15 @@ router = APIRouter()
 
 @router.get("/p25", response_class=HTMLResponse)
 async def p25_page(request: Request):
-    """Render the P25 management interface."""
+    """Render the P25 management interface with protocol standby awareness."""
     conf = dvm_config_manager.load_config_dict()
     p25_conf = conf.get("protocols", {}).get("p25", {})
     sys_conf = conf.get("system", {}).get("config", {})
     modem_conf = conf.get("system", {}).get("modem", {})
     hotspot_conf = modem_conf.get("hotspot", {})
+
+    active_proto = dvm_config_manager.get_active_protocol()
+    is_standby = (active_proto == "dmr")
 
     iden_entries = read_iden_table_file(dvm_config_manager.iden_path)
 
@@ -61,6 +64,8 @@ async def p25_page(request: Request):
         {
             "title": "P25 Management",
             "active_tab": "p25",
+            "active_protocol": active_proto,
+            "is_standby": is_standby,
             "p25": p25_conf,
             "sys": sys_conf,
             "modem": modem_conf,
@@ -91,7 +96,7 @@ async def p25_save(
     p25_disc_bw: int = Form(0),
     p25_post_bw: int = Form(0),
 ):
-    """Save P25 parameters to config.yml safely."""
+    """Save P25 parameters safely, preserving profile settings without breaking standby mode."""
     errors = validate_p25_settings({
         "nac": nac,
         "netId": wacn,
@@ -108,39 +113,62 @@ async def p25_save(
             {"type": "error", "message": "; ".join(errors)}
         )
 
+    active_proto = dvm_config_manager.get_active_protocol()
+    is_standby = (active_proto == "dmr")
+
+    def apply_p25_fields(c: Dict[str, Any]):
+        c.setdefault("protocols", {}).setdefault("p25", {})
+        c["protocols"]["p25"]["callHang"] = call_hang
+        c["protocols"]["p25"]["tduPreambleCount"] = tdu_preambles
+
+        c.setdefault("system", {}).setdefault("config", {})
+        c["system"]["config"]["nac"] = nac
+        if tx_nac.strip():
+            c["system"]["config"]["txNAC"] = tx_nac.strip()
+        elif "txNAC" in c["system"]["config"]:
+            del c["system"]["config"]["txNAC"]
+
+        c["system"]["config"]["netId"] = wacn.strip().upper()
+        c["system"]["config"]["sysId"] = sys_id.strip().upper()
+        c["system"]["config"]["rfssId"] = rfss_id
+        c["system"]["config"]["siteId"] = site_id
+        c["system"]["config"]["channelId"] = channel_id
+        c["system"]["config"]["channelNo"] = channel_no
+
+        c.setdefault("system", {}).setdefault("modem", {})
+        c["system"]["modem"]["p25CorrCount"] = p25_corr_count
+        c["system"]["modem"].setdefault("hotspot", {})
+        c["system"]["modem"]["hotspot"]["p25DiscBWAdj"] = p25_disc_bw
+        c["system"]["modem"]["hotspot"]["p25PostBWAdj"] = p25_post_bw
+
     conf = dvm_config_manager.load_config_dict()
-    conf.setdefault("protocols", {}).setdefault("p25", {})
-    conf["protocols"]["p25"]["enable"] = enable
-    conf["protocols"]["p25"]["callHang"] = call_hang
-    conf["protocols"]["p25"]["tduPreambleCount"] = tdu_preambles
-
-    conf.setdefault("system", {}).setdefault("config", {})
-    conf["system"]["config"]["nac"] = nac
-    if tx_nac.strip():
-        conf["system"]["config"]["txNAC"] = tx_nac.strip()
-    elif "txNAC" in conf["system"]["config"]:
-        del conf["system"]["config"]["txNAC"]
-
-    conf["system"]["config"]["netId"] = wacn.strip().upper()
-    conf["system"]["config"]["sysId"] = sys_id.strip().upper()
-    conf["system"]["config"]["rfssId"] = rfss_id
-    conf["system"]["config"]["siteId"] = site_id
-    conf["system"]["config"]["channelId"] = channel_id
-    conf["system"]["config"]["channelNo"] = channel_no
-
-    conf.setdefault("system", {}).setdefault("modem", {})
-    conf["system"]["modem"]["p25CorrCount"] = p25_corr_count
-    conf["system"]["modem"].setdefault("hotspot", {})
-    conf["system"]["modem"]["hotspot"]["p25DiscBWAdj"] = p25_disc_bw
-    conf["system"]["modem"]["hotspot"]["p25PostBWAdj"] = p25_post_bw
+    apply_p25_fields(conf)
+    if is_standby:
+        # Keep P25 disabled in active configuration so live DMR is undisturbed
+        conf["protocols"]["p25"]["enable"] = False
+        conf["protocols"].setdefault("dmr", {})["enable"] = True
+    else:
+        conf["protocols"]["p25"]["enable"] = enable
+        if enable:
+            conf["protocols"].setdefault("dmr", {})["enable"] = False
 
     dvm_config_manager.save_config_dict(conf, summary=f"Update P25 settings (NAC {nac}, WACN {wacn})")
-    log_audit("P25", "SAVE_CONFIG", f"Updated P25 parameters: NAC={nac}, WACN={wacn}, SysID={sys_id}")
+
+    # Persist directly into P25 profile so settings are preserved when switching
+    from dvm_nexus.config_engine.profile_manager import profile_manager
+    profile_manager.sync_protocol_settings("p25", apply_p25_fields)
+
+    log_audit("P25", "SAVE_CONFIG", f"Updated P25 parameters: NAC={nac}, WACN={wacn}, SysID={sys_id} (Standby: {is_standby})")
+
+    if is_standby:
+        msg = "P25 standby settings saved to profile! Radio remains on DMR. Settings will apply when you switch to P25."
+    else:
+        msg = "P25 settings saved successfully! Restart radio service to apply."
 
     return render_template(
         request,
         "components/toast.html",
-        {"type": "success", "message": "P25 settings saved successfully! Restart service to apply."}
+        {"type": "success", "message": msg}
     )
 
 

@@ -1,16 +1,38 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% if is_standby %}
+<!-- Protocol Standby Alert Banner -->
+<div class="card standby-alert-card">
+  <div class="standby-icon">⚡</div>
+  <div class="standby-content">
+    <div class="standby-title">P25 Phase 1 is in Standby Mode</div>
+    <div class="standby-desc">
+      DVMHost is currently actively driving the radio in <strong>DMR Duplex</strong>. You can safely configure and save all P25 parameters below without disturbing active DMR communications. Edits are preserved in your P25 profile and will apply automatically when you switch modes.
+    </div>
+  </div>
+  <div class="standby-action">
+    <button type="button" class="btn btn-primary btn-sm" onclick="openModeSwitchModal('p25', 'P25 Phase 1')">
+      ⚡ Switch Radio to P25
+    </button>
+  </div>
+</div>
+{% endif %}
+
 <!-- Top Live OTA P25 Commands -->
 <div class="card" style="border-left:4px solid var(--accent-indigo);">
   <div class="card-header">
     <div class="card-title">⚡ Live Over-The-Air P25 Commands</div>
-    <span class="badge badge-indigo">REST API Direct</span>
+    {% if is_standby %}
+      <span class="badge badge-muted">Standby (Radio in DMR Mode)</span>
+    {% else %}
+      <span class="badge badge-indigo">REST API Direct</span>
+    {% endif %}
   </div>
   <form hx-post="/p25/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
     <div class="ota-cmd-field">
       <label class="form-label">Command</label>
-      <select name="action" class="form-control">
+      <select name="action" class="form-control" {% if is_standby %}disabled{% endif %}>
         <option value="check">Radio Check</option>
         <option value="page">Radio Page / Call Alert</option>
         <option value="inhibit">Inhibit (Stun / Kill)</option>
@@ -20,10 +42,14 @@
     </div>
     <div class="ota-cmd-field">
       <label class="form-label">Target Radio ID (RID)</label>
-      <input type="number" name="rid" class="form-control" placeholder="e.g. 1234567" required>
+      <input type="number" name="rid" class="form-control" placeholder="e.g. 1234567" {% if is_standby %}disabled{% endif %} required>
     </div>
     <div class="ota-cmd-btn-wrap">
-      <button type="submit" class="btn btn-primary ota-send-btn">Send Command</button>
+      {% if is_standby %}
+        <button type="button" class="btn btn-secondary ota-send-btn" disabled title="Switch radio to P25 to transmit live OTA commands">DMR Active (Standby)</button>
+      {% else %}
+        <button type="submit" class="btn btn-primary ota-send-btn">Send Command</button>
+      {% endif %}
     </div>
   </form>
 </div>
@@ -56,9 +82,12 @@
       <div class="form-group">
         <label class="form-label">P25 Mode</label>
         <select name="enable" class="form-control">
-          <option value="true" {% if p25.enable %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if not p25.enable %}selected{% endif %}>Disabled</option>
+          <option value="true" {% if p25.enable or is_standby %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if not p25.enable and not is_standby %}selected{% endif %}>Disabled</option>
         </select>
+        {% if is_standby %}
+          <small class="form-hint" style="color:var(--warning);">📻 DMR is active. Saving preserves settings in P25 profile without interrupting DMR.</small>
+        {% endif %}
       </div>
 
       <div class="form-group">
