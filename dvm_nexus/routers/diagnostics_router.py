@@ -65,6 +65,26 @@ async def diagnostics_checks_component(request: Request):
     )
 
 
+@router.post("/components/diagnostics-clear-logs", response_class=HTMLResponse)
+async def diagnostics_clear_logs_component(
+    request: Request,
+    service: str = Form("dvmhost")
+):
+    """HTMX endpoint to vacuum/clear journal logs for a service."""
+    res = diagnostics_engine.clear_logs(service_name=service)
+    logs_data = diagnostics_engine.get_service_logs(service_name=service, lines=10, filter_level="all")
+    return render_template(
+        request,
+        "components/diagnostics_logs.html",
+        {
+            "logs": logs_data,
+            "selected_service": service,
+            "selected_filter": "all",
+            "flash_message": res.get("message"),
+        }
+    )
+
+
 @router.post("/components/diagnostics-autofix", response_class=HTMLResponse)
 async def diagnostics_autofix_component(request: Request):
     """HTMX action to execute 1-Click Auto-Repair on all detected configuration issues."""

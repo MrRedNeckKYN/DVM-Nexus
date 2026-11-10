@@ -221,10 +221,49 @@ function copyTerminalLogs(btn) {
   const content = document.getElementById('terminal-log-content');
   if (!content) return;
   const text = content.innerText;
-  navigator.clipboard.writeText(text).then(() => {
+
+  const showSuccess = () => {
     const orig = btn.innerHTML;
     btn.innerHTML = '<span>✅ Copied!</span>';
     setTimeout(() => { btn.innerHTML = orig; }, 2000);
+  };
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(showSuccess).catch(() => fallbackCopy(text, showSuccess));
+  } else {
+    fallbackCopy(text, showSuccess);
+  }
+}
+
+function fallbackCopy(text, onSuccess) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    const successful = document.execCommand('copy');
+    if (successful && onSuccess) {
+      onSuccess();
+    }
+  } catch (err) {
+    console.error('Fallback copy failed', err);
+  } finally {
+    document.body.removeChild(ta);
+  }
+}
+
+function clearTerminalLogs(btn) {
+  if (!confirm(`Are you sure you want to clear/rotate the service logs for ${currentService}?`)) {
+    return;
+  }
+  htmx.ajax('POST', '/components/diagnostics-clear-logs', {
+    target: '#diagnostics-log-stream',
+    swap: 'innerHTML',
+    values: { service: currentService }
   });
 }
 </script>

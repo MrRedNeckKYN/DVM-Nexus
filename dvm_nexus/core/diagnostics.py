@@ -24,6 +24,29 @@ class DiagnosticsEngine:
     def __init__(self):
         self.dvm_dir = settings.dvm_dir
         self.service_controller = service_controller
+        self._simulated_cleared = False
+
+    def clear_logs(self, service_name: str = "dvmhost") -> Dict[str, Any]:
+        """
+        Clear or vacuum systemd journal logs, or reset the terminal stream.
+        """
+        has_systemctl = shutil.which("journalctl") is not None and os.name != "nt"
+        if not has_systemctl:
+            self._simulated_cleared = True
+            log_audit("DIAGNOSTICS", "CLEAR_LOGS", f"Cleared terminal logs for {service_name} (simulated)")
+            return {"success": True, "message": "Terminal log stream cleared successfully."}
+
+        try:
+            # Rotate journal and vacuum immediately
+            subprocess.run(["sudo", "journalctl", "--rotate"], capture_output=True, timeout=5)
+            res = subprocess.run(["sudo", "journalctl", "--vacuum-time=1s"], capture_output=True, text=True, timeout=10)
+            if res.returncode == 0:
+                log_audit("DIAGNOSTICS", "CLEAR_LOGS", f"Cleared journal logs for {service_name}")
+                return {"success": True, "message": "Journal logs flushed and vacuumed successfully."}
+            else:
+                return {"success": False, "message": res.stderr.strip() or "Failed to vacuum journal"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
 
     def get_service_logs(self, service_name: str = "dvmhost", lines: int = 60, filter_level: str = "all") -> Dict[str, Any]:
         """
@@ -36,28 +59,31 @@ class DiagnosticsEngine:
         raw_lines: List[str] = []
 
         if not has_systemctl:
-            # Simulated logs for development / testing environment
-            status = self.service_controller.get_status()
             now_str = time.strftime("%b %d %H:%M:%S")
-            if status.get("is_failed") or not status.get("is_running"):
-                raw_lines = [
-                    f"{now_str} nexus-pi5 systemd[1]: Starting DVMHost Digital Voice Modem Host...",
-                    f"{now_str} nexus-pi5 dvmhost[1234]: DVMHost v1.0.0-git (Built for Raspberry Pi 5 ARM64)",
-                    f"{now_str} nexus-pi5 dvmhost[1234]: [INFO] Loading configuration from /opt/dvm/config.yml",
-                    f"{now_str} nexus-pi5 dvmhost[1234]: [WARN] System identity ABCD123 is using default demonstration ID",
-                    f"{now_str} nexus-pi5 dvmhost[1234]: [ERROR] iAgreeNotToBeStupid check failed! You must agree not to be stupid!",
-                    f"{now_str} nexus-pi5 dvmhost[1234]: [FATAL] Fatal configuration violation encountered. Aborting startup.",
-                    f"{now_str} nexus-pi5 systemd[1]: dvmhost.service: Main process exited, code=exited, status=1/FAILURE",
-                    f"{now_str} nexus-pi5 systemd[1]: dvmhost.service: Failed with result 'exit-code'.",
-                    f"{now_str} nexus-pi5 systemd[1]: Failed to start DVMHost Digital Voice Modem Host.",
-                ]
+            if self._simulated_cleared:
+                raw_lines = [f"{now_str} nexus-pi5 [INFO] Journal log stream cleared. Waiting for new service events..."]
             else:
-                raw_lines = [
-                    f"{now_str} nexus-pi5 systemd[1]: Started DVMHost Digital Voice Modem Host.",
-                    f"{now_str} nexus-pi5 dvmhost[9999]: DVMHost active. Listening for RF frames on /dev/ttyAMA0 @ 115200.",
-                    f"{now_str} nexus-pi5 dvmhost[9999]: [INFO] DMR Tier II Duplex controller ready. ColorCode: 1, Timeslots: 1 & 2.",
-                    f"{now_str} nexus-pi5 dvmhost[9999]: [INFO] FNE Network link connected to BrandMeister DMR master.",
-                ]
+                # Simulated logs for development / testing environment
+                status = self.service_controller.get_status()
+                if status.get("is_failed") or not status.get("is_running"):
+                    raw_lines = [
+                        f"{now_str} nexus-pi5 systemd[1]: Starting DVMHost Digital Voice Modem Host...",
+                        f"{now_str} nexus-pi5 dvmhost[1234]: DVMHost v1.0.0-git (Built for Raspberry Pi 5 ARM64)",
+                        f"{now_str} nexus-pi5 dvmhost[1234]: [INFO] Loading configuration from /opt/dvm/config.yml",
+                        f"{now_str} nexus-pi5 dvmhost[1234]: [WARN] System identity ABCD123 is using default demonstration ID",
+                        f"{now_str} nexus-pi5 dvmhost[1234]: [ERROR] iAgreeNotToBeStupid check failed! You must agree not to be stupid!",
+                        f"{now_str} nexus-pi5 dvmhost[1234]: [FATAL] Fatal configuration violation encountered. Aborting startup.",
+                        f"{now_str} nexus-pi5 systemd[1]: dvmhost.service: Main process exited, code=exited, status=1/FAILURE",
+                        f"{now_str} nexus-pi5 systemd[1]: dvmhost.service: Failed with result 'exit-code'.",
+                        f"{now_str} nexus-pi5 systemd[1]: Failed to start DVMHost Digital Voice Modem Host.",
+                    ]
+                else:
+                    raw_lines = [
+                        f"{now_str} nexus-pi5 systemd[1]: Started DVMHost Digital Voice Modem Host.",
+                        f"{now_str} nexus-pi5 dvmhost[9999]: DVMHost active. Listening for RF frames on /dev/ttyAMA0 @ 115200.",
+                        f"{now_str} nexus-pi5 dvmhost[9999]: [INFO] DMR Tier II Duplex controller ready. ColorCode: 1, Timeslots: 1 & 2.",
+                        f"{now_str} nexus-pi5 dvmhost[9999]: [INFO] FNE Network link connected to BrandMeister DMR master.",
+                    ]
         else:
             try:
                 cmd = ["journalctl", "-u", full_service, "-n", str(lines), "--no-pager"]
@@ -326,7 +352,16 @@ class DiagnosticsEngine:
         fixes_applied: List[str] = []
 
         try:
-            # 1. Enforce config.yml parameters (iAgreeNotToBeStupid=True, daemon=False)
+            # 1. Ensure active config.yml exists in target directory
+            dvm_config_manager.ensure_active_config_exists()
+            cfg_file = dvm_config_manager.config_path
+            if not cfg_file.exists() or cfg_file.stat().st_size == 0:
+                dmr_src = settings.profiles_dir / "default_dmr" / "config.yml"
+                if dmr_src.exists():
+                    backup_manager.atomic_write(cfg_file, dmr_src.read_text(encoding="utf-8"))
+                    fixes_applied.append(f"Deployed default DMR configuration to '{cfg_file}'")
+
+            # 2. Enforce config.yml parameters (iAgreeNotToBeStupid=True, daemon=False)
             cfg = dvm_config_manager.load_config_dict()
             modified = False
 
@@ -340,19 +375,31 @@ class DiagnosticsEngine:
                 fixes_applied.append("Set 'daemon: false' in config.yml (systemd foreground supervision)")
                 modified = True
 
-            if modified:
+            if modified or not cfg_file.exists():
                 dvm_config_manager.save_config_dict(cfg, summary="Auto-Fix: Corrected DVMHost policy and daemon flags")
 
-            # 2. Restore any missing baseline data tables
+            # 3. Restore any missing baseline data tables
             for tbl in ("iden_table.dat", "rid_acl.dat", "talkgroup_rules.yml"):
                 target = self.dvm_dir / tbl
                 if not target.exists() or target.stat().st_size == 0:
-                    src_example = DEFAULT_CONFIGS_DIR / f"{Path(tbl).stem}.example{Path(tbl).suffix}"
+                    src_example = settings.profiles_dir / "default_dmr" / tbl
+                    if not src_example.exists():
+                        src_example = DEFAULT_CONFIGS_DIR / f"{Path(tbl).stem}.example{Path(tbl).suffix}"
                     if src_example.exists():
                         backup_manager.atomic_write(target, src_example.read_text(encoding="utf-8"))
                         fixes_applied.append(f"Restored missing data table '{tbl}' from template")
 
-            # 3. Trigger restart of dvmhost service
+            # 4. Fix permissions on Linux so dvmhost can read files
+            if os.name != "nt":
+                try:
+                    for p in [cfg_file, self.dvm_dir / "iden_table.dat", self.dvm_dir / "rid_acl.dat", self.dvm_dir / "talkgroup_rules.yml"]:
+                        if p.exists():
+                            p.chmod(0o644)
+                    fixes_applied.append("Set file permissions (0644) for dvmhost")
+                except Exception:
+                    pass
+
+            # 5. Trigger restart of dvmhost service
             restart_res = self.service_controller.restart()
             time.sleep(1.5)
             new_status = self.service_controller.get_status()

@@ -65,6 +65,15 @@ class DVMConfigManager:
             if src.exists():
                 backup_manager.atomic_write(self.rid_acl_path, src.read_text(encoding="utf-8"))
 
+        # Fix file permissions on Linux so dvmhost can read them
+        if os.name != "nt":
+            try:
+                for p in [self.config_path, self.iden_path, self.tg_rules_path, self.rid_acl_path]:
+                    if p.exists():
+                        p.chmod(0o644)
+            except Exception:
+                pass
+
     def load_config_raw(self) -> str:
         """Read config.yml text."""
         self.ensure_active_config_exists()

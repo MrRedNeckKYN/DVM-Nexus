@@ -121,3 +121,13 @@ def test_diagnostics_api_endpoints(client):
     resp_exp = client.get("/api/diagnostics/export?service=dvmhost")
     assert resp_exp.status_code == 200
     assert "text/plain" in resp_exp.headers["content-type"]
+
+
+def test_diagnostics_clear_logs(client):
+    """Test clearing/rotating logs via engine and HTMX route."""
+    res = diagnostics_engine.clear_logs(service_name="dvmhost")
+    assert res["success"] is True
+
+    resp = client.post("/components/diagnostics-clear-logs", data={"service": "dvmhost"})
+    assert resp.status_code == 200
+    assert "log-terminal-header" in resp.text

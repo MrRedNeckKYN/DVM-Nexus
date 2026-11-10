@@ -25,7 +25,7 @@ class Settings(BaseModel):
     dvm_dir: Path = Field(
         default_factory=lambda: (
             Path("/opt/dvm")
-            if os.path.exists("/opt/dvm") or os.path.exists("/opt/dvm/config.yml")
+            if os.name != "nt" or os.path.exists("/opt/dvm")
             else ACTIVE_CONFIG_DIR_DEV
         )
     )

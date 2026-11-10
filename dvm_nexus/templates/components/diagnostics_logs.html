@@ -2,10 +2,16 @@
   <div class="terminal-meta">
     <span class="terminal-title">📜 journalctl -u {{ logs.service }}</span>
     <span class="terminal-count">{{ logs.entries|length }} lines</span>
+    {% if flash_message %}
+      <span class="badge badge-success" style="margin-left: 0.5rem;">{{ flash_message }}</span>
+    {% endif %}
   </div>
   <div class="terminal-actions">
     <button type="button" class="btn btn-sm btn-outline-cyan" onclick="copyTerminalLogs(this)">
       <span>📋 Copy Logs</span>
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-red" onclick="clearTerminalLogs(this)">
+      <span>🧹 Clear Logs</span>
     </button>
     <a href="/api/diagnostics/export?service={{ selected_service|default('dvmhost') }}&lines=200" class="btn btn-sm btn-secondary" target="_blank">
       <span>💾 Download</span>
