@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card" style="border-left:4px solid var(--accent-cyan);">
+  <div class="card-header">
+    <div>
+      <div class="card-title">📡 Modem & ADF7021 Transceiver Tuning</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">
+        Hardware calibration for the AURSINC MMDVM Duplex Hat. Configures the Pi 5 GPIO UART serial interface, ADF7021 filter bandwidths, and RF frequency offsets.
+      </div>
+    </div>
+  </div>
+
+  <form hx-post="/modem/save" hx-target="#toast-container" hx-swap="beforeend">
+    <div style="margin-bottom:1.5rem;">
+      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">Serial UART & Duplex Mode</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Serial Device Port</label>
+          <input type="text" name="uart_port" class="form-control" value="{{ uart_port }}" required>
+          <span style="font-size:0.75rem; color:var(--text-dim);">Pi 5 GPIO UART is typically <code>/dev/ttyAMA0</code> or <code>/dev/serial0</code>.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">UART Baud Rate</label>
+          <input type="number" name="uart_speed" class="form-control" value="{{ uart_speed }}" required>
+          <span style="font-size:0.75rem; color:var(--text-dim);">Standard MMDVM_HS firmware operates at 115200.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Duplex Mode</label>
+          <select name="duplex" class="form-control">
+            <option value="true" {% if duplex %}selected{% endif %}>Full Duplex (AURSINC Dual ADF7021)</option>
+            <option value="false" {% if not duplex %}selected{% endif %}>Simplex (Single Transceiver)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:1.5rem;">
+      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">Signal Polarities & Levels</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">RX Invert</label>
+          <select name="rx_invert" class="form-control">
+            <option value="false" {% if not rx_invert %}selected{% endif %}>Normal</option>
+            <option value="true" {% if rx_invert %}selected{% endif %}>Inverted</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">TX Invert</label>
+          <select name="tx_invert" class="form-control">
+            <option value="false" {% if not tx_invert %}selected{% endif %}>Normal</option>
+            <option value="true" {% if tx_invert %}selected{% endif %}>Inverted</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">PTT Invert</label>
+          <select name="ptt_invert" class="form-control">
+            <option value="false" {% if not ptt_invert %}selected{% endif %}>Active High</option>
+            <option value="true" {% if ptt_invert %}selected{% endif %}>Active Low</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Modulation Level (TX Level %)</label>
+          <input type="number" name="tx_level" class="form-control" min="0" max="100" value="{{ tx_level }}">
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:1.5rem;">
+      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">ADF7021 Hotspot Transceiver Adjustments</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">ADF7021 LNA Gain Mode</label>
+          <select name="adf_gain_mode" class="form-control">
+            <option value="0" {% if hotspot.adfGainMode == 0 %}selected{% endif %}>0 - Auto</option>
+            <option value="1" {% if hotspot.adfGainMode == 1 %}selected{% endif %}>1 - Auto High Linearity</option>
+            <option value="2" {% if hotspot.adfGainMode == 2 or not hotspot.adfGainMode %}selected{% endif %}>2 - Low Gain</option>
+            <option value="3" {% if hotspot.adfGainMode == 3 %}selected{% endif %}>3 - High Gain</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Automatic Frequency Correction (AFC)</label>
+          <select name="afc_enable" class="form-control">
+            <option value="true" {% if hotspot.afcEnable %}selected{% endif %}>Enabled</option>
+            <option value="false" {% if not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
+          <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
+          <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">DMR Discriminator BW (-128 to 128)</label>
+          <input type="number" name="dmr_disc_bw" class="form-control" value="{{ hotspot.dmrDiscBWAdj or 0 }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">DMR Post Demod BW (-128 to 128)</label>
+          <input type="number" name="dmr_post_bw" class="form-control" value="{{ hotspot.dmrPostBWAdj or 0 }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">P25 Discriminator BW (-128 to 128)</label>
+          <input type="number" name="p25_disc_bw" class="form-control" value="{{ hotspot.p25DiscBWAdj or 0 }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">P25 Post Demod BW (-128 to 128)</label>
+          <input type="number" name="p25_post_bw" class="form-control" value="{{ hotspot.p25PostBWAdj or 0 }}">
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end;">
+      <button type="submit" class="btn btn-primary" style="padding:0.6rem 2rem;">
+        💾 Save Modem Settings
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

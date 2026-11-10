@@ -1,0 +1,6 @@
+<div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+  <div class="toast toast-{{ type }}">
+    {% if type == 'success' %}✓{% elif type == 'error' %}✗{% else %}ℹ{% endif %}
+    <span>{{ message }}</span>
+  </div>
+</div>

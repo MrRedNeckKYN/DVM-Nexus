@@ -1,0 +1,56 @@
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Rev #</th>
+        <th>Timestamp (UTC)</th>
+        <th>Associated Profile</th>
+        <th>Change Summary</th>
+        <th>Changed Files</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rev in revisions %}
+      <tr>
+        <td><strong>#{{ rev.id }}</strong></td>
+        <td style="color:var(--text-dim); font-size:0.8rem;">{{ rev.timestamp[:19] }}</td>
+        <td>{{ rev.profile_name or 'Default' }}</td>
+        <td>{{ rev.summary }}</td>
+        <td style="font-size:0.8rem; color:var(--accent-cyan);">{{ rev.changed_files }}</td>
+        <td>
+          <div style="display:flex; gap:0.5rem;">
+            <button 
+              hx-get="/config/diff/{{ rev.id }}" 
+              hx-target="#diff-viewer-target" 
+              hx-swap="innerHTML"
+              class="btn btn-secondary btn-sm">
+              🔍 Diff
+            </button>
+            <button 
+              hx-post="/config/rollback/{{ rev.id }}" 
+              hx-target="#revision-table-container" 
+              hx-swap="innerHTML"
+              class="btn btn-danger btn-sm"
+              onclick="return confirm('Rollback active configuration to snapshot #{{ rev.id }}? Current files will be backed up before restoring.')">
+              ⏪ Rollback
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" style="text-align:center; color:var(--text-dim);">No configuration revisions recorded yet.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if toast %}
+  <div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+    <div class="toast toast-{{ toast.type }}">
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
+{% endif %}

@@ -1,0 +1,32 @@
+<div class="card" style="border: 1px solid var(--accent-cyan); margin-bottom:1.5rem; background:var(--bg-secondary);">
+  <div class="card-header">
+    <div>
+      <div class="card-title">🔍 Visual Diff for Revision #{{ revision_id }}</div>
+      <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">
+        {{ summary }} (Comparing revision snapshot vs currently active <code>config.yml</code>)
+      </div>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('diff-viewer-target').innerHTML=''">✕ Close</button>
+  </div>
+
+  <div class="diff-container" style="max-height:450px;">
+    {% for line in diff_lines %}
+      {% if line.type == 'add' %}
+        <div class="diff-line diff-line-add">
+          <span class="diff-num">+</span>
+          <span>{{ line.text }}</span>
+        </div>
+      {% elif line.type == 'del' %}
+        <div class="diff-line diff-line-del">
+          <span class="diff-num">-</span>
+          <span>{{ line.text }}</span>
+        </div>
+      {% else %}
+        <div class="diff-line" style="color:var(--text-dim);">
+          <span class="diff-num">{{ line.old_num }}</span>
+          <span>{{ line.text }}</span>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>

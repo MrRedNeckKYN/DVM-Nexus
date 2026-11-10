@@ -1,0 +1,69 @@
+<div class="update-card-content">
+  {% if updater.check.update_available %}
+    <div class="alert alert-success mb-3" style="border-left: 4px solid var(--accent-green);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="font-size: 1.05rem;">🎉 Update Available!</strong>
+          <div style="font-size: 0.85rem; margin-top: 0.25rem;">
+            A newer version is ready on the <code>{{ updater.check.channel }}</code> channel.
+            {% if updater.check.commits_behind > 0 %}
+              <strong>{{ updater.check.commits_behind }}</strong> new commits ahead.
+            {% endif %}
+          </div>
+        </div>
+        <span class="badge badge-success" style="font-size: 0.9rem; padding: 6px 12px;">
+          {{ updater.check.latest_version or updater.check.latest_commit }}
+        </span>
+      </div>
+    </div>
+  {% else %}
+    <div class="alert alert-info mb-3">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong>System Status:</strong>
+          {% if updater.check.last_checked %}
+            Up to date as of {{ updater.check.last_checked[11:19] }} UTC.
+          {% else %}
+            Ready to check for upstream updates.
+          {% endif %}
+        </div>
+        <span class="badge badge-secondary">v{{ updater.repo_info.version }}</span>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Release Notes & Changelog -->
+  <div style="background: #050810; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1.25rem;">
+    <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); font-weight: 600; margin-bottom: 0.5rem;">
+      Changelog / Release Information
+    </div>
+    <pre style="margin: 0; font-family: monospace; font-size: 0.85rem; color: #a5f3fc; white-space: pre-wrap; max-height: 180px; overflow-y: auto;">{{ updater.check.release_notes }}</pre>
+  </div>
+
+  <!-- Action Buttons -->
+  <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+    {% if updater.check.update_available %}
+      <form hx-post="/updates/apply" hx-target="#update-action-area" hx-swap="innerHTML" style="display: inline;">
+        <input type="hidden" name="channel" value="{{ updater.check.channel }}">
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Apply update now? DVM Nexus will create a safety snapshot, pull latest code, and restart.')">
+          🚀 Install Update Now (1-Click)
+        </button>
+      </form>
+    {% else %}
+      <!-- Allow re-install or force pull -->
+      <form hx-post="/updates/apply" hx-target="#update-action-area" hx-swap="innerHTML" style="display: inline;">
+        <input type="hidden" name="channel" value="{{ updater.check.channel }}">
+        <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Re-sync code and verify dependencies against upstream?')">
+          🔄 Re-Sync / Force Update
+        </button>
+      </form>
+    {% endif %}
+
+    <form hx-post="/updates/check" hx-target="#update-card-container" hx-swap="innerHTML" style="display: inline;">
+      <input type="hidden" name="channel" value="{{ updater.check.channel }}">
+      <button type="submit" class="btn btn-secondary btn-sm">
+        🔍 Check for Updates
+      </button>
+    </form>
+  </div>
+</div>

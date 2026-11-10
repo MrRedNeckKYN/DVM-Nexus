@@ -1,0 +1,35 @@
+#
+# Digital Voice Modem - Peer ID Access Control List
+#
+# This file sets the valid peer IDs allowed on a FNE. This file should always end with an empty line!
+#
+#   * PEER ID           [REQUIRED]  - Unique ID for a peer.
+#                                       Peer IDs are valid numbers between 1 and 999999999.
+#   * PEER PASSWORD     [REQUIRED]  - Unique password for this peer to use when authenticating.
+#   * PEER REPLICATION  [OPTIONAL]  - Flag indicating whether or not the peer connection is another FNE and will receive
+#                                       full configuration from this FNE. When peer replication is set, and the connection is 
+#                                       another FNE, that FNE will receive all the talkgroups, radio ID lists, and 
+#                                       peer lists from this FNE, it will also receive all system traffic.
+#   * PEER ALIAS        [OPTIONAL]  - Textual name alias for the peer.
+#   * CAN REQUEST KEYS  [OPTIONAL]  - Flag indicating the peer connection is allowed to request encryption keys.
+#                                       If this flag is disabled (0), and the connected peer requests and encryption key
+#                                       the encryption key request will be dropped and ignored.
+#   * CAN ISSUE INHIBIT [OPTIONAL]  - Flag indicating the peer connection is capable of transmitting inhibit packets.
+#                                       If this flag is disabled (0), and the connected peer issues an inhibit to the network
+#                                       this FNE will drop the packet and ignore it.
+#   * HAS CALL PRIORITY [OPTIONAL]  - Flag indicating the peer connection has call priority.
+#                                       If this flag is disabled (0), and the connected peer tries to transmit over an on going
+#                                       call, normal call collision rules are applied to the traffic being transmitted.
+#                                       If this flag is enabled (1), and the connected peer tries to transmit over an on going
+#                                       call, call collision rules are ignored, and the peer is given priority.
+#   * JITTER ENABLED    [OPTIONAL] - Flag indicating whether the adaptive jitter buffer is enabled.
+#   * JITTER MAX FRAMES [OPTIONAL] - Maximum buffer size in frames (range: 2-8 frames).
+#   * JITTER MAX WAIT   [OPTIONAL] - Maximum wait time in microseconds (range: 10000-200000 us).
+#
+# Entry Format: "Peer ID,Peer Password,Peer Replication (1 = Enabled / 0 = Disabled),Peer Alias (optional),Can Request Keys (1 = Enabled / 0 = Disabled),Can Issue Inhibit (1 = Enabled / 0 = Disabled),Has Call Priority (1 = Enabled / 0 = Disabled),Jitter Enabled (1 = Enabled / 0 = Disabled),Jitter Max Size, Jitter Max Wait<newline>"
+# Examples:
+#1234,,0,,1,0,0,0,4,40000,
+#5678,MYSECUREPASSWORD,0,,0,0,0,0,4,40000,
+#9876,MYSECUREPASSWORD,1,,0,0,0,0,4,40000,
+#5432,MYSECUREPASSWORD,,Peer Alias 1,0,0,0,0,4,40000,
+#1012,MYSECUREPASSWORD,1,Peer Alias 2,1,0,0,0,4,40000,

@@ -1,0 +1,9 @@
+{% if service and service.is_running %}
+  <span class="badge badge-success">
+    ● DVMHost Running {% if service.main_pid %}(PID {{ service.main_pid }}){% endif %}
+  </span>
+{% else %}
+  <span class="badge badge-danger">
+    ■ DVMHost Inactive
+  </span>
+{% endif %}

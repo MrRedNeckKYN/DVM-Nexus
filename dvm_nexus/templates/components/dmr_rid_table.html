@@ -1,0 +1,49 @@
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Radio ID</th>
+        <th>Alias</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in rids %}
+      <tr>
+        <td><strong>{{ item.rid }}</strong></td>
+        <td>{{ item.alias or 'Subscriber' }}</td>
+        <td>
+          {% if item.enabled %}
+            <span class="badge badge-success">Allowed</span>
+          {% else %}
+            <span class="badge badge-danger">Blocked</span>
+          {% endif %}
+        </td>
+        <td>
+          <button 
+            hx-post="/dmr/rids/delete/{{ item.rid }}" 
+            hx-target="#dmr-rid-container" 
+            hx-swap="innerHTML"
+            class="btn btn-danger btn-sm"
+            onclick="return confirm('Delete RID {{ item.rid }}?')">
+            Delete
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" style="text-align:center; color:var(--text-dim);">No Radio IDs configured.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if toast %}
+  <div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+    <div class="toast toast-{{ toast.type }}">
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
+{% endif %}

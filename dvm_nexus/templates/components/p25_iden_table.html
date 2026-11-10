@@ -1,0 +1,51 @@
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Channel ID</th>
+        <th>Base Frequency</th>
+        <th>Spacing</th>
+        <th>Input Offset</th>
+        <th>Bandwidth</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in iden_entries %}
+      <tr>
+        <td><strong>Channel #{{ entry.channel_id }}</strong></td>
+        <td>{{ entry.base_freq_mhz }} MHz ({{ entry.base_freq_hz }} Hz)</td>
+        <td>{{ entry.spacing_khz }} kHz</td>
+        <td>
+          <span class="badge {% if entry.offset_mhz > 0 %}badge-success{% elif entry.offset_mhz < 0 %}badge-danger{% else %}badge-cyan{% endif %}">
+            {{ '%+.3f'|format(entry.offset_mhz) }} MHz
+          </span>
+        </td>
+        <td>{{ entry.bandwidth_khz }} kHz</td>
+        <td>
+          <button 
+            hx-post="/p25/iden/delete/{{ entry.channel_id }}" 
+            hx-target="#p25-iden-container" 
+            hx-swap="innerHTML"
+            class="btn btn-danger btn-sm"
+            onclick="return confirm('Delete IDEN Channel #{{ entry.channel_id }}?')">
+            Delete
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" style="text-align:center; color:var(--text-dim);">No IDEN bandplan entries defined.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if toast %}
+  <div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+    <div class="toast toast-{{ toast.type }}">
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
+{% endif %}

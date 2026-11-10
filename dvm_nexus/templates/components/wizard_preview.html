@@ -1,0 +1,73 @@
+<div class="card" style="border-top: 4px solid var(--accent-cyan); margin-top:2rem;">
+  <div class="card-header">
+    <div class="card-title">🔍 Generated Configuration Preview & Verification</div>
+    <span class="badge badge-cyan">{{ protocol|upper }} Network</span>
+  </div>
+
+  <div class="grid-3" style="margin-bottom:1.5rem;">
+    <div class="card" style="margin-bottom:0; background:var(--bg-secondary);">
+      <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase;">Calculated RF Frequencies</div>
+      <div style="font-size:1.1rem; font-weight:700; margin-top:0.25rem;">
+        TX: <span style="color:var(--accent-cyan);">{{ tx_freq_mhz }} MHz</span><br>
+        RX: <span style="color:var(--success);">{{ rx_freq_mhz }} MHz</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:0; background:var(--bg-secondary);">
+      <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase;">IDEN Bandplan Mapping</div>
+      <div style="font-size:1.1rem; font-weight:700; margin-top:0.25rem;">
+        Channel ID: <strong>{{ channel_id }}</strong><br>
+        Channel No: <strong>#{{ channel_no }}</strong>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:0; background:var(--bg-secondary);">
+      <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase;">Access Rules Configured</div>
+      <div style="font-size:1.1rem; font-weight:700; margin-top:0.25rem;">
+        Talkgroups: <strong>{{ talkgroups|length }}</strong><br>
+        Subscriber RIDs: <strong>{{ rids|length }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unified Diff View -->
+  <div style="margin-bottom:1.5rem;">
+    <h4 style="font-size:0.9rem; color:var(--text-muted); margin-bottom:0.5rem;">Visual Diff vs Current Configuration:</h4>
+    <div class="diff-container" style="max-height: 350px;">
+      {% for line in structured_diff %}
+        {% if line.type == 'add' %}
+          <div class="diff-line diff-line-add">
+            <span class="diff-num">+</span>
+            <span>{{ line.text }}</span>
+          </div>
+        {% elif line.type == 'del' %}
+          <div class="diff-line diff-line-del">
+            <span class="diff-num">-</span>
+            <span>{{ line.text }}</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Apply Form -->
+  <form hx-post="/wizard/apply" hx-target="#wizard-results" hx-swap="innerHTML">
+    <input type="hidden" name="network_name" value="{{ network_name }}">
+    <input type="hidden" name="protocol" value="{{ protocol }}">
+    <input type="hidden" name="proposed_yaml" value="{{ proposed_yaml }}">
+    <input type="hidden" name="proposed_iden" value="{{ proposed_iden }}">
+    <input type="hidden" name="talkgroups_json" value='{{ talkgroups|tojson }}'>
+    <input type="hidden" name="rids_json" value='{{ rids|tojson }}'>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:1.25rem;">
+      <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.9rem; cursor:pointer;">
+        <input type="checkbox" name="save_as_profile" value="true" checked>
+        <span>Save this configuration as an independent profile (<strong>{{ network_name }}</strong>)</span>
+      </label>
+
+      <button type="submit" class="btn btn-primary" style="padding:0.75rem 2.5rem; font-size:1rem;">
+        🚀 Apply & Start Network
+      </button>
+    </div>
+  </form>
+</div>

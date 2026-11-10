@@ -1,0 +1,58 @@
+<div class="table-responsive">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Route Name</th>
+        <th>Source Event</th>
+        <th>Filter ID</th>
+        <th>Target Destination</th>
+        <th>Message Template</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if routes %}
+        {% for r in routes %}
+          <tr>
+            <td><strong>{{ r.name }}</strong></td>
+            <td>
+              <span class="badge {% if r.source_type == 'dmr_talkgroup' %}badge-primary{% elif r.source_type == 'p25_talkgroup' %}badge-info{% else %}badge-secondary{% endif %}">
+                {% if r.source_type == 'dmr_talkgroup' %}DMR Talkgroup
+                {% elif r.source_type == 'p25_talkgroup' %}P25 Talkgroup
+                {% elif r.source_type == 'system_status' %}System Event
+                {% else %}{{ r.source_type }}{% endif %}
+              </span>
+            </td>
+            <td><code>{{ r.source_id }}</code></td>
+            <td>
+              <span>Ch {{ r.dest_channel }}</span>
+              <span style="color: var(--text-dim); font-size: 0.75rem;">➔ {{ r.dest_node }}</span>
+            </td>
+            <td><code style="font-size: 0.75rem;">{{ r.template }}</code></td>
+            <td>
+              {% if r.enabled %}
+                <span class="badge badge-success">Active</span>
+              {% else %}
+                <span class="badge badge-secondary">Disabled</span>
+              {% endif %}
+            </td>
+            <td>
+              <form hx-post="/meshtastic/routes/{{ r.id }}/delete" hx-target="#routes-table-container" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete this routing rule?')">
+                  🗑️
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">
+            No event bridge rules configured.
+          </td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,375 @@
+#
+# Digital Voice Modem - Conference FNE Software Configuration
+#
+
+# Flag indicating whether the host will run as a background or foreground task.
+daemon: true
+
+#
+# This flag should be set to 'true', it simply means that you acknowledge the license and restrictions of use for this
+# software, at no time should THIS SOFTWARE EVER BE USED IN PUBLIC SAFETY OR LIFE SAFETY CRITICAL APPLICATIONS. This 
+# software project is provided solely for personal, non-commercial, hobbyist use; any commercial, professional, 
+# governmental, or other non-hobbyist use is strictly discouraged, fully unsupported and expressly disclaimed by 
+# the authors.
+#
+# By using this software, you agree to indemnify, defend, and hold harmless the authors, contributors, and affiliated 
+# parties from and against any and all claims, liabilities, damages, losses, or expenses (including reasonable 
+# attorneys’ fees) arising out of or relating to any unlawful, unauthorized, or improper use of the software.
+#
+iAgreeNotToBeStupid: false
+
+#
+# Logging Configuration
+#   Logging Levels:
+#     1 - Debug
+#     2 - Informational
+#     3 - Warning
+#     4 - Error
+#     5 - Fatal
+#
+log:
+    # Console display logging level (used when in foreground).
+    displayLevel: 1
+    # File logging level.
+    fileLevel: 1
+    # Full path for the directory to store the log files.
+    filePath: .
+    # Flag indicating file logs should be sent to syslog instead of a file.
+    useSyslog: false
+    # Full path for the directory to store the activity log files.
+    activityFilePath: .
+    # Log filename prefix.
+    fileRoot: DVM
+
+#
+# Master
+#   (This is the endpoint that downstream peers connect to for this FNE instance.)
+#
+master:
+    # Network Peer ID
+    #   NOTE: This ID is a uniquely identifying number. It *MUST* be a unique number across any networks this FNE
+    #        instance connects to. Failure to use a unique number *WILL* cause network issues.
+    peerId: 9000100
+    # Hostname/IP address to listen on (blank for all).
+    address: 0.0.0.0
+    # Port number to listen on.
+    #   NOTE: This port number includes itself for traffic, and master port + 1 for metadata. (For 
+    #     example, a master port of 62031 will use 62032 for metadata messages.)
+    port: 62031
+    # FNE access password.
+    password: RPT1234
+    # Flag indicating whether or not verbose logging is enabled.
+    verbose: true
+    # Flag indicating whether or not packet dumping is enabled.
+    packetDump: false
+    # Flag indicating whether or not verbose debug logging is enabled.
+    debug: false
+
+    #
+    # High Availability
+    #
+    ha:
+      # Flag indicating high availability advertisements are enabled.
+      enable: false
+      # WAN IP address of this FNE master.
+      #   This IP address is advertised to the network as a globally WAN accessible IP.
+      advertisedWANAddress: 1.2.3.4
+      # WAN port for this FNE master.
+      #   This port is advertised to the network as a globally WAN accessible port.
+      advertisedWANPort: 62031
+
+    #
+    # Adaptive Jitter Buffer Configuration
+    # NOTE: In 99% of cases, the adaptive jitter buffer, if needed, should only be enabled on a per-peer basis,
+    #   and remain disabled for all peers globally. Enabling the jitter buffer adds latency to voice traffic, 
+    #   and should only be used in specific network conditions where high jitter or out-of-order packets are 
+    #   common (i.e. satellite links, cellular networks, etc.).
+    #
+    jitterBuffer:
+        # Flag indicating whether the adaptive jitter buffer is enabled by default for all peers.
+        enabled: false
+        # Default maximum buffer size in frames (range: 2-8 frames).
+        #   Larger values provide more reordering capability but add latency.
+        #   Recommended: 4 frames for most networks, 6-8 for high-jitter links (satellite, cellular).
+        defaultMaxSize: 4
+        # Default maximum wait time in microseconds (range: 10000-200000 us).
+        #   Frames exceeding this age are delivered even if gaps exist.
+        #   Recommended: 40000 us (40ms) for terrestrial, 80000 us (80ms) for satellite.
+        defaultMaxWait: 40000
+
+    # Flag indicating whether or not denied traffic will be logged.
+    #   (This is useful for debugging talkgroup rules and other ACL issues, but can be very noisy on a busy system.)
+    logDenials: false
+    # Flag indicating whether or not calls start/end events from a upstream peer will be logged.
+    logUpstreamCallStartEnd: true
+
+    # Maximum number of concurrent packet processing workers.
+    workers: 16
+
+    # Maximum permitted connections (hard maximum is 250 peers).
+    connectionLimit: 100
+
+    # Flag indicating whether or not the peer spanning tree is enabled.
+    #   NOTE: This should not be disabled. Disabling this can cause network loops
+    #         and other issues in a multi-peer FNE network.
+    enableSpanningTree: true
+    # Flag indicating whether or not spanning tree changes will be logged.
+    logSpanningTreeChanges: false
+    # Flag indicating whether or not the spanning tree allows fast peer reconnects.
+    #   (This is mainly useful for a peer announcing the same master to reconnect rapidly, inbetween
+    #    spanning tree updates.)
+    spanningTreeFastReconnect: true
+
+    # Flag indicating whether or not peer pinging will be reported.
+    reportPeerPing: true
+
+    # Flag indicating whether or not master endpoint networking is encrypted.
+    encrypted: false
+    # AES-256 32-byte Preshared Key
+    #   (This field *must* be 32 hex bytes in length or 64 characters
+    #    0 - 9, A - F.)
+    presharedKey: "000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
+
+    # Flag indicating whether or not DMR traffic will be passed.
+    allowDMRTraffic: true
+    # Flag indicating whether or not P25 traffic will be passed.
+    allowP25Traffic: true
+    # Flag indicating whether or not NXDN traffic will be passed.
+    allowNXDNTraffic: true
+    # Flag indicating whether or not analog traffic will be passed.
+    allowAnalogTraffic: false
+
+    # Flag indicating whether packet data will be passed.
+    disablePacketData: false
+    # Flag indicating whether verbose dumping of data packets is enabled.
+    dumpPacketData: false
+    # Flag indicating whether verbose logging of data packet operations is enabled.
+    verbosePacketData: false
+
+    # Delay from when a call on a parrot TG ends to when the playback starts (in milliseconds).
+    parrotDelay: 2000
+    # Flag indicating whether or not a parrot TG call will generate a grant demand.
+    parrotGrantDemand: true
+    # Flag indicating whether or not a parrot TG call will only be sent to the originating peer.
+    parrotOnlyToOrginiatingPeer: false
+    # Source ID to override parrot TG calls with (0 for no override).
+    parrotOverrideSrcId: 0
+
+    # Flag indicating whether or not P25 OTAR KMF services are enabled.
+    kmfServicesEnabled: false
+    # Port number to listen on for P25 OTAR KMF services.
+    kmfOtarPort: 64414
+    # Flag indicating whether or not verbose debug logging for P25 OTAR KMF services is enabled.
+    kmfDebug: false
+
+    # Amount of time in seconds for a call collision to last before switching over the source of a call.
+    callCollisionTimeout: 5
+
+    # Flag indicating whether or not a grant responses will only be sent to TGs with affiliations, if the TG is configured for affiliation gating.
+    restrictGrantToAffiliatedOnly: false
+    # Flag indicating whether or not a private call will only be routed to the network peers the RID registers with.
+    restrictPrivateCallToRegOnly: false
+
+    # Flag indicating whether or not a adjacent site broadcasts will pass to any peers.
+    disallowAdjStsBcast: false
+    # Flag indicating whether or not a P25 ADJ_STS_BCAST will pass to connected external peers.
+    disallowExtAdjStsBcast: true
+    # Flag indicating whether or not a conventional site can override affiliation rules.
+    allowConvSiteAffOverride: true
+    # Flag indicating whether or not In-Call Control feedback is enabled.
+    disallowInCallCtrl: false
+    # Flag indicating whether or not RID ACL In-Call Control feedback is enabled.
+    #   (This will enforce RID ACLs network wide, regardless of local peer RID ACL setting.)
+    enableRIDInCallCtrl: false
+    # Flag indicating whether or not unknown/undefined RIDs will be rejected by the FNE.
+    #   (This is a strict rejection, any unknown or undefined RID not in the RID ACL list will be hard rejected.)
+    rejectUnknownRID: false
+    # Flag indicating whether or not a TDULC call terminations will pass to any peers.
+    disallowCallTerm: false
+
+    # Flag indicating whether or not the FNE will mask all outbound traffic to use the FNE's own peer ID.
+    #   (This is useful for FNEs that are public facing, and the originating traffic peer ID should be masked.)
+    maskOutboundPeerID: false
+    # Flag indicating whether or not the FNE will mask only non-Peer-Link outbound traffic to use the FNE's own peer ID.
+    #   (This is useful for networked FNEs that are have a mix of connections, and the originating traffic peer ID to non-Peer-Link FNEs should be masked.)
+    maskOutboundPeerIDForNonPeerLink: false
+
+    # Flag indicating that P25 terminators will be filtered by destination ID (i.e. valid RID or valid TGID).
+    filterTerminators: true
+
+    # Flag indicating the FNE will drop all inbound Unit-to-Unit calls.
+    disallowAllUnitToUnit: false
+    # List of peers that unit to unit calls are dropped for.
+    dropUnitToUnit: []
+
+    # Flag indicating whether or not InfluxDB logging and metrics recording is enabled.
+    enableInflux: false
+    # Hostname/IP address of the InfluxDB instance to connect to.
+    influxServerAddress: 127.0.0.1
+    # Port number of the InfluxDB instance to connect to.
+    influxServerPort: 8086
+    # API Token to access the InfluxDB instance API.
+    influxServerToken: "APITOKEN"
+    # Organization Name on InfluxDB instance API.
+    influxOrg: "dvm"
+    # Data Bucket Name on InfluxDB instance API.
+    influxBucket: "dvm"
+    # Flag indicating whether TSBK/CSBK/RCCH messages will be logged to InfluxDB.
+    influxLogRawData: false
+
+    #
+    # Crypto Container Configuration
+    #
+    crypto_container:
+        # Flag indicating whether or not crypto services are enabled.
+        enable: false
+        # Full path to the KFDtool crypto container file.
+        file: key_container.ekc
+        # Container password.
+        password: "PASSWORD"
+        # Amount of time between updates of crypto container file. (minutes)
+        time: 30
+
+    #
+    # Talkgroup Rules Configuration
+    #
+    talkgroup_rules:
+        # Full path to the talkgroup rules file.
+        file: talkgroup_rules.yml
+        # Amount of time between updates of talkgroup rules file. (minutes)
+        time: 30
+
+    #
+    # Adj. Site Map Configuration
+    #
+    adj_site_map:
+        # Full path to the Adj. Site Map file.
+        file: adj_site_map.yml
+        # Amount of time between updates of Adj. Site Map file. (minutes)
+        time: 30
+
+#
+# Upstream FNE Neighbor Peering
+#   (This is the list of connections to upstream FNEs this FNE instance should be connected to.)
+#
+peers:
+    - name: MASTERFNE
+      # Flag indicating whether or not the peer is enabled.
+      enable: true
+      # Hostname/IP address of the FNE master to connect to.
+      masterAddress: 127.0.0.1
+      # Port number of the FNE master to connect to.
+      masterPort: 32090
+      # FNE access password.
+      password: RPT1234
+      # Network Peer ID of this peer on the upstream FNE master.
+      peerId: 9000990
+
+      # Flag indicating whether or not peer endpoint networking is encrypted.
+      encrypted: false
+      # AES-256 32-byte Preshared Key
+      #   (This field *must* be 32 hex bytes in length or 64 characters
+      #    0 - 9, A - F.)
+      presharedKey: "000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
+
+      # Latitude.
+      latitude: 0.0
+      # Longitude.
+      longitude: 0.0
+      # Textual location for this host.
+      location: Anywhere, USA
+
+      # Flag indicating whether or not packet dumping is enabled.
+      packetDump: false
+      # Flag indicating whether or not verbose debug logging is enabled.
+      debug: false
+
+#
+# System Configuration
+#
+system:
+    # Textual identity of this FNE (this is used when peering with upstream FNEs).
+    identity: MASTERFNE
+
+    # Time in seconds between pings to peers.
+    pingTime: 5
+    # Maximum number of missable pings before a peer is considered disconnected.
+    maxMissedPings: 10
+
+    # Time in minutes between updates of the ACL rules.
+    aclRuleUpdateTime: 10
+
+    # Flag indicating the TGID information for this master will be sent to its peers.
+    sendTalkgroups: true
+
+    # Flag indicating when this FNE instance receives peer link configuration updates, it will save those
+    # peer link configurations.
+    peerLinkSaveACL: false
+
+    # Flag indicating whether or not the host diagnostic log will be sent to the network.
+    allowDiagnosticTransfer: true
+
+    # Flag indicating whether or not REST API is enabled.
+    restEnable: false
+    # IP address of the network interface to listen for REST API on (or 0.0.0.0 for all).
+    restAddress: 127.0.0.1
+    # Port number for REST API to listen on.
+    restPort: 9990
+    # Flag indicating whether or not REST API is operating in SSL mode.
+    restSsl: false
+    # HTTPS/TLS certificate.
+    restSslCertificate: web.crt
+    # HTTPS/TLS key file.
+    restSslKey: web.key
+    # REST API authentication password.
+    restPassword: "PASSWORD"
+    # Flag indicating whether or not verbose REST API debug logging is enabled.
+    restDebug: false
+
+    #
+    # Radio ID ACL Configuration
+    #
+    radio_id:
+        # Full path to the Radio ID ACL file.
+        file: rid_acl.dat
+        # Amount of time between updates of Radio ID ACL file. (minutes)
+        time: 2
+
+    #
+    # Peer ACL configuration
+    #
+    peer_acl:
+        # Flag indicating whether or not the peer ACLs are enabled.
+        enable: false
+        # Full path to the peer ACL file.
+        file: peer_list.dat
+        # Amount of time between updates of peer ACL file. (minutes)
+        time: 2
+
+#
+# Packet Data Virtual Network Tunnel Configuration
+#
+vtun:
+    # Flag indicating the virtual network tunnel is enabled.
+    # (If this is enabled, dvmfne must be run as root to create the TUN interface.)
+    enable: false
+    # Operational mode for the network tunnel (dmr or p25).
+    digitalMode: p25
+
+    # Kernel Interface Name
+    interfaceName: fne0
+    # IP address of the tunnel network interface
+    address: 192.168.1.254
+    # Netmask of the tunnel network interface
+    netmask: 255.255.255.0
+    # Broadcast address of the tunnel network interface
+    broadcast: 192.168.1.255
+
+    #
+    # P25 SNDCP Dynamic IP Allocation
+    #
+    sndcp:
+        # Starting IP address for dynamic IP allocation pool
+        startAddress: 192.168.1.10
+        # Ending IP address for dynamic IP allocation pool
+        endAddress: 192.168.1.200

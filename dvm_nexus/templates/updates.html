@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="updates-page">
+
+  <!-- Overview Header Card -->
+  <div class="card mb-4">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h3 class="card-title">🔄 DVM Nexus System Auto-Updater</h3>
+        <p class="card-subtitle">Keep your radio network OS up to date with the latest DVMHost improvements and feature releases</p>
+      </div>
+      <div>
+        <span class="badge badge-primary" style="font-size: 0.85rem; padding: 6px 12px;">
+          Installed: v{{ updater.repo_info.version }} ({{ updater.repo_info.commit_hash }})
+        </span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="grid-4 mb-3" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div style="background: var(--bg-surface-2); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+          <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">Software Version</div>
+          <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">v{{ updater.repo_info.version }}</div>
+        </div>
+        <div style="background: var(--bg-surface-2); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+          <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">Active Channel</div>
+          <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">{{ updater.repo_info.branch }}</div>
+        </div>
+        <div style="background: var(--bg-surface-2); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+          <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">Git Commit / Hash</div>
+          <div style="font-size: 1.1rem; font-weight: 700; font-family: monospace; color: var(--accent-purple);">{{ updater.repo_info.commit_hash }}</div>
+        </div>
+        <div style="background: var(--bg-surface-2); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+          <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">Upstream GitHub</div>
+          <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            {{ updater.repo_info.github_repo }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Update Card Area -->
+      <div id="update-action-area">
+        <div id="update-card-container">
+          {% include "components/update_card.html" %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- DVMHost Radio Daemon Updater Card -->
+  <div class="card mb-4">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h3 class="card-title">📻 DVMHost Radio Daemon Updater</h3>
+        <p class="card-subtitle">Safely upgrade the core C++ DVMHost radio daemon binary (/opt/dvm/bin/dvmhost) from upstream releases</p>
+      </div>
+      <div>
+        <span class="badge {% if dvmhost_updater.installed_info.installed %}badge-success{% else %}badge-secondary{% endif %}" style="font-size: 0.85rem; padding: 6px 12px;">
+          {% if dvmhost_updater.installed_info.installed %}Daemon Binary Installed{% else %}Binary Missing{% endif %}
+        </span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="dvmhost-action-area">
+        <div id="dvmhost-card-container">
+          {% include "components/dvmhost_update_card.html" %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Safety & Rollback Guarantee -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <h3 class="card-title">🛡️ Safety Snapshot &amp; Rollback Guarantee</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <div style="font-size: 2rem;">💾</div>
+        <div>
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">Automatic Pre-Update Backups</h4>
+          <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem;">
+            Before any code or dependencies are updated, DVM Nexus automatically takes an atomic snapshot of all active radio configurations (<code>config.yml</code>, <code>talkgroup_rules.yml</code>, <code>rid_acl.dat</code>, <code>iden_table.dat</code>).
+          </p>
+          <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0;">
+            If you ever need to revert to a previous state, navigate to the <a href="/config" style="color: var(--accent-cyan); font-weight: 600;">Config &amp; History</a> section where any prior snapshot can be restored with a single click.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terminal Update Reference -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <h3 class="card-title">💻 Terminal / Command Line Updating</h3>
+      <p class="card-subtitle">Prefer managing updates via SSH? You can use the DVM Nexus CLI tool anytime</p>
+    </div>
+    <div class="card-body">
+      <div style="background: #050810; padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
+        <code style="color: #6ee7b7; font-size: 0.9rem;">
+          # Check and apply updates via terminal<br>
+          sudo dvm-nexus update<br><br>
+          # Or run the automated installer script<br>
+          sudo /opt/dvm-nexus/scripts/install-nexus.sh
+        </code>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>TGID</th>
+        <th>Name</th>
+        <th>Slot</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tg in talkgroups %}
+      <tr>
+        <td><strong>{{ tg.id or tg.tgid }}</strong></td>
+        <td>{{ tg.name or 'Talkgroup' }}</td>
+        <td>
+          <span class="badge {% if tg.slot == 2 %}badge-indigo{% else %}badge-cyan{% endif %}">
+            Slot {{ tg.slot or 1 }}
+          </span>
+        </td>
+        <td>
+          <button 
+            hx-post="/dmr/talkgroups/delete/{{ tg.id or tg.tgid }}" 
+            hx-target="#dmr-tg-container" 
+            hx-swap="innerHTML"
+            class="btn btn-danger btn-sm"
+            onclick="return confirm('Delete Talkgroup {{ tg.id or tg.tgid }}?')">
+            Delete
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" style="text-align:center; color:var(--text-dim);">No talkgroups defined.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if toast %}
+  <div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+    <div class="toast toast-{{ toast.type }}">
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
+{% endif %}

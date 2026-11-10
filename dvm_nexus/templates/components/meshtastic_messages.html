@@ -1,0 +1,29 @@
+<div class="message-stream">
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="message-item {% if msg.direction == 'outbound' %}msg-outbound{% else %}msg-inbound{% endif %}">
+        <div class="msg-meta">
+          <span class="msg-direction {% if msg.direction == 'outbound' %}dir-tx{% else %}dir-rx{% endif %}">
+            {% if msg.direction == 'outbound' %}TX ⬆{% else %}RX ⬇{% endif %}
+          </span>
+          <strong class="msg-sender">{{ msg.sender_name or msg.sender_id }}</strong>
+          <span class="msg-id">({{ msg.sender_id }})</span>
+          <span class="msg-arrow">➔</span>
+          <span class="msg-recipient">
+            {% if msg.recipient_id == '^all' %}Broadcast{% else %}{{ msg.recipient_id }}{% endif %}
+          </span>
+          <span class="badge badge-secondary" style="font-size: 0.65rem; padding: 2px 6px;">Ch {{ msg.channel }}</span>
+          {% if msg.snr is not none %}
+            <span class="msg-snr">SNR: {{ "%.1f"|format(msg.snr) }} dB</span>
+          {% endif %}
+          <span class="msg-time">{{ msg.timestamp[11:19] }}</span>
+        </div>
+        <div class="msg-text">{{ msg.text }}</div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div style="text-align: center; color: var(--text-dim); padding: 2rem;">
+      No messages received or transmitted yet. Send a message below or simulate inbound activity.
+    </div>
+  {% endif %}
+</div>

@@ -1,0 +1,57 @@
+<div class="table-responsive">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Protocol</th>
+        <th>Direction</th>
+        <th>Radio Endpoint</th>
+        <th>Meshtastic Node / Ch</th>
+        <th>Message Content</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if bridged_messages %}
+        {% for m in bridged_messages %}
+          <tr>
+            <td style="font-size: 0.75rem; color: var(--text-dim); font-family: monospace;">{{ m.timestamp[11:19] }}</td>
+            <td>
+              <span class="badge {% if m.protocol == 'dmr' %}badge-primary{% else %}badge-info{% endif %}">
+                {{ m.protocol|upper }}
+              </span>
+            </td>
+            <td>
+              {% if m.direction == 'mesh_to_radio' %}
+                <span class="badge badge-success" style="font-size: 0.7rem;">Mesh ➔ Radio</span>
+              {% elif m.direction == 'radio_to_mesh' %}
+                <span class="badge badge-warning" style="font-size: 0.7rem;">Radio ➔ Mesh</span>
+              {% else %}
+                <span class="badge badge-secondary" style="font-size: 0.7rem;">Web ➔ Radio</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if m.direction == 'radio_to_mesh' %}
+                <strong>RID {{ m.radio_src_id }}</strong> ➔ <span>TG {{ m.radio_dest_id }}</span>
+              {% else %}
+                <span>Target: <strong>TG {{ m.radio_dest_id }}</strong></span>
+              {% endif %}
+            </td>
+            <td>
+              <code>{{ m.mesh_node_id }}</code>
+              <span class="badge badge-secondary" style="font-size: 0.65rem; margin-left: 4px;">Ch {{ m.mesh_channel }}</span>
+            </td>
+            <td style="font-weight: 500;">{{ m.text }}</td>
+            <td><span class="badge badge-success" style="font-size: 0.65rem;">✓ Delivered</span></td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">
+            No text messages bridged yet. Send a message with <code>#dmr &lt;text&gt;</code> or simulate radio SMS below.
+          </td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,10 @@
+<div class="card" style="border: 2px solid var(--danger); background: var(--danger-bg); margin-top:2rem;">
+  <div style="font-weight:700; color:var(--danger); font-size:1.1rem; margin-bottom:0.5rem;">
+    Validation Error
+  </div>
+  <ul style="padding-left:1.5rem; color:var(--text-main); font-size:0.9rem;">
+    {% for err in errors %}
+      <li>{{ err }}</li>
+    {% endfor %}
+  </ul>
+</div>

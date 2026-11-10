@@ -1,0 +1,56 @@
+<div class="table-responsive">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Callsign / Name</th>
+        <th>Node ID</th>
+        <th>Permission Level</th>
+        <th>Restart Service</th>
+        <th>Switch Profile</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if admins %}
+        {% for a in admins %}
+          <tr>
+            <td><strong>{{ a.callsign_or_name }}</strong></td>
+            <td><code>{{ a.node_id }}</code></td>
+            <td>
+              <span class="badge {% if a.permission_level == 'admin' %}badge-danger{% elif a.permission_level == 'operator' %}badge-warning{% else %}badge-secondary{% endif %}">
+                {{ a.permission_level|upper }}
+              </span>
+            </td>
+            <td>
+              {% if a.can_restart_service %}
+                <span style="color: var(--accent-green); font-weight: bold;">✓ Allowed</span>
+              {% else %}
+                <span style="color: var(--text-dim);">✗ Denied</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if a.can_switch_profile %}
+                <span style="color: var(--accent-green); font-weight: bold;">✓ Allowed</span>
+              {% else %}
+                <span style="color: var(--text-dim);">✗ Denied</span>
+              {% endif %}
+            </td>
+            <td>
+              <form hx-post="/meshtastic/admins/{{ a.node_id }}/delete" hx-target="#admins-table-container" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Revoke admin access for {{ a.node_id }}?')">
+                  Revoke
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">
+            No authorized Meshtastic administrators. Add a node ID below to grant remote management access.
+          </td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>

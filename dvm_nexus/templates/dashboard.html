@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Top Highlights Grid -->
+<div class="grid-4">
+  <div class="card" style="border-left: 4px solid var(--accent-cyan);">
+    <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Active Protocol</div>
+    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">
+      {% if dvm.protocol == 'dmr' %}
+        <span class="badge badge-cyan" style="font-size:0.95rem;">DMR Tier II</span>
+      {% elif dvm.protocol == 'p25' %}
+        <span class="badge badge-indigo" style="font-size:0.95rem;">P25 Phase 1</span>
+      {% else %}
+        <span class="badge badge-warning" style="font-size:0.95rem;">{{ dvm.protocol|upper }}</span>
+      {% endif %}
+    </div>
+    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
+      Profile: <strong>{{ profile.name if profile else 'Custom' }}</strong>
+    </div>
+  </div>
+
+  <div class="card" style="border-left: 4px solid var(--accent-blue);">
+    <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Identity & Site</div>
+    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">
+      {{ dvm.callsign }}
+    </div>
+    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
+      Site ID: <strong>{{ dvm.channel_id }}</strong> | Ch: <strong>#{{ dvm.channel_no }}</strong>
+    </div>
+  </div>
+
+  <div class="card" style="border-left: 4px solid {% if dvm.duplex %}var(--success){% else %}var(--warning){% endif %};">
+    <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">RF Mode</div>
+    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">
+      {% if dvm.duplex %}
+        <span style="color:var(--success);">Full Duplex</span>
+      {% else %}
+        <span style="color:var(--warning);">Simplex</span>
+      {% endif %}
+    </div>
+    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
+      ADF7021 Dual Transceivers
+    </div>
+  </div>
+
+  <div class="card" style="border-left: 4px solid {% if dvm.network_enabled %}var(--success){% else %}var(--text-dim){% endif %};">
+    <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Network / FNE</div>
+    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">
+      {% if dvm.network_enabled %}
+        <span style="color:var(--success);">Peer #{{ dvm.network_peer_id }}</span>
+      {% else %}
+        <span style="color:var(--text-dim);">Standalone RF</span>
+      {% endif %}
+    </div>
+    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
+      {% if dvm.network_enabled %}{{ dvm.network_address }}:{{ dvm.network_port }}{% else %}No Network Link{% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Live Hardware Metrics (Auto-polled via HTMX) -->
+<div id="sys-stats-container" hx-get="/components/system-stats" hx-trigger="every 3s">
+  {% include "components/sys_stats.html" %}
+</div>
+
+<!-- Main Row: Radio Config Details & Service Controls -->
+<div class="grid-2">
+  <!-- Radio Operational Details -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📡 Active Radio Configuration</div>
+      <a href="{% if dvm.protocol == 'dmr' %}/dmr{% else %}/p25{% endif %}" class="btn btn-secondary btn-sm">Configure →</a>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <tbody>
+          <tr>
+            <td style="color:var(--text-dim); width:40%;">Active Mode</td>
+            <td><strong>{{ dvm.protocol|upper }}</strong> ({% if dvm.duplex %}Duplex Repeater{% else %}Simplex Hotspot{% endif %})</td>
+          </tr>
+          {% if dvm.protocol == 'dmr' %}
+          <tr>
+            <td style="color:var(--text-dim);">DMR Color Code</td>
+            <td><span class="badge badge-cyan">{{ dvm.color_code }}</span></td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-dim);">DMR Network ID</td>
+            <td>{{ dvm.network_peer_id }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-dim);">Time Slots</td>
+            <td>Slot 1 (Active), Slot 2 (Active)</td>
+          </tr>
+          {% elif dvm.protocol == 'p25' %}
+          <tr>
+            <td style="color:var(--text-dim);">P25 NAC (Hex)</td>
+            <td><span class="badge badge-indigo">0x{{ dvm.nac }}</span></td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-dim);">P25 WACN / SysID</td>
+            <td>WACN: <strong>{{ dvm.net_id }}</strong> | SysID: <strong>001</strong></td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td style="color:var(--text-dim);">Modem Port & Speed</td>
+            <td><code>{{ dvm.modem_port }}</code> @ {{ dvm.modem_speed }} baud</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-dim);">DVMHost REST API</td>
+            <td>
+              {% if dvm.rest_enabled %}
+                <span class="badge badge-success">Port {{ dvm.rest_port }}</span>
+              {% else %}
+                <span class="badge badge-danger">Disabled</span>
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Service Controls Container -->
+  <div id="service-controls-container">
+    {% include "components/service_controls.html" %}
+  </div>
+</div>
+
+<!-- Recent Event & Audit Log -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">📋 Recent System & Radio Events</div>
+    <span style="font-size:0.8rem; color:var(--text-dim);">Audit Trail</span>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp (UTC)</th>
+          <th>Category</th>
+          <th>Action</th>
+          <th>Details</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td style="color:var(--text-dim); font-size:0.8rem;">{{ log.timestamp }}</td>
+          <td><span class="badge badge-cyan">{{ log.category }}</span></td>
+          <td><strong>{{ log.action }}</strong></td>
+          <td>{{ log.details }}</td>
+          <td>
+            {% if log.status == 'success' %}
+              <span class="badge badge-success">OK</span>
+            {% elif log.status == 'warning' %}
+              <span class="badge badge-warning">WARN</span>
+            {% else %}
+              <span class="badge badge-danger">ERR</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" style="text-align:center; color:var(--text-dim);">No recent activity recorded.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

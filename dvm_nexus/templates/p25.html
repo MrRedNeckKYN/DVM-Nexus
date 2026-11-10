@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Top Live OTA P25 Commands -->
+<div class="card" style="border-left:4px solid var(--accent-indigo);">
+  <div class="card-header">
+    <div class="card-title">⚡ Live Over-The-Air P25 Commands</div>
+    <span class="badge badge-indigo">REST API Direct</span>
+  </div>
+  <form hx-post="/p25/rids/action" hx-target="#toast-container" hx-swap="beforeend" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+    <div style="flex:1; min-width:140px;">
+      <label class="form-label">Command</label>
+      <select name="action" class="form-control">
+        <option value="check">Radio Check</option>
+        <option value="page">Radio Page / Call Alert</option>
+        <option value="inhibit">Inhibit (Stun / Kill)</option>
+        <option value="uninhibit">Uninhibit (Revive)</option>
+        <option value="dyn-regrp">Dynamic Regroup</option>
+      </select>
+    </div>
+    <div style="flex:1; min-width:140px;">
+      <label class="form-label">Target Radio ID (RID)</label>
+      <input type="number" name="rid" class="form-control" placeholder="e.g. 1234567" required>
+    </div>
+    <button type="submit" class="btn btn-primary" style="height:38px;">Send Command</button>
+  </form>
+</div>
+
+<!-- Active Frequency & Channel Info Pill -->
+{% if active_tx_mhz and active_rx_mhz %}
+<div class="card" style="background:var(--bg-secondary); border-color:var(--border-light); margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center;">
+  <div>
+    <div style="font-size:0.8rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Calculated Frequency from IDEN Bandplan</div>
+    <div style="font-size:1.2rem; font-weight:700; margin-top:0.25rem;">
+      TX: <span style="color:var(--accent-cyan);">{{ active_tx_mhz }} MHz</span> &nbsp;|&nbsp;
+      RX: <span style="color:var(--success);">{{ active_rx_mhz }} MHz</span>
+    </div>
+  </div>
+  <div>
+    <span class="badge badge-indigo">IDEN Ch #{{ sys.channelId }} / Slot {{ sys.channelNo }}</span>
+  </div>
+</div>
+{% endif %}
+
+<!-- P25 Parameters Form -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">⚙️ P25 Phase 1 Parameters</div>
+    <span style="font-size:0.85rem; color:var(--text-dim);">Stored in <code>config.yml</code></span>
+  </div>
+
+  <form hx-post="/p25/save" hx-target="#toast-container" hx-swap="beforeend">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">P25 Mode</label>
+        <select name="enable" class="form-control">
+          <option value="true" {% if p25.enable %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if not p25.enable %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">P25 NAC (Network Access Code)</label>
+        <input type="text" name="nac" class="form-control" value="{{ sys.nac or '293' }}" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">TX NAC Override (Optional)</label>
+        <input type="text" name="tx_nac" class="form-control" value="{{ sys.txNAC or '' }}" placeholder="Leave blank to match RX">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">WACN (Wide Area Net ID)</label>
+        <input type="text" name="wacn" class="form-control" value="{{ sys.netId or 'BB800' }}" required>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">System ID (3-digit Hex)</label>
+        <input type="text" name="sys_id" class="form-control" value="{{ sys.sysId or '001' }}" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">RFSS ID (1 - 255)</label>
+        <input type="number" name="rfss_id" class="form-control" value="{{ sys.rfssId or 1 }}" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Site ID (1 - 255)</label>
+        <input type="number" name="site_id" class="form-control" value="{{ sys.siteId or 1 }}" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Call Hang Time (seconds)</label>
+        <input type="number" name="call_hang" class="form-control" value="{{ p25.callHang or 5 }}">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">IDEN Channel ID (0 - 15)</label>
+        <input type="number" name="channel_id" class="form-control" min="0" max="15" value="{{ sys.channelId or 0 }}" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">IDEN Channel Number</label>
+        <input type="number" name="channel_no" class="form-control" value="{{ sys.channelNo or 1 }}" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">TDU Preamble Count</label>
+        <input type="number" name="tdu_preambles" class="form-control" value="{{ p25.tduPreambleCount or 6 }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">P25 Correlation Count</label>
+        <input type="number" name="p25_corr_count" class="form-control" value="{{ modem.p25CorrCount or 2 }}">
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end;">
+      <button type="submit" class="btn btn-primary">💾 Save P25 Settings</button>
+    </div>
+  </form>
+</div>
+
+<!-- IDEN Bandplan Table -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="card-title">📋 IDEN Frequency Bandplan Table</div>
+      <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">
+        Defines base frequencies, step spacing, and RX input offsets in <code>iden_table.dat</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Update IDEN Row Form -->
+  <form hx-post="/p25/iden/save" hx-target="#p25-iden-container" hx-swap="innerHTML" style="margin-bottom:1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+    <div style="width:90px;">
+      <label class="form-label">Ch ID</label>
+      <input type="number" name="channel_id" class="form-control" min="0" max="15" placeholder="0" required>
+    </div>
+    <div style="flex:2; min-width:140px;">
+      <label class="form-label">Base Freq (Hz)</label>
+      <input type="number" name="base_freq_hz" class="form-control" placeholder="e.g. 440000000" required>
+    </div>
+    <div style="width:110px;">
+      <label class="form-label">Spacing (kHz)</label>
+      <input type="number" step="0.01" name="spacing_khz" class="form-control" value="6.25" required>
+    </div>
+    <div style="width:120px;">
+      <label class="form-label">Offset (MHz)</label>
+      <input type="number" step="0.001" name="offset_mhz" class="form-control" value="5.000" required>
+    </div>
+    <div style="width:110px;">
+      <label class="form-label">BW (kHz)</label>
+      <input type="number" step="0.1" name="bandwidth_khz" class="form-control" value="12.5" required>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm" style="height:38px;">Save IDEN</button>
+  </form>
+
+  <div id="p25-iden-container">
+    {% include "components/p25_iden_table.html" %}
+  </div>
+</div>
+
+<!-- P25 Text Messaging & Meshtastic Gateway -->
+<div class="card" style="margin-top: 1.5rem;">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <div class="card-title">💬 P25 Over-the-Air Text Messenger &amp; Meshtastic Bridge</div>
+      <span style="font-size:0.75rem; color:var(--text-dim);">Send and receive P25 packet data / TMS messages linked with Meshtastic</span>
+    </div>
+    <a href="/meshtastic" class="btn btn-secondary btn-sm">🌐 Meshtastic Gateway Settings</a>
+  </div>
+  <div class="card-body">
+    <form hx-post="/p25/send-sms" hx-target="#toast-container" hx-swap="beforeend" onsubmit="setTimeout(() => document.getElementById('p25-sms-text').value='', 50)" class="form-row">
+      <div class="form-group col-md-2">
+        <label class="form-label">Target Type</label>
+        <select name="target_type" class="form-control">
+          <option value="group">Talkgroup (Group SMS)</option>
+          <option value="private">Unit ID (Private SMS)</option>
+        </select>
+      </div>
+      <div class="form-group col-md-2">
+        <label class="form-label">Target TG / Unit ID</label>
+        <input type="number" name="target_id" class="form-control" value="101" placeholder="e.g. 101" required>
+      </div>
+      <div class="form-group col-md-5">
+        <label class="form-label">Message Text</label>
+        <input type="text" name="text" id="p25-sms-text" class="form-control" placeholder="Enter text to transmit over P25..." required>
+      </div>
+      <div class="form-group col-md-2" style="display:flex; align-items:center; padding-top:1.5rem;">
+        <label style="font-size:0.8rem; cursor:pointer;">
+          <input type="checkbox" name="forward_to_mesh" value="1" checked style="margin-right:4px;"> Mirror to Meshtastic
+        </label>
+      </div>
+      <div class="form-group col-md-1" style="display:flex; align-items:flex-end;">
+        <button type="submit" class="btn btn-primary" style="width:100%;">Transmit</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

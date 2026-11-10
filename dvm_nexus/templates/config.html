@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Revision History & Rollback -->
+<div class="card" style="border-left:4px solid var(--accent-cyan);">
+  <div class="card-header">
+    <div>
+      <div class="card-title">📜 Configuration Snapshots & Revision History</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">
+        Automatic timestamped backups created prior to any configuration change or profile activation. View side-by-side diffs or roll back with 1-click.
+      </div>
+    </div>
+  </div>
+
+  <div id="revision-table-container">
+    {% include "components/revision_table.html" %}
+  </div>
+</div>
+
+<!-- Modal / In-page Diff Viewer Target -->
+<div id="diff-viewer-target"></div>
+
+<!-- Raw YAML Configuration Editor -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="card-title">📝 Raw YAML Editor (Expert Mode)</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">
+        Direct access to <code>config.yml</code> with syntax validation and automatic backup before saving.
+      </div>
+    </div>
+  </div>
+
+  <form hx-post="/config/raw-save" hx-target="#toast-container" hx-swap="beforeend">
+    <div class="form-group">
+      <textarea 
+        name="raw_content" 
+        class="form-control" 
+        rows="22" 
+        style="font-family:ui-monospace, monospace; font-size:0.85rem; line-height:1.4; background:#050810;" 
+        required>{{ raw_yaml }}</textarea>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-size:0.8rem; color:var(--text-dim);">
+        Changes are validated with PyYAML before committing to disk.
+      </span>
+      <button type="submit" class="btn btn-primary" onclick="return confirm('Save manual YAML changes? A backup snapshot will be created automatically.')">
+        💾 Validate & Save YAML
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

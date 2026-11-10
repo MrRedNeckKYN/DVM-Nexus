@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest cache and test coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Nexus runtime databases and temporary test databases
+*.db
+*.db-journal
+*.sqlite3
+data/*.db
+dvm_nexus/data/*.db
+dvm_nexus/data/*.log
+dvm_nexus/data/backups/
+dvm_nexus/data/active/
+dvm_nexus/data/tmp_update/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/

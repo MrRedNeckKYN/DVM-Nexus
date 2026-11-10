@@ -1,0 +1,75 @@
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Profile Name</th>
+        <th>Protocol</th>
+        <th>Description</th>
+        <th>Last Updated</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for prof in profiles %}
+      <tr style="{% if prof.is_active %}background:rgba(6, 182, 212, 0.08);{% endif %}">
+        <td>
+          {% if prof.is_active %}
+            <span class="badge badge-success">● Active</span>
+          {% else %}
+            <span class="badge badge-warning">Inactive</span>
+          {% endif %}
+        </td>
+        <td>
+          <strong style="font-size:0.95rem;">{{ prof.name }}</strong>
+        </td>
+        <td>
+          {% if prof.protocol == 'dmr' %}
+            <span class="badge badge-cyan">DMR</span>
+          {% else %}
+            <span class="badge badge-indigo">P25</span>
+          {% endif %}
+        </td>
+        <td style="color:var(--text-muted); font-size:0.85rem;">{{ prof.description or '—' }}</td>
+        <td style="color:var(--text-dim); font-size:0.8rem;">{{ prof.updated_at[:16] }}</td>
+        <td>
+          <div style="display:flex; gap:0.5rem;">
+            {% if not prof.is_active %}
+              <button 
+                hx-post="/profiles/activate/{{ prof.id }}" 
+                hx-target="#profile-list-container" 
+                hx-swap="innerHTML"
+                class="btn btn-primary btn-sm"
+                onclick="return confirm('Switch to profile \'{{ prof.name }}\'? DVMHost will be safely stopped and restarted.')">
+                ⚡ Activate
+              </button>
+              <button 
+                hx-post="/profiles/delete/{{ prof.id }}" 
+                hx-target="#profile-list-container" 
+                hx-swap="innerHTML"
+                class="btn btn-danger btn-sm"
+                onclick="return confirm('Delete profile \'{{ prof.name }}\'?')">
+                Delete
+              </button>
+            {% else %}
+              <span style="font-size:0.8rem; color:var(--success); font-weight:600;">Currently Active</span>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" style="text-align:center; color:var(--text-dim);">No profiles found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if toast %}
+  <div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+    <div class="toast toast-{{ toast.type }}">
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
+{% endif %}

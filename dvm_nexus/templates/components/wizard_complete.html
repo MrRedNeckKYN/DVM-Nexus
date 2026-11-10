@@ -1,0 +1,30 @@
+<div class="card" style="border: 2px solid var(--success); background: rgba(16, 185, 129, 0.05); margin-top:2rem;">
+  <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+    <div style="width:40px; height:40px; border-radius:50%; background:var(--success); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.5rem; font-weight:bold;">
+      ✓
+    </div>
+    <div>
+      <h3 style="font-size:1.25rem; font-weight:700; color:var(--success);">Network Successfully Created and Applied!</h3>
+      <div style="font-size:0.875rem; color:var(--text-muted);">
+        Configuration for <strong>{{ network_name }}</strong> ({{ protocol|upper }}) was written atomically and verified.
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:1rem; background:var(--bg-secondary); border-radius:var(--radius-md); margin-bottom:1.25rem; font-size:0.85rem;">
+    <div><strong>Backup Snapshot:</strong> <code>{{ backup_dir }}</code></div>
+    <div style="margin-top:0.25rem;">
+      <strong>Service Status:</strong> 
+      {% if verified %}
+        <span class="badge badge-success">Running & Verified</span>
+      {% else %}
+        <span class="badge badge-warning">Service Restart Triggered</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="display:flex; gap:1rem;">
+    <a href="/" class="btn btn-primary">Go to Dashboard →</a>
+    <a href="/profiles" class="btn btn-secondary">View Profiles</a>
+  </div>
+</div>

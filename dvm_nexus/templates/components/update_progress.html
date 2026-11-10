@@ -1,0 +1,41 @@
+<div class="update-progress-view">
+  {% if res.success %}
+    <div class="alert alert-success mb-3">
+      <strong>✅ Update Applied Successfully!</strong>
+      <div>{{ res.message }}</div>
+      <div style="font-size: 0.8rem; margin-top: 0.5rem; color: var(--text-dim);">
+        The web interface will automatically reconnect once the service finishes reloading.
+      </div>
+    </div>
+  {% else %}
+    <div class="alert alert-danger mb-3">
+      <strong>❌ Update Notice:</strong>
+      <div>{{ res.error }}</div>
+    </div>
+  {% endif %}
+
+  <!-- Execution Console Log -->
+  <div style="background: #050810; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+    <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); font-weight: 600; margin-bottom: 0.5rem;">
+      Update Execution Console Output
+    </div>
+    <div style="font-family: monospace; font-size: 0.825rem; color: #67e8f9; line-height: 1.4; max-height: 250px; overflow-y: auto;">
+      {% if res.logs %}
+        {% for line in res.logs %}
+          <div>{{ line }}</div>
+        {% endfor %}
+      {% else %}
+        <div>No logs recorded.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 0.5rem;">
+    <button type="button" class="btn btn-secondary btn-sm" onclick="location.reload();">
+      🔄 Refresh Page
+    </button>
+    <a href="/" class="btn btn-primary btn-sm">
+      📊 Return to Dashboard
+    </a>
+  </div>
+</div>

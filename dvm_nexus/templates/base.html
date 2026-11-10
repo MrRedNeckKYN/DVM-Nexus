@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} - DVM Nexus</title>
+  <link rel="stylesheet" href="/static/css/nexus.css">
+  <script src="/static/js/htmx.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">N</div>
+        <div>
+          <div class="brand-title">DVM Nexus</div>
+          <div class="brand-subtitle">Radio Network OS</div>
+        </div>
+      </div>
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <a href="/" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}">
+            <span>📊</span> Dashboard
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/wizard" class="nav-link {% if active_tab == 'wizard' %}active{% endif %}">
+            <span>✨</span> Network Builder
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/dmr" class="nav-link {% if active_tab == 'dmr' %}active{% endif %}">
+            <span>📻</span> DMR Management
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/p25" class="nav-link {% if active_tab == 'p25' %}active{% endif %}">
+            <span>⚡</span> P25 Management
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/profiles" class="nav-link {% if active_tab == 'profiles' %}active{% endif %}">
+            <span>🔄</span> Radio Profiles
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/modem" class="nav-link {% if active_tab == 'modem' %}active{% endif %}">
+            <span>📡</span> Modem & RF
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/meshtastic" class="nav-link {% if active_tab == 'meshtastic' %}active{% endif %}">
+            <span>🌐</span> Meshtastic
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/config" class="nav-link {% if active_tab == 'config' %}active{% endif %}">
+            <span>⚙️</span> Config & History
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/updates" class="nav-link {% if active_tab == 'updates' %}active{% endif %}">
+            <span>🔄</span> System Updates
+          </a>
+        </li>
+      </ul>
+      <div style="padding: 1rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-dim);">
+        <div>Hardware: Raspberry Pi 5</div>
+        <div>Target: MMDVM Duplex Hat</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan);">DVM Nexus v1.0.0</div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <header class="top-header">
+        <div class="header-left">
+          <h1 class="page-title">{{ title }}</h1>
+        </div>
+        <div class="header-right">
+          <div id="service-badge-container" hx-get="/components/service-badge" hx-trigger="every 5s">
+            {% include "components/status_badge.html" %}
+          </div>
+          <form hx-post="/api/service/restart" hx-target="#service-controls-container" hx-swap="innerHTML" style="display:inline;">
+            <button type="submit" class="btn btn-secondary btn-sm" title="Restart DVMHost Service">
+              🔄 Restart Radio
+            </button>
+          </form>
+        </div>
+      </header>
+
+      <main class="page-container">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <script>
+    // Simple auto-dismiss toast handler
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+      const toasts = document.querySelectorAll('.toast');
+      toasts.forEach(t => {
+        setTimeout(() => {
+          t.style.opacity = '0';
+          setTimeout(() => t.remove(), 300);
+        }, 4000);
+      });
+    });
+  </script>
+</body>
+</html>

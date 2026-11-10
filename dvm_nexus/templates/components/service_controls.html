@@ -1,0 +1,35 @@
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Radio Service Control</div>
+    {% if service.is_running %}
+      <span class="badge badge-success">Running</span>
+    {% else %}
+      <span class="badge badge-danger">Stopped</span>
+    {% endif %}
+  </div>
+  
+  <p style="font-size:0.875rem; color:var(--text-muted); margin-bottom:1rem;">
+    Direct management of <code>{{ service.service }}</code>. Changes to active configuration require a restart to apply.
+  </p>
+
+  <div style="display:flex; gap:0.75rem; align-items:center;">
+    {% if service.is_running %}
+      <form hx-post="/api/service/restart" hx-target="#service-controls-container" hx-swap="innerHTML">
+        <button type="submit" class="btn btn-secondary">🔄 Restart Service</button>
+      </form>
+      <form hx-post="/api/service/stop" hx-target="#service-controls-container" hx-swap="innerHTML">
+        <button type="submit" class="btn btn-danger">⏹️ Stop Service</button>
+      </form>
+    {% else %}
+      <form hx-post="/api/service/start" hx-target="#service-controls-container" hx-swap="innerHTML">
+        <button type="submit" class="btn btn-primary">▶️ Start Service</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {% if message %}
+    <div style="margin-top:1rem; font-size:0.85rem; padding:0.5rem 0.75rem; border-radius:var(--radius-sm); {% if is_success %}background:var(--success-bg); color:var(--success);{% else %}background:var(--danger-bg); color:var(--danger);{% endif %}">
+      {{ message }}
+    </div>
+  {% endif %}
+</div>

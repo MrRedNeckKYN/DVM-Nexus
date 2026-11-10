@@ -1,0 +1,79 @@
+<div class="table-responsive">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Node</th>
+        <th>Node ID</th>
+        <th>Hardware</th>
+        <th>Battery / Power</th>
+        <th>Signal (SNR)</th>
+        <th>GPS Position</th>
+        <th>Last Heard</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if nodes %}
+        {% for n in nodes %}
+          <tr>
+            <td>
+              <strong>{{ n.long_name }}</strong>
+              <div style="font-size: 0.75rem; color: var(--accent-cyan);">[{{ n.short_name }}]</div>
+            </td>
+            <td><code>{{ n.id }}</code></td>
+            <td><span class="badge badge-secondary">{{ n.hw_model }}</span></td>
+            <td>
+              {% if n.battery is not none %}
+                <span class="badge {% if n.battery > 50 %}badge-success{% elif n.battery > 20 %}badge-warning{% else %}badge-danger{% endif %}">
+                  🔋 {{ n.battery }}%
+                </span>
+                {% if n.voltage %}
+                  <span style="font-size: 0.75rem; color: var(--text-dim); margin-left: 4px;">{{ "%.2f"|format(n.voltage) }}V</span>
+                {% endif %}
+              {% else %}
+                <span style="color: var(--text-dim);">N/A</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if n.snr is not none %}
+                <span style="font-weight: 600; color: {% if n.snr > 8 %}var(--accent-green){% elif n.snr > 3 %}var(--accent-cyan){% else %}var(--accent-orange){% endif %};">
+                  {{ "%.1f"|format(n.snr) }} dB
+                </span>
+              {% else %}
+                <span style="color: var(--text-dim);">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if n.latitude and n.longitude %}
+                <span style="font-size: 0.8rem; font-family: monospace;">
+                  {{ "%.4f"|format(n.latitude) }}, {{ "%.4f"|format(n.longitude) }}
+                </span>
+              {% else %}
+                <span style="color: var(--text-dim);">No Fix</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if n.last_heard %}
+                <span style="font-size: 0.8rem; color: var(--text-dim);">Recent</span>
+              {% else %}
+                <span style="color: var(--text-dim);">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <button type="button" class="btn btn-secondary btn-sm"
+                      onclick="setRecipient('{{ n.id }}', '{{ n.long_name }}')">
+                ✉️ DM
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">
+            No mesh nodes discovered. Verify device connection or scan nearby nodes.
+          </td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>

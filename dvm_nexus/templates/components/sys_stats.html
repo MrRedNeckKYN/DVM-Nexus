@@ -1,0 +1,38 @@
+<div class="grid-4">
+  <div class="card" style="margin-bottom:0;">
+    <div style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">CPU Utilization</div>
+    <div style="font-size:1.6rem; font-weight:700; margin-top:0.25rem;">{{ sys.cpu_percent }}%</div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" style="width: {{ sys.cpu_percent }}%;"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:0;">
+    <div style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">CPU Temperature</div>
+    <div style="font-size:1.6rem; font-weight:700; margin-top:0.25rem; color:{% if sys.cpu_temp_c and sys.cpu_temp_c > 65 %}var(--danger){% elif sys.cpu_temp_c and sys.cpu_temp_c > 50 %}var(--warning){% else %}var(--success){% endif %};">
+      {{ sys.cpu_temp_display }}
+    </div>
+    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:0.4rem;">
+      Raspberry Pi 5 SoC Thermal
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:0;">
+    <div style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">Memory Usage</div>
+    <div style="font-size:1.6rem; font-weight:700; margin-top:0.25rem;">{{ sys.memory_percent }}%</div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" style="width: {{ sys.memory_percent }}%; background-color:var(--accent-blue);"></div>
+    </div>
+    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:0.4rem;">
+      {{ sys.memory_used_mb }} / {{ sys.memory_total_mb }} MB
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:0;">
+    <div style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">Disk & Uptime</div>
+    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">{{ sys.uptime }}</div>
+    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:0.4rem;">
+      Disk: {{ sys.disk_percent }}% used ({{ sys.disk_used_gb }} / {{ sys.disk_total_gb }} GB)
+    </div>
+  </div>
+</div>
