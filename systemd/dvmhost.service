@@ -1,0 +1,20 @@
+[Unit]
+Description=DVMHost Digital Voice Modem Host
+Documentation=https://github.com/DVMProject/dvmhost
+After=network.target syslog.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/dvm
+ExecStart=/opt/dvm/bin/dvmhost -c /opt/dvm/config.yml
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

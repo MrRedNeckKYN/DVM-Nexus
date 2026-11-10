@@ -71,6 +71,9 @@ class DVMConfigManager:
         """Serialize dictionary back to config.yml with backup."""
         self.ensure_active_config_exists()
         backup_manager.create_backup(summary=summary, changed_files=["config.yml"])
+        # Enforce DVMHost systemd and execution requirements
+        data["iAgreeNotToBeStupid"] = True
+        data["daemon"] = False
         content = yaml.dump(data, default_flow_style=False, sort_keys=False)
         backup_manager.atomic_write(self.config_path, content)
 

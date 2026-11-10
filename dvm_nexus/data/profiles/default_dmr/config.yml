@@ -1,5 +1,5 @@
-daemon: true
-iAgreeNotToBeStupid: false
+daemon: false
+iAgreeNotToBeStupid: true
 log:
   disableNonAuthoritiveLogging: false
   displayLevel: 1
@@ -161,7 +161,7 @@ system:
   config:
     authoritative: true
     supervisor: false
-    channelId: 2
+    channelId: 0
     channelNo: 1
     controlCh:
       rpcAddress: 127.0.0.1
@@ -178,14 +178,14 @@ system:
     secure:
       key: 000102030405060708090A0B0C0D0E0F
     colorCode: 1
-    nac: 293
+    nac: '456'
     ran: 1
     pSuperGroup: FFFE
     announcementGroup: FFFE
     defaultNetIdleTalkgroup: 0
     dmrNetId: 1
-    netId: BB800
-    sysId: 1
+    netId: BEE00
+    sysId: '002'
     rfssId: 1
     siteId: 1
   cwId:

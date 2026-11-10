@@ -1,5 +1,5 @@
-daemon: true
-iAgreeNotToBeStupid: false
+daemon: false
+iAgreeNotToBeStupid: true
 log:
   disableNonAuthoritiveLogging: false
   displayLevel: 1
