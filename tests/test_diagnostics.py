@@ -29,6 +29,7 @@ def test_diagnostics_health_checks():
     check_ids = [c["id"] for c in report["checks"]]
     assert "service_state" in check_ids
     assert "config_file" in check_ids
+    assert "yaml_indentation" in check_ids
     assert "stupid_check" in check_ids
     assert "daemon_mode" in check_ids
 
@@ -60,6 +61,48 @@ def test_diagnostics_detects_bad_config_and_autofixes():
     stupid_fixed = next((c for c in recheck["checks"] if c["id"] == "stupid_check"), None)
     assert stupid_fixed is not None
     assert stupid_fixed["status"] == "pass"
+
+
+def test_diagnostics_detects_bad_yaml_indent_and_autofixes():
+    """Verify doctor catches unindented sequence items (yaml-cpp incompatibility) and autofixes it."""
+    orig = dvm_config_manager.config_path.read_text(encoding="utf-8")
+    good_block = (
+        "    voiceChNo:\n"
+        "      - channelId: 2\n"
+        "        channelNo: 1\n"
+        "        rpcAddress: 127.0.0.1\n"
+        "        rpcPort: 9890\n"
+        "        rpcPassword: ULTRA-VERY-SECURE-DEFAULT"
+    )
+    bad_block = (
+        "    voiceChNo:\n"
+        "    - channelId: 2\n"
+        "      channelNo: 1\n"
+        "      rpcAddress: 127.0.0.1\n"
+        "      rpcPort: 9890\n"
+        "      rpcPassword: ULTRA-VERY-SECURE-DEFAULT"
+    )
+    try:
+        bad_content = orig.replace(good_block, bad_block)
+        dvm_config_manager.config_path.write_text(bad_content, encoding="utf-8")
+
+        # Run doctor check
+        report = diagnostics_engine.run_health_checks()
+        yaml_check = next((c for c in report["checks"] if c["id"] == "yaml_indentation"), None)
+        assert yaml_check is not None
+        assert yaml_check["status"] == "fail"
+
+        # Run auto-fix
+        fix_res = diagnostics_engine.auto_fix_all()
+        assert any("YAML" in f for f in fix_res["fixes_applied"])
+
+        # Verify fixed
+        recheck = diagnostics_engine.run_health_checks()
+        yaml_fixed = next((c for c in recheck["checks"] if c["id"] == "yaml_indentation"), None)
+        assert yaml_fixed is not None
+        assert yaml_fixed["status"] == "pass"
+    finally:
+        dvm_config_manager.config_path.write_text(orig, encoding="utf-8")
 
 
 def test_diagnostics_logs_parsing_and_filtering():

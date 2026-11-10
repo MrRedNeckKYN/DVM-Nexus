@@ -13,6 +13,15 @@ from dvm_nexus.core.config import settings, DEFAULT_CONFIGS_DIR
 from dvm_nexus.config_engine.backup_manager import backup_manager
 
 
+class IndentedSafeDumper(yaml.SafeDumper):
+    """
+    Custom YAML dumper that indents sequences under mapping keys.
+    Required for C++ yaml-cpp compatibility in DVMHost.
+    """
+    def increase_indent(self, flow=False, indentless=False):
+        return super().increase_indent(flow=flow, indentless=False)
+
+
 class DVMConfigManager:
     """Manages active DVMHost configuration files."""
 
@@ -91,7 +100,7 @@ class DVMConfigManager:
         # Enforce DVMHost systemd and execution requirements
         data["iAgreeNotToBeStupid"] = True
         data["daemon"] = False
-        content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+        content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
         backup_manager.atomic_write(self.config_path, content)
 
     def get_active_protocol(self) -> str:

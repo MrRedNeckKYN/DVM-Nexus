@@ -4,6 +4,7 @@ Performs live health checks, crash log analysis, and automated configuration rep
 """
 
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -195,6 +196,34 @@ class DiagnosticsEngine:
                     "summary": "config.yml is present and passed YAML structural parsing.",
                     "auto_fixable": False,
                 })
+
+                # Check yaml-cpp parser compatibility (sequences must be indented relative to mapping key)
+                raw_cfg = cfg_path.read_text(encoding="utf-8")
+                bad_indent = False
+                for m in re.finditer(r'^([ \t]*)([a-zA-Z0-9_-]+):\s*\n([ \t]*)-\s', raw_cfg, re.MULTILINE):
+                    if len(m.group(3)) <= len(m.group(1)):
+                        bad_indent = True
+                        break
+                if bad_indent:
+                    checks.append({
+                        "id": "yaml_indentation",
+                        "name": "YAML-CPP Compatibility (List Indentation)",
+                        "status": "fail",
+                        "badge": "BAD INDENT",
+                        "summary": "config.yml has list entries not indented under their parent key. DVMHost yaml-cpp parser will reject this with 'Different entry is not allowed'.",
+                        "remedy": "Click Auto-Repair to automatically format sequences with compliant indentation.",
+                        "auto_fixable": True,
+                        "fix_id": "fix_yaml_indent",
+                    })
+                else:
+                    checks.append({
+                        "id": "yaml_indentation",
+                        "name": "YAML-CPP Compatibility (List Indentation)",
+                        "status": "pass",
+                        "badge": "COMPLIANT",
+                        "summary": "List indentation is fully compliant with DVMHost C++ yaml-cpp parser.",
+                        "auto_fixable": False,
+                    })
             except Exception as e:
                 checks.append({
                     "id": "config_file",
@@ -375,8 +404,20 @@ class DiagnosticsEngine:
                 fixes_applied.append("Set 'daemon: false' in config.yml (systemd foreground supervision)")
                 modified = True
 
+            # Check if raw config has yaml-cpp incompatible sequence indentation
+            raw_cfg = cfg_file.read_text(encoding="utf-8") if cfg_file.exists() else ""
+            bad_indent = False
+            for m in re.finditer(r'^([ \t]*)([a-zA-Z0-9_-]+):\s*\n([ \t]*)-\s', raw_cfg, re.MULTILINE):
+                if len(m.group(3)) <= len(m.group(1)):
+                    bad_indent = True
+                    break
+
+            if bad_indent:
+                fixes_applied.append("Reformatted YAML list indentation for DVMHost yaml-cpp compatibility")
+                modified = True
+
             if modified or not cfg_file.exists():
-                dvm_config_manager.save_config_dict(cfg, summary="Auto-Fix: Corrected DVMHost policy and daemon flags")
+                dvm_config_manager.save_config_dict(cfg, summary="Auto-Fix: Corrected DVMHost policy, daemon, and YAML indentation")
 
             # 3. Restore any missing baseline data tables
             for tbl in ("iden_table.dat", "rid_acl.dat", "talkgroup_rules.yml"):
