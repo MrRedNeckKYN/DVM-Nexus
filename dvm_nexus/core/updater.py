@@ -31,6 +31,26 @@ class SystemUpdater:
         self._logs: List[str] = []
         self._last_check: Optional[Dict[str, Any]] = None
 
+    @property
+    def git_bin(self) -> str:
+        """Locate git binary across Raspberry Pi OS, Linux, and Windows."""
+        which_git = shutil.which("git")
+        if which_git:
+            return which_git
+        candidates = [
+            r"C:\Program Files\Git\cmd\git.exe",
+            r"C:\Program Files\Git\bin\git.exe",
+            r"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe",
+            r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe",
+            r"C:\Program Files (x86)\Git\cmd\git.exe",
+            r"/usr/bin/git",
+            r"/usr/local/bin/git"
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+        return "git"
+
     def get_repo_info(self) -> Dict[str, Any]:
         """Detect local Git repository status and current version."""
         git_dir = self.repo_dir / ".git"
@@ -43,7 +63,7 @@ class SystemUpdater:
         if is_git:
             try:
                 res = subprocess.run(
-                    ["git", "rev-parse", "--short", "HEAD"],
+                    [self.git_bin, "rev-parse", "--short", "HEAD"],
                     cwd=str(self.repo_dir),
                     capture_output=True,
                     text=True,
@@ -53,7 +73,7 @@ class SystemUpdater:
                     commit_hash = res.stdout.strip()
 
                 b_res = subprocess.run(
-                    ["git", "branch", "--show-current"],
+                    [self.git_bin, "branch", "--show-current"],
                     cwd=str(self.repo_dir),
                     capture_output=True,
                     text=True,
@@ -63,7 +83,7 @@ class SystemUpdater:
                     branch = b_res.stdout.strip()
 
                 d_res = subprocess.run(
-                    ["git", "log", "-1", "--format=%cd", "--date=short"],
+                    [self.git_bin, "log", "-1", "--format=%cd", "--date=short"],
                     cwd=str(self.repo_dir),
                     capture_output=True,
                     text=True,
@@ -86,7 +106,7 @@ class SystemUpdater:
 
     def check_for_updates(self, channel: Optional[str] = None) -> Dict[str, Any]:
         """
-        Check GitHub for newer releases or commits on the selected channel.
+        Check GitHub for newer releases, tags, or commits on the selected channel.
         channel: 'main' (development branch) or 'stable' (latest tagged release)
         """
         channel = channel or settings.update_channel
@@ -110,7 +130,7 @@ class SystemUpdater:
         if repo_info["is_git"]:
             try:
                 fetch_res = subprocess.run(
-                    ["git", "fetch", "origin", channel],
+                    [self.git_bin, "fetch", "origin", channel],
                     cwd=str(self.repo_dir),
                     capture_output=True,
                     text=True,
@@ -118,7 +138,7 @@ class SystemUpdater:
                 )
                 if fetch_res.returncode == 0:
                     rev_res = subprocess.run(
-                        ["git", "rev-list", f"HEAD..origin/{channel}", "--count"],
+                        [self.git_bin, "rev-list", f"HEAD..origin/{channel}", "--count"],
                         cwd=str(self.repo_dir),
                         capture_output=True,
                         text=True,
@@ -131,7 +151,7 @@ class SystemUpdater:
                             update_info["commits_behind"] = behind
                             # Get log of new commits
                             log_res = subprocess.run(
-                                ["git", "log", f"HEAD..origin/{channel}", "--oneline", "-n", "10"],
+                                [self.git_bin, "log", f"HEAD..origin/{channel}", "--oneline", "-n", "10"],
                                 cwd=str(self.repo_dir),
                                 capture_output=True,
                                 text=True,
@@ -140,7 +160,7 @@ class SystemUpdater:
                             update_info["release_notes"] = log_res.stdout.strip()
                             # Get latest remote hash
                             hash_res = subprocess.run(
-                                ["git", "rev-parse", "--short", f"origin/{channel}"],
+                                [self.git_bin, "rev-parse", "--short", f"origin/{channel}"],
                                 cwd=str(self.repo_dir),
                                 capture_output=True,
                                 text=True,
@@ -154,12 +174,13 @@ class SystemUpdater:
             except Exception as e:
                 logger.debug(f"Git fetch check failed: {e}")
 
-        # Method 2: GitHub API check (works without git CLI or if git fetch fails)
+        # Method 2: GitHub API check (releases, tags, and commits)
         try:
-            api_url = f"https://api.github.com/repos/{settings.github_repo}/releases/latest"
             headers = {"User-Agent": "DVM-Nexus-Updater", "Accept": "application/vnd.github.v3+json"}
-            resp = requests.get(api_url, headers=headers, timeout=5)
 
+            # Check 1: Formal Releases
+            releases_url = f"https://api.github.com/repos/{settings.github_repo}/releases/latest"
+            resp = requests.get(releases_url, headers=headers, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 latest_tag = data.get("tag_name", "").lstrip("v")
@@ -169,14 +190,44 @@ class SystemUpdater:
                     update_info["update_available"] = True
                     update_info["latest_version"] = latest_tag
                     update_info["release_notes"] = body
-            elif resp.status_code == 404:
-                # Repo not published yet or private
-                update_info["release_notes"] = f"Repository '{settings.github_repo}' upstream check complete (Local development build)."
             else:
-                update_info["error"] = f"GitHub API returned HTTP {resp.status_code}"
+                # Check 2: Git Tags (when no formal release page is published)
+                tags_url = f"https://api.github.com/repos/{settings.github_repo}/tags"
+                tag_resp = requests.get(tags_url, headers=headers, timeout=5)
+                if tag_resp.status_code == 200:
+                    tags_data = tag_resp.json()
+                    if isinstance(tags_data, list) and len(tags_data) > 0:
+                        top_tag = tags_data[0]
+                        tag_name = top_tag.get("name", "").lstrip("v")
+                        tag_sha = top_tag.get("commit", {}).get("sha", "")[:7]
+                        update_info["latest_version"] = tag_name
+                        if tag_sha:
+                            update_info["latest_commit"] = tag_sha
+                        if tag_name != repo_info["version"]:
+                            update_info["update_available"] = True
+                            update_info["release_notes"] = f"New version tag v{tag_name} is available on GitHub."
+
+            # Check 3: Latest Branch Commits (for continuous updates on main channel)
+            commits_url = f"https://api.github.com/repos/{settings.github_repo}/commits/{channel}"
+            c_resp = requests.get(commits_url, headers=headers, timeout=5)
+            if c_resp.status_code == 200:
+                c_data = c_resp.json()
+                latest_sha = c_data.get("sha", "")[:7]
+                commit_msg = c_data.get("commit", {}).get("message", "").strip()
+                commit_author = c_data.get("commit", {}).get("author", {}).get("name", "upstream")
+                commit_date = c_data.get("commit", {}).get("author", {}).get("date", "")[:10]
+                update_info["latest_commit"] = latest_sha
+
+                if repo_info["commit_hash"] != "unknown" and latest_sha != repo_info["commit_hash"]:
+                    update_info["update_available"] = True
+                    update_info["commits_behind"] = max(update_info.get("commits_behind", 0), 1)
+                    update_info["release_notes"] = f"New commit {latest_sha} by {commit_author} ({commit_date}):\n\n{commit_msg}"
+                elif not update_info["update_available"]:
+                    update_info["release_notes"] = f"Up to date with GitHub {channel} ({latest_sha}):\n\n{commit_msg}"
         except Exception as e:
             logger.debug(f"GitHub API update check error: {e}")
-            update_info["error"] = "Could not connect to GitHub API (Offline or DNS unresolved)."
+            if not update_info["update_available"]:
+                update_info["error"] = "Could not connect to GitHub API (Offline or rate-limited)."
 
         self._last_check = update_info
         return update_info
@@ -217,10 +268,10 @@ class SystemUpdater:
             log(f"Updating source code from Git origin/{channel}...")
             try:
                 # Stash any dirty tracked files
-                subprocess.run(["git", "stash"], cwd=str(self.repo_dir), capture_output=True, timeout=10)
+                subprocess.run([self.git_bin, "stash"], cwd=str(self.repo_dir), capture_output=True, timeout=10)
                 # Pull latest
                 pull = subprocess.run(
-                    ["git", "pull", "origin", channel],
+                    [self.git_bin, "pull", "origin", channel],
                     cwd=str(self.repo_dir),
                     capture_output=True,
                     text=True,
@@ -259,14 +310,17 @@ class SystemUpdater:
             except Exception as e:
                 log(f"Warning running pip install: {e}")
 
-        # Step 4: Run database schema updates
-        log("Running database migrations and table verification...")
+        # Step 4: Run Database Migrations
+        log("Checking SQLite database schema integrity...")
         try:
+            with get_db_connection() as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.commit()
             from dvm_nexus.core.database import init_db
             init_db()
-            log("Database tables verified.")
+            log("Database schema verified.")
         except Exception as e:
-            log(f"Warning during DB init: {e}")
+            log(f"Database migration notice: {e}")
 
         # Step 5: Schedule service restart
         log("Scheduling DVM Nexus service restart...")
@@ -286,8 +340,8 @@ class SystemUpdater:
             log("Local development environment: update complete. Please restart run_nexus.py if needed.")
 
         self._state = "completed"
-        log("Update successfully applied!")
-        log_audit("SYSTEM_UPDATE", "SUCCESS", "DVM Nexus auto-update applied successfully")
+        log("Update finished successfully! DVM Nexus is running the latest version.")
+        log_audit("SYSTEM_UPDATE", "SUCCESS", f"Updated successfully to channel {channel}")
 
         return {
             "success": True,
@@ -302,6 +356,9 @@ class SystemUpdater:
             "update_available": False,
             "current_version": repo_info["version"],
             "latest_version": repo_info["version"],
+            "current_commit": repo_info["commit_hash"],
+            "latest_commit": repo_info["commit_hash"],
+            "commits_behind": 0,
             "last_checked": None,
             "channel": settings.update_channel,
             "release_notes": "Click 'Check for Updates' to query the latest release."
@@ -310,8 +367,13 @@ class SystemUpdater:
             "state": self._state,
             "repo_info": repo_info,
             "check": check,
-            "logs": self._logs
+            "logs": self._logs,
+            "current_version": repo_info["version"],
+            "latest_version": check.get("latest_version", repo_info["version"]),
+            "current_commit": repo_info["commit_hash"],
+            "branch": repo_info["branch"]
         }
 
 
+# Singleton instance
 system_updater = SystemUpdater()
