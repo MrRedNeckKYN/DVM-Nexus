@@ -37,10 +37,10 @@
     </div>
 
     <div class="station-actions-group">
-      <a href="{% if dvm.protocol == 'dmr' %}/dmr{% else %}/p25{% endif %}" class="btn btn-primary btn-sm">
+      <a href="{% if dvm.protocol == 'dmr' %}/dmr{% else %}/p25{% endif %}" class="btn btn-primary btn-sm station-action-btn">
         Configure {{ dvm.protocol|upper }} →
       </a>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="openModeSwitchModal('{% if dvm.protocol == 'dmr' %}p25{% else %}dmr{% endif %}', '{% if dvm.protocol == 'dmr' %}P25 Phase 1{% else %}DMR Duplex{% endif %}')">
+      <button type="button" class="btn btn-secondary btn-sm station-action-btn" onclick="openModeSwitchModal('{% if dvm.protocol == 'dmr' %}p25{% else %}dmr{% endif %}', '{% if dvm.protocol == 'dmr' %}P25 Phase 1{% else %}DMR Duplex{% endif %}')">
         ⇄ Switch Mode
       </button>
     </div>
@@ -50,7 +50,7 @@
   <div class="station-telemetry-strip">
     <div class="telemetry-strip-item">
       <span class="strip-label">FNE / Master Network</span>
-      <span class="strip-value">
+      <span class="strip-value truncate">
         {% if dvm.network_enabled %}
           <span class="dot-online"></span> Peer #{{ dvm.network_peer_id }}
         {% else %}
@@ -60,7 +60,7 @@
     </div>
     <div class="telemetry-strip-item">
       <span class="strip-label">{% if dvm.protocol == 'dmr' %}Color Code / Slots{% else %}NAC / WACN{% endif %}</span>
-      <span class="strip-value font-mono">
+      <span class="strip-value font-mono truncate">
         {% if dvm.protocol == 'dmr' %}
           CC {{ dvm.color_code }} &bull; Slot 1 &amp; 2
         {% else %}
@@ -70,11 +70,13 @@
     </div>
     <div class="telemetry-strip-item">
       <span class="strip-label">Modem Interface</span>
-      <span class="strip-value font-mono">{{ dvm.modem_port }} @ {{ dvm.modem_speed }}</span>
+      <span class="strip-value font-mono truncate" title="{{ dvm.modem_port }} @ {{ dvm.modem_speed }}">
+        <span class="modem-port-badge">{{ dvm.modem_port }}</span> <span class="modem-speed-subtext">@ {{ dvm.modem_speed }}</span>
+      </span>
     </div>
     <div class="telemetry-strip-item">
       <span class="strip-label">REST API Telemetry</span>
-      <span class="strip-value">
+      <span class="strip-value truncate">
         {% if dvm.rest_enabled %}
           <span class="badge badge-success">Port {{ dvm.rest_port }}</span>
         {% else %}

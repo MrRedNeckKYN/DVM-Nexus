@@ -124,7 +124,7 @@
       <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.7') }}</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.8') }}</div>
       </div>
     </aside>
 
@@ -148,18 +148,18 @@
             {% if active_protocol == 'dmr' %}
               <div class="protocol-tag protocol-tag-active" title="Current Mode: DMR Duplex">
                 <span class="pulse-dot"></span>
-                <span class="tag-title">DMR ACTIVE</span>
+                <span class="tag-title"><span class="proto-text-full">DMR ACTIVE</span><span class="proto-text-short">DMR</span></span>
               </div>
               <button type="button" class="btn btn-switch-mode" onclick="openModeSwitchModal('p25', 'P25 Phase 1')" title="Switch radio to P25 Phase 1">
-                <span class="switch-arrow">⇄</span> Switch to P25
+                <span class="switch-arrow">⇄</span> <span class="switch-btn-text">Switch to P25</span>
               </button>
             {% elif active_protocol == 'p25' %}
               <div class="protocol-tag protocol-tag-active" title="Current Mode: P25 Phase 1">
                 <span class="pulse-dot"></span>
-                <span class="tag-title">P25 ACTIVE</span>
+                <span class="tag-title"><span class="proto-text-full">P25 ACTIVE</span><span class="proto-text-short">P25</span></span>
               </div>
               <button type="button" class="btn btn-switch-mode" onclick="openModeSwitchModal('dmr', 'DMR Duplex')" title="Switch radio to DMR Duplex">
-                <span class="switch-arrow">⇄</span> Switch to DMR
+                <span class="switch-arrow">⇄</span> <span class="switch-btn-text">Switch to DMR</span>
               </button>
             {% else %}
               <div class="protocol-tag" title="Multi-Mode">
@@ -282,6 +282,14 @@
       // Auto-close on link click
       document.querySelectorAll('#sidebar .nav-link').forEach(link => {
         link.addEventListener('click', closeDrawer);
+      });
+
+      // Escape key closes drawer and modals
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeDrawer();
+          closeModeSwitchModal();
+        }
       });
     })();
 

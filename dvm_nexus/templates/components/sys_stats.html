@@ -1,23 +1,8 @@
 <div class="telemetry-grid">
-  <!-- CPU Utilization Tile -->
+  <!-- SoC Temperature Tile (°F) -->
   <div class="telemetry-card">
     <div class="telemetry-header">
-      <span class="telemetry-label">CPU Utilization</span>
-      <span class="telemetry-value">{{ sys.cpu_percent }}%</span>
-    </div>
-    <div class="telemetry-bar-bg">
-      <div class="telemetry-bar-fill {% if sys.cpu_percent > 85 %}bar-danger{% elif sys.cpu_percent > 60 %}bar-warning{% else %}bar-cyan{% endif %}"
-           style="width: {{ sys.cpu_percent }}%;"></div>
-    </div>
-    <div class="telemetry-footer">
-      <span>{{ sys.cpu_model|default('BCM2712 (Cortex-A76 4C)') }}</span>
-    </div>
-  </div>
-
-  <!-- CPU Temperature Tile (°F) -->
-  <div class="telemetry-card">
-    <div class="telemetry-header">
-      <span class="telemetry-label">SoC Temperature</span>
+      <span class="telemetry-label">SoC Temp</span>
       <span class="telemetry-value {% if sys.cpu_temp_f and sys.cpu_temp_f > 158 %}temp-hot{% elif sys.cpu_temp_f and sys.cpu_temp_f > 131 %}temp-warm{% else %}temp-cool{% endif %}">
         {% if sys.cpu_temp_f %}
           <span class="temp-indicator-dot {% if sys.cpu_temp_f > 158 %}dot-danger{% elif sys.cpu_temp_f > 131 %}dot-warning{% else %}dot-success{% endif %}"></span>
@@ -30,7 +15,22 @@
            style="width: {{ sys.cpu_temp_percent|default(50) }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span>{{ sys.temp_source|default('BCM2712 SoC Thermal') }}</span>
+      <span class="truncate">{{ sys.temp_source|default('BCM2712 SoC Thermal') }}</span>
+    </div>
+  </div>
+
+  <!-- CPU Utilization Tile -->
+  <div class="telemetry-card">
+    <div class="telemetry-header">
+      <span class="telemetry-label">CPU Utilization</span>
+      <span class="telemetry-value">{{ sys.cpu_percent }}%</span>
+    </div>
+    <div class="telemetry-bar-bg">
+      <div class="telemetry-bar-fill {% if sys.cpu_percent > 85 %}bar-danger{% elif sys.cpu_percent > 60 %}bar-warning{% else %}bar-cyan{% endif %}"
+           style="width: {{ sys.cpu_percent }}%;"></div>
+    </div>
+    <div class="telemetry-footer">
+      <span class="truncate">{{ sys.cpu_model|default('BCM2712 (Cortex-A76 4C)') }}</span>
     </div>
   </div>
 
@@ -45,21 +45,35 @@
            style="width: {{ sys.memory_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span>{{ sys.memory_display }}</span>
+      <span class="truncate">{{ sys.memory_display }}</span>
     </div>
   </div>
 
-  <!-- Storage & Uptime Tile (Target: 64 GB Storage) -->
+  <!-- Storage Tile (Target: 64 GB Storage) -->
   <div class="telemetry-card">
     <div class="telemetry-header">
-      <span class="telemetry-label">System Uptime</span>
-      <span class="telemetry-value uptime-value">{{ sys.uptime }}</span>
+      <span class="telemetry-label">Storage</span>
+      <span class="telemetry-value">{{ sys.disk_percent }}%</span>
     </div>
     <div class="telemetry-bar-bg">
       <div class="telemetry-bar-fill bar-purple" style="width: {{ sys.disk_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span>Disk: {{ sys.disk_used_gb }} / {{ sys.disk_total_gb|int if sys.disk_total_gb == sys.disk_total_gb|int else sys.disk_total_gb }} GB ({{ sys.disk_percent }}%)</span>
+      <span class="truncate">Disk: {{ sys.disk_used_gb }} / {{ sys.disk_total_gb|int if sys.disk_total_gb == sys.disk_total_gb|int else sys.disk_total_gb }} GB</span>
     </div>
+  </div>
+</div>
+
+<!-- Consolidated System Uptime & Target Hardware Strip -->
+<div class="telemetry-uptime-strip">
+  <div class="uptime-badge-item">
+    <span class="uptime-icon">⏱️</span>
+    <span class="uptime-label">Uptime:</span>
+    <strong class="uptime-val">{{ sys.uptime }}</strong>
+  </div>
+  <div class="uptime-badge-item">
+    <span class="pulse-dot-small"></span>
+    <span class="uptime-label">Hardware:</span>
+    <strong class="uptime-val">Raspberry Pi 5 (2 GB / 64 GB)</strong>
   </div>
 </div>

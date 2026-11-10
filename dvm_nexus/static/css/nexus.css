@@ -202,26 +202,27 @@ body.drawer-open {
   color: var(--text-dim);
 }
 
-/* Mobile Sidebar Backdrop Overlay */
+/* Mobile Sidebar Backdrop Overlay (bg-black/60 backdrop-blur-sm) */
 .sidebar-overlay {
-  display: none;
+  display: block;
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.60);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  z-index: 999;
+  z-index: 9998;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-overlay.active {
-  display: block;
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 
@@ -1030,47 +1031,82 @@ html.device-desktop .restart-text {
     display: none !important;
   }
 
-  /* Sidebar transforms into off-canvas drawer */
+  /* Sidebar transforms into full-height off-canvas slide-over drawer (w-[85vw] max-w-xs) */
   .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    height: 100vh;
+    height: 100dvh;
+    width: 85vw;
+    max-width: 320px;
+    z-index: 9999;
     transform: translateX(-100%);
     box-shadow: none;
-    width: 280px;
-    max-width: 84vw;
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .sidebar.open {
     transform: translateX(0);
-    box-shadow: 10px 0 35px rgba(0, 0, 0, 0.75);
+    box-shadow: 12px 0 40px rgba(0, 0, 0, 0.85);
   }
 
   .sidebar-close-btn {
-    display: block;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    font-size: 1.8rem;
+    cursor: pointer;
   }
 
-  /* Main content takes full screen */
+  /* Main content takes full screen with safe padding for bottom bar */
   .main-content {
     margin-left: 0;
     width: 100%;
-    /* Extra padding at bottom for the fixed mobile bottom bar */
-    padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+    /* Extra padding at bottom so fixed mobile bar never obstructs cards or buttons (pb-24) */
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Compact Mobile Header */
+  /* Compact Mobile Header with Overflow Prevention */
   .top-header {
-    height: 56px;
-    padding: 0 0.85rem;
+    height: 58px;
+    padding: 0 1rem; /* px-4 */
+    overflow-x: hidden;
+    max-width: 100vw;
+    gap: 0.5rem;
+  }
+
+  .header-left {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    gap: 0.5rem;
   }
 
   .mobile-nav-toggle {
     display: flex;
+    flex-shrink: 0;
   }
 
   .header-brand-mobile {
     display: inline-flex;
+    flex-shrink: 0;
   }
 
   .page-title {
     font-size: 1.05rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .header-right {
+    gap: 0.4rem;
+    flex-shrink: 0;
   }
 
   /* Status Badge & Restart on Mobile */
@@ -1087,12 +1123,12 @@ html.device-desktop .restart-text {
   }
 
   .restart-btn {
-    padding: 0.35rem 0.6rem;
+    padding: 0.35rem 0.55rem;
   }
 
   /* Page Container & Cards Padding */
   .page-container {
-    padding: 0.85rem 0.65rem;
+    padding: 0.85rem 0.75rem calc(5rem + env(safe-area-inset-bottom, 0px)) 0.75rem;
   }
 
   .card {
@@ -1182,15 +1218,17 @@ html.device-desktop .restart-text {
     font-size: 0.85rem;
   }
 
-  /* Mobile Bottom Navigation Bar */
+  /* Mobile Bottom Navigation Bar with Safe Area Inset */
   .mobile-bottom-nav {
     display: flex;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: calc(56px + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: auto;
+    min-height: 56px;
+    padding-top: 0.35rem;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
     background-color: rgba(19, 26, 43, 0.96);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -1432,6 +1470,114 @@ html.device-desktop .restart-text {
   }
   .standby-action .btn {
     width: 100%;
+  }
+
+  /* Header Bar Responsive Controls & Overflow Prevention */
+  .top-header {
+    padding: 0 0.75rem !important;
+  }
+
+  .proto-text-full {
+    display: none !important;
+  }
+
+  .proto-text-short {
+    display: inline !important;
+  }
+
+  .switch-btn-text {
+    display: none !important;
+  }
+
+  .btn-switch-mode {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.72rem !important;
+  }
+
+  .protocol-header-capsule {
+    padding: 2px 4px 2px 7px !important;
+    gap: 0.3rem !important;
+  }
+
+  .restart-text {
+    display: none !important;
+  }
+
+  .restart-btn {
+    padding: 0.35rem 0.5rem !important;
+  }
+
+  /* Metric Cards Mobile Density (Compact 2-Column Grid) */
+  .telemetry-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .telemetry-card {
+    padding: 0.85rem 0.85rem !important;
+  }
+
+  .telemetry-header {
+    margin-bottom: 0.4rem !important;
+  }
+
+  .telemetry-label {
+    font-size: 0.68rem !important;
+  }
+
+  .telemetry-value {
+    font-size: 1.15rem !important;
+  }
+
+  .telemetry-bar-bg {
+    height: 4px !important;
+    margin-bottom: 0.45rem !important;
+  }
+
+  .telemetry-footer {
+    font-size: 0.68rem !important;
+  }
+
+  /* Action Buttons & Radio Card on Mobile */
+  .station-hero-main {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 1rem !important;
+    padding: 1.15rem 1rem !important;
+  }
+
+  .station-actions-group {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  .station-action-btn, .station-actions-group .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    padding: 0.55rem 0.5rem !important;
+    font-size: 0.85rem !important;
+  }
+
+  .station-telemetry-strip {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+    padding: 0.85rem 1rem !important;
+  }
+
+  .telemetry-strip-item {
+    min-width: 0 !important;
+  }
+
+  .telemetry-uptime-strip {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
   }
 }
 
@@ -1813,4 +1959,83 @@ html.device-desktop .restart-text {
 
 .font-mono {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Responsive Header Text Toggles */
+.proto-text-short {
+  display: none;
+}
+
+.proto-text-full {
+  display: inline;
+}
+
+.switch-btn-text {
+  display: inline;
+}
+
+/* Truncation & Monospace Subtext Badges */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  display: block;
+}
+
+.modem-port-badge {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.modem-speed-subtext {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+/* Consolidated System Uptime & Target Strip */
+.telemetry-uptime-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.85rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.uptime-badge-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.uptime-label {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.uptime-val {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.pulse-dot-small {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 6px var(--accent-cyan);
+  display: inline-block;
 }
