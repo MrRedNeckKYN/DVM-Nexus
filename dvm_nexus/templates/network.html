@@ -123,42 +123,9 @@
         </div>
       </div>
 
-      <!-- Field-Hotspot Technical Architecture Card -->
-      <div class="card network-info-card">
-        <div class="card-header">
-          <div class="card-title-group">
-            <span class="card-icon">🛡️</span>
-            <span class="card-title">Failover Hotspot Architecture</span>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="hotspot-spec-list">
-            <div class="hotspot-spec-item">
-              <span class="spec-label">Hotspot SSID:</span>
-              <strong class="spec-val font-mono">MMDVM-Field-AP</strong>
-            </div>
-            <div class="hotspot-spec-item">
-              <span class="spec-label">Hotspot Passphrase:</span>
-              <strong class="spec-val font-mono">FieldPassword123</strong>
-            </div>
-            <div class="hotspot-spec-item">
-              <span class="spec-label">Gateway IP Address:</span>
-              <strong class="spec-val font-mono">10.42.0.1</strong>
-            </div>
-            <div class="hotspot-spec-item">
-              <span class="spec-label">DHCP Server Method:</span>
-              <span class="spec-val">NetworkManager shared (dnsmasq)</span>
-            </div>
-            <div class="hotspot-spec-item">
-              <span class="spec-label">Watchdog Service:</span>
-              <span class="spec-val font-mono">wifi-failover.service</span>
-            </div>
-            <div class="hotspot-spec-item">
-              <span class="spec-label">Failover Policy:</span>
-              <span class="spec-val">Autoconnect Priority 1 vs. Client 100</span>
-            </div>
-          </div>
-        </div>
+      <!-- Field-Hotspot Technical Settings & Provisioning Card -->
+      <div id="hotspot-card-container">
+        {% include "components/network_hotspot_card.html" %}
       </div>
 
     </div>

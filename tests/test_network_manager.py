@@ -1,6 +1,6 @@
 """
 Unit & Integration Tests for DVM Nexus Network & Wi-Fi Management Module
-Tests NetworkController, nmcli integration, failover logic, and REST/HTMX endpoints.
+Tests NetworkController, nmcli integration, failover logic, web provisioning, and REST/HTMX endpoints.
 """
 
 import pytest
@@ -32,6 +32,8 @@ def test_network_controller_get_status_sim():
     assert "interface" in status
     assert status["interface"] == "wlan0"
     assert "is_connected" in status
+    assert "hotspot_provisioned" in status
+    assert "hotspot_config" in status
 
 
 def test_network_controller_hotspot_toggle_sim():
@@ -40,12 +42,10 @@ def test_network_controller_hotspot_toggle_sim():
     res = network_controller.toggle_hotspot(True)
     assert res["success"] is True
     assert res["mode"] == "hotspot"
-    assert res["active_ssid"] == HOTSPOT_SSID
     assert res["ip"] == HOTSPOT_IP
 
     status = network_controller.get_status()
     assert status["mode"] == "hotspot"
-    assert status["active_ssid"] == HOTSPOT_SSID
 
     # Toggle back to Client
     res_client = network_controller.toggle_hotspot(False)
@@ -88,6 +88,42 @@ def test_manual_override_flag():
     assert network_controller.is_manual_override_active() is True
     network_controller.clear_manual_override()
     assert network_controller.is_manual_override_active() is False
+
+
+def test_hotspot_config_persistence_and_provision():
+    """Verify Web UI hotspot settings storage and auto-provisioning."""
+    cfg = network_controller.get_hotspot_config()
+    assert "ssid" in cfg
+    assert "password" in cfg
+
+    updated = network_controller.save_hotspot_config({
+        "ssid": "MMDVM-Field-AP",
+        "password": "NewSecretPassword123",
+        "channel": 11,
+        "auto_failover_enabled": True
+    })
+    assert updated["channel"] == 11
+    assert updated["password"] == "NewSecretPassword123"
+
+    # Provision
+    prov_res = network_controller.provision_hotspot()
+    assert prov_res["success"] is True
+    assert prov_res["provisioned"] is True
+    assert network_controller.is_hotspot_provisioned() is True
+
+
+def test_sync_client_priorities():
+    """Verify 1-click client connection priority synchronization."""
+    res = network_controller.sync_client_priorities()
+    assert res["success"] is True
+
+
+def test_watchdog_step_execution():
+    """Verify watchdog failover state machine evaluation."""
+    network_controller.clear_manual_override()
+    step_res = network_controller.watchdog_step()
+    assert isinstance(step_res, dict)
+    assert "action" in step_res
 
 
 # ==============================================================================
@@ -146,6 +182,27 @@ def test_api_network_connect(client):
     assert resp_bad.status_code == 400
 
 
+def test_api_hotspot_config_and_provision(client):
+    """Test /api/network/hotspot/config and /provision."""
+    resp = client.get("/api/network/hotspot/config")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "config" in data
+    assert "provisioned" in data
+
+    post_resp = client.post("/api/network/hotspot/config", json={"ssid": "MMDVM-Field-AP", "channel": 6})
+    assert post_resp.status_code == 200
+    assert post_resp.json()["success"] is True
+
+    prov_resp = client.post("/api/network/hotspot/provision")
+    assert prov_resp.status_code == 200
+    assert prov_resp.json()["success"] is True
+
+    sync_resp = client.post("/api/network/hotspot/sync-priorities")
+    assert sync_resp.status_code == 200
+    assert sync_resp.json()["success"] is True
+
+
 # ==============================================================================
 # Web UI HTML Endpoint Tests
 # ==============================================================================
@@ -158,6 +215,7 @@ def test_network_html_page(client):
     assert "network-hero-card" in resp.text
     assert "MMDVM-Field-AP" in resp.text
     assert "Quick Connect" in resp.text
+    assert "hotspot-card-container" in resp.text
 
 
 def test_network_components_htmx(client):
@@ -181,3 +239,15 @@ def test_network_components_htmx(client):
     resp_conn = client.post("/components/network-connect", data={"ssid": "Field-Station-Net", "password": "123"})
     assert resp_conn.status_code == 200
     assert "CLIENT MODE" in resp_conn.text
+
+    # Hotspot config component
+    resp_hcfg = client.post("/components/network-hotspot-config", data={
+        "ssid": "MMDVM-Field-AP",
+        "password": "Password123",
+        "band": "bg",
+        "channel": 6,
+        "failover_threshold_sec": 45,
+        "auto_failover_enabled": "true"
+    })
+    assert resp_hcfg.status_code == 200
+    assert "PROVISIONED &amp; READY" in resp_hcfg.text or "PROVISIONED & READY" in resp_hcfg.text

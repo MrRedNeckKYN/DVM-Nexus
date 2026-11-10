@@ -4,6 +4,7 @@ FastAPI Application Entry Point
 """
 
 import os
+import asyncio
 import secrets
 import base64
 from contextlib import asynccontextmanager
@@ -44,8 +45,20 @@ async def lifespan(app: FastAPI):
     init_db()
     dvm_config_manager.ensure_active_config_exists()
     log_audit("SYSTEM", "STARTUP", f"DVM Nexus v{settings.app_version} initialized")
+
+    # Auto-provision Field Hotspot and launch embedded failover watchdog
+    watchdog_task = None
+    try:
+        from dvm_nexus.core.network_manager import network_controller
+        network_controller.ensure_hotspot_provisioned()
+        watchdog_task = asyncio.create_task(network_controller.run_watchdog_loop())
+    except Exception:
+        pass
+
     yield
     # Shutdown
+    if watchdog_task:
+        watchdog_task.cancel()
     log_audit("SYSTEM", "SHUTDOWN", "DVM Nexus shutdown")
 
 

@@ -1,12 +1,12 @@
 # DVM Nexus
 
-[![Version: 1.0.11](https://img.shields.io/badge/version-1.0.11-blue.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
+[![Version: 1.0.12](https://img.shields.io/badge/version-1.0.12-blue.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Hardware: RPi 5](https://img.shields.io/badge/Hardware-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/products/raspberry-pi-5/)
 [![Modem: MMDVM Duplex](https://img.shields.io/badge/Modem-AURSINC%20Duplex%20Hat-blueviolet.svg)](#hardware-architecture)
-[![Tests: 49 Passed](https://img.shields.io/badge/tests-49%20passed-success.svg)](#automated-testing)
+[![Tests: 53 Passed](https://img.shields.io/badge/tests-53%20passed-success.svg)](#automated-testing)
 
 **DVM Nexus** is a modernized, router-grade web management interface, telemetry dashboard, and configuration engine engineered specifically for the [DVMProject](https://github.com/DVMProject) ecosystem centered around `dvmhost`.
 
@@ -27,18 +27,22 @@ Instead of manually editing YAML files, calculating IDEN frequency tables by han
 - **Touch Ergonomics:** Enforces a minimum $44\times 44\text{px}$ touch target on all mobile buttons, links, and form inputs, with tactile press response (`active:scale-[0.98]`).
 - **Live Activity Feed:** Server-Sent Events (SSE) stream delivering real-time peer connections, RF transmissions, and system diagnostics without client polling.
 
-### 2. Automatic Failover Access Point (Field Hotspot) & Wi-Fi Manager
-- **Field Hotspot (`MMDVM-Field-AP`):** Built-in failover hotspot configuration powered by NetworkManager (`nmcli`) and `dnsmasq` shared IPv4 routing (`10.42.0.1/24`).
-- **Automated Watchdog Daemon (`wifi-failover.service`):**
-  - Monitors client Wi-Fi association and gateway reachability every 20 seconds.
-  - If disconnected from client Wi-Fi for $> 45$ seconds, automatically activates `Field-Hotspot` so you can connect from a smartphone or tablet in the field.
+### 2. Automatic Failover Access Point (Field Hotspot) & Wi-Fi Manager (100% Web UI Driven)
+- **Zero Terminal Setup:** DVM Nexus automatically provisions the NetworkManager `Field-Hotspot` profile on first launch. No terminal commands, bash scripts, or SSH sessions are required!
+- **Field Hotspot (`MMDVM-Field-AP`):** Powered by NetworkManager (`nmcli`) and `dnsmasq` shared IPv4 routing (`10.42.0.1/24`), enabling direct wireless connections from smartphones, tablets, or laptops in the field.
+- **Embedded Async Watchdog Daemon:**
+  - Built directly into the DVM Nexus backend as an async background task (and available as an optional standalone systemd service).
+  - Monitors client Wi-Fi association and gateway reachability continuously.
+  - If disconnected from client Wi-Fi for $> 45$ seconds (configurable), automatically activates `Field-Hotspot`.
   - While in Hotspot mode, conducts background Wi-Fi scans. When a saved station/home Wi-Fi network comes back into range, it automatically tears down the hotspot and restores client Wi-Fi.
-  - **Manual Override Locking:** Web UI toggles activate a 5-minute override flag (`/tmp/wifi-manual.override`) to ensure the watchdog doesn't interrupt intentional configuration sessions.
-- **Web UI Wi-Fi Management (`/network`):**
-  - Live Status Hero Card displaying active mode (Client vs. Field AP), assigned IP, gateway, signal percentage, interface (`wlan0`), and MAC address.
-  - 1-Click tactile mode toggle: **Switch to Field Hotspot** / **Switch to Client Wi-Fi**.
-  - Live Wi-Fi Scanner: Scans channels, removes hidden SSIDs, deduplicates, and sorts by signal strength.
-  - Quick Connect Form: Autocomplete from scanned networks, password visibility toggle (`👁️`), and connection safety alerts.
+  - **Manual Override Protection:** Web UI manual toggles activate a 5-minute override flag (`/tmp/wifi-manual.override`) to ensure the watchdog doesn't interrupt intentional configuration sessions.
+- **Full Web UI Network & Hotspot Management (`/network`):**
+  - **Live Status Hero Card:** Active mode badge (Client vs. Field AP), assigned IP, gateway, signal percentage, interface (`wlan0`), and MAC address.
+  - **1-Click Tactile Mode Switch:** Instant toggle between **Switch to Field Hotspot** and **Switch to Client Wi-Fi**.
+  - **Hotspot Settings & Provisioning Panel:** Customize Hotspot SSID (`MMDVM-Field-AP`), passphrase, Wi-Fi Band (2.4 GHz vs. 5 GHz), Channel (1, 6, 11, 36), and Failover Timeout directly from the Web UI!
+  - **1-Click Priority Sync Button:** Re-syncs all saved station Wi-Fi networks to priority `100` with one click.
+  - **Live Wi-Fi Scanner:** Scans channels, removes hidden SSIDs, deduplicates, and sorts by signal strength.
+  - **Quick Connect Form:** Autocomplete from scanned networks, password visibility toggle (`👁️`), and connection safety alerts.
 
 ### 3. Dynamic Hardware Telemetry (Raspberry Pi 5 Target & Remote Agent)
 - **Dynamic RAM Detection:** Reads real-time kernel memory directly from `/proc/meminfo` or `psutil`, dynamically adapting to 2 GB, 4 GB, 8 GB, or 16 GB Pi 5 boards without hardcoded limits:
@@ -184,20 +188,18 @@ sudo ./install.sh
 4. Registers and starts `dvm-nexus.service` on boot.
 5. Installs the `/usr/local/bin/dvm-nexus` CLI management utility.
 
-### 2. Configure Field Hotspot & Automatic Failover Watchdog
+### 2. Field Hotspot & Failover Watchdog (100% Web UI Driven)
 
-Run the automated hotspot setup script included in the repository:
+**No manual terminal setup needed!**
+When DVM Nexus starts up on your Raspberry Pi, it automatically verifies and provisions the `Field-Hotspot` NetworkManager connection profile and activates the embedded background failover watchdog.
+
+You can customize the SSID, passphrase, Wi-Fi channel, and failover timeouts directly from the Web UI under **Hardware & Network $\rightarrow$ Wi-Fi & Hotspot** (`http://<ip>:8080/network`) with one-click provisioning.
+
+*(Optional)* If you prefer running a standalone systemd watchdog daemon (`wifi-failover.service`) outside of Python, an optional setup script is also bundled:
 
 ```bash
 sudo bash scripts/setup_hotspot.sh
 ```
-
-**This script automatically:**
-1. Creates the persistent NetworkManager `Field-Hotspot` profile (`SSID: MMDVM-Field-AP`, `Pass: FieldPassword123`, `IP: 10.42.0.1`).
-2. Configures priority `100` on your saved home/station Wi-Fi networks.
-3. Installs the watchdog script to `/usr/local/bin/wifi-failover.sh`.
-4. Installs and enables `wifi-failover.service`.
-5. Deploys the sudoers rule in `/etc/sudoers.d/010_dvm_nexus_nmcli` so the web interface can manage Wi-Fi without full root permissions.
 
 ---
 

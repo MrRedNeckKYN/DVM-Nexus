@@ -1,0 +1,131 @@
+{% if flash_message %}
+  <div class="alert alert-{{ flash_type|default('info') }}" style="margin-bottom: 1.25rem;">
+    {% if flash_type == 'danger' %}⚠️{% else %}✅{% endif %} {{ flash_message }}
+  </div>
+{% endif %}
+
+<div class="card network-info-card">
+  <div class="card-header flex-between">
+    <div class="card-title-group">
+      <span class="card-icon">📡</span>
+      <span class="card-title">Failover Hotspot Settings &amp; Provisioning</span>
+    </div>
+    <div>
+      {% if net.hotspot_provisioned %}
+        <span class="badge-pill badge-client" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+          <span class="pulse-dot dot-success"></span> PROVISIONED &amp; READY
+        </span>
+      {% else %}
+        <span class="badge-pill badge-standby" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+          <span class="pulse-dot dot-gray"></span> NOT PROVISIONED
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+    <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1.25rem; line-height: 1.5;">
+      Configure the automatic failover access point parameters. Changes saved here are applied directly to NetworkManager without requiring SSH terminal scripts.
+    </p>
+
+    <form id="hotspot-settings-form"
+          hx-post="/components/network-hotspot-config"
+          hx-target="#hotspot-card-container"
+          hx-swap="innerHTML"
+          hx-indicator="#hotspot-save-spinner">
+
+      <div class="form-row-2col" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem;">
+        <div class="form-group">
+          <label for="hotspot-ssid" class="form-label">Hotspot SSID *</label>
+          <input type="text" id="hotspot-ssid" name="ssid" class="form-control font-mono"
+                 value="{{ net.hotspot_config.ssid|default('MMDVM-Field-AP') }}" required>
+        </div>
+
+        <div class="form-group">
+          <label for="hotspot-pass" class="form-label">Hotspot Passphrase (WPA2) *</label>
+          <div class="input-password-wrapper">
+            <input type="password" id="hotspot-pass" name="password" class="form-control font-mono"
+                   value="{{ net.hotspot_config.password|default('FieldPassword123') }}" minlength="8" required>
+            <button type="button" class="btn-password-toggle" onclick="toggleHotspotPassVisibility()" title="Show/Hide">
+              <span id="hotspot-eye-icon">👁️</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row-3col" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+        <div class="form-group">
+          <label for="hotspot-band" class="form-label">Wi-Fi Band</label>
+          <select id="hotspot-band" name="band" class="form-control">
+            <option value="bg" {% if net.hotspot_config.band == 'bg' %}selected{% endif %}>2.4 GHz (bg) - Recommended</option>
+            <option value="a" {% if net.hotspot_config.band == 'a' %}selected{% endif %}>5 GHz (a)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="hotspot-channel" class="form-label">Channel</label>
+          <select id="hotspot-channel" name="channel" class="form-control font-mono">
+            <option value="1" {% if net.hotspot_config.channel == 1 %}selected{% endif %}>Ch 1 (2412 MHz)</option>
+            <option value="6" {% if net.hotspot_config.channel == 6 or not net.hotspot_config.channel %}selected{% endif %}>Ch 6 (2437 MHz)</option>
+            <option value="11" {% if net.hotspot_config.channel == 11 %}selected{% endif %}>Ch 11 (2462 MHz)</option>
+            <option value="36" {% if net.hotspot_config.channel == 36 %}selected{% endif %}>Ch 36 (5180 MHz)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="hotspot-threshold" class="form-label">Failover Disconnect Timeout</label>
+          <select id="hotspot-threshold" name="failover_threshold_sec" class="form-control font-mono">
+            <option value="30" {% if net.hotspot_config.failover_threshold_sec == 30 %}selected{% endif %}>30 Seconds</option>
+            <option value="45" {% if net.hotspot_config.failover_threshold_sec == 45 or not net.hotspot_config.failover_threshold_sec %}selected{% endif %}>45 Seconds (Default)</option>
+            <option value="60" {% if net.hotspot_config.failover_threshold_sec == 60 %}selected{% endif %}>60 Seconds</option>
+            <option value="90" {% if net.hotspot_config.failover_threshold_sec == 90 %}selected{% endif %}>90 Seconds</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Auto Failover Watchdog Checkbox -->
+      <div class="form-check-group" style="display: flex; align-items: center; gap: 0.65rem; margin-bottom: 1.5rem; padding: 0.75rem 1rem; background: rgba(255,255,255,0.03); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.06);">
+        <input type="checkbox" id="auto-failover-check" name="auto_failover_enabled" value="true"
+               {% if net.hotspot_config.auto_failover_enabled %}checked{% endif %} style="width: 18px; height: 18px; cursor: pointer;">
+        <label for="auto-failover-check" style="font-size: 0.85rem; color: var(--text-main); font-weight: 600; cursor: pointer; margin: 0;">
+          Enable Automatic Failover Watchdog (Switches to Hotspot on disconnect &amp; auto-restores client Wi-Fi when home network returns)
+        </label>
+      </div>
+
+      <div id="hotspot-save-spinner" class="htmx-indicator" style="display:none; text-align:center; padding:0.5rem 0;">
+        <div class="spinner"></div>
+        <div style="font-size:0.85rem; color:var(--accent-cyan); margin-top:0.35rem; font-weight:600;">Applying configuration to NetworkManager...</div>
+      </div>
+
+      <div class="form-actions flex-between" style="gap: 1rem; flex-wrap: wrap;">
+        <button type="submit" class="btn btn-primary" id="btn-save-hotspot">
+          <span>⚡ Save &amp; Provision Hotspot</span>
+        </button>
+
+        <button type="button" class="btn btn-outline-cyan"
+                hx-post="/components/network-sync-priorities"
+                hx-target="#hotspot-card-container"
+                hx-swap="innerHTML"
+                hx-indicator="#hotspot-save-spinner"
+                title="Sets autoconnect-priority to 100 on all saved client networks so station Wi-Fi is always preferred over the Hotspot">
+          <span>🛡️ Re-sync Client Priorities (100)</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function toggleHotspotPassVisibility() {
+  const p = document.getElementById('hotspot-pass');
+  const eye = document.getElementById('hotspot-eye-icon');
+  if (!p) return;
+  if (p.type === 'password') {
+    p.type = 'text';
+    if (eye) eye.textContent = '🙈';
+  } else {
+    p.type = 'password';
+    if (eye) eye.textContent = '👁️';
+  }
+}
+</script>

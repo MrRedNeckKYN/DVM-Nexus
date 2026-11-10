@@ -1,0 +1,10 @@
+{
+  "ssid": "MMDVM-Field-AP",
+  "password": "Password123",
+  "band": "bg",
+  "channel": 6,
+  "ip_address": "10.42.0.1/24",
+  "auto_failover_enabled": true,
+  "failover_threshold_sec": 45,
+  "watchdog_interval_sec": 20
+}
