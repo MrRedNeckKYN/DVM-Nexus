@@ -225,25 +225,60 @@ class NetworkController:
             logger.info("Field-Hotspot profile not found. Auto-provisioning via NetworkController...")
             self.provision_hotspot()
 
+    def get_known_wifi_connections(self) -> List[Dict[str, str]]:
+        """
+        Query NetworkManager for all saved client Wi-Fi connection profiles.
+        Returns list of dicts: [{'name': '...', 'ssid': '...', 'uuid': '...'}, ...]
+        excluding the failover hotspot profile.
+        """
+        if not self._has_nmcli or os.name == "nt":
+            return [
+                {"name": "Station-Wi-Fi-5G", "ssid": "Station-Wi-Fi-5G", "uuid": "sim-uuid-1"},
+                {"name": "Home-Network", "ssid": "Home-Network", "uuid": "sim-uuid-2"},
+            ]
+
+        results = []
+        try:
+            res = self._run_cmd(["nmcli", "-t", "-f", "UUID,NAME,TYPE,802-11-wireless.ssid", "connection", "show"])
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.replace(r"\:", "__COLON__").split(":")
+                    if len(parts) >= 3:
+                        uuid_val = parts[0].replace("__COLON__", ":").strip()
+                        name_val = parts[1].replace("__COLON__", ":").strip()
+                        type_val = parts[2].replace("__COLON__", ":").strip()
+                        ssid_val = parts[3].replace("__COLON__", ":").strip() if len(parts) >= 4 else ""
+
+                        if type_val in ("802-11-wireless", "wifi") and name_val != HOTSPOT_CON_NAME:
+                            results.append({
+                                "uuid": uuid_val,
+                                "name": name_val,
+                                "ssid": ssid_val or name_val,
+                            })
+        except Exception as e:
+            logger.error(f"Error fetching known Wi-Fi connections: {e}")
+
+        return results
+
     def sync_client_priorities(self) -> Dict[str, Any]:
         """Elevate autoconnect-priority to 100 on all saved client Wi-Fi connections."""
         if not self._has_nmcli or os.name == "nt":
             return {"success": True, "count": 2, "message": "Client connection priorities synchronized (simulation)"}
 
         try:
-            res = self._run_cmd(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"])
+            conns = self.get_known_wifi_connections()
             count = 0
-            if res.returncode == 0:
-                for line in res.stdout.splitlines():
-                    parts = line.split(":")
-                    if len(parts) >= 2 and parts[1] == "802-11-wireless" and parts[0] != HOTSPOT_CON_NAME:
-                        con_name = parts[0]
-                        self._run_cmd([
-                            "nmcli", "connection", "modify", con_name,
-                            "connection.autoconnect", "yes",
-                            "connection.autoconnect-priority", "100"
-                        ])
-                        count += 1
+            for c in conns:
+                con_name = c["name"]
+                self._run_cmd([
+                    "nmcli", "connection", "modify", con_name,
+                    "connection.autoconnect", "yes",
+                    "connection.autoconnect-priority", "100"
+                ])
+                count += 1
             return {"success": True, "count": count, "message": f"Prioritized {count} client Wi-Fi connections"}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -421,14 +456,25 @@ class NetworkController:
                     }
             else:
                 self._run_cmd(["nmcli", "connection", "down", HOTSPOT_CON_NAME], timeout=10.0)
-                self._run_cmd(["nmcli", "device", "connect", self.interface], timeout=20.0)
+                time.sleep(1.0)
+                # Try to bring up any known saved client Wi-Fi connection
+                known = self.get_known_wifi_connections()
+                connected = False
+                for conn in known:
+                    res = self._run_cmd(["nmcli", "connection", "up", conn["name"]], timeout=15.0)
+                    if res.returncode == 0:
+                        connected = True
+                        break
+                if not connected:
+                    self._run_cmd(["nmcli", "device", "connect", self.interface], timeout=15.0)
+                time.sleep(1.5)
                 status = self.get_status()
                 return {
                     "success": True,
                     "mode": status["mode"],
                     "active_ssid": status["active_ssid"],
                     "ip": status["ip_address"],
-                    "message": f"Deactivated hotspot. Status is now {status['mode']}."
+                    "message": f"Deactivated hotspot. Status is now {status['mode']} ({status.get('active_ssid') or 'scanning'})."
                 }
         except subprocess.TimeoutExpired:
             return {"success": False, "error": "Operation timed out", "status_code": 504}
@@ -495,14 +541,23 @@ class NetworkController:
     def connect_network(self, ssid: str, password: Optional[str] = None, timeout: float = 25.0) -> Dict[str, Any]:
         """
         Connect to a Wi-Fi network and set autoconnect-priority to 100.
+        If in Field-Hotspot mode, safely tears down the hotspot before connecting,
+        and automatically restores Field-Hotspot if connection fails.
         """
         if not ssid or not ssid.strip():
             return {"success": False, "error": "SSID cannot be empty", "status_code": 400}
 
         ssid = ssid.strip()
+        pwd = (password or "").strip()
         self.set_manual_override()
 
         if not self._has_nmcli or os.name == "nt":
+            if ssid.lower() == "failnetwork":
+                return {
+                    "success": False,
+                    "error": f"Failed to connect to '{ssid}': Invalid Wi-Fi password. Field-Hotspot was restored.",
+                    "status_code": 401
+                }
             self._sim_mode = "client"
             self._sim_connected_ssid = ssid
             self._sim_ip = "192.168.1.185"
@@ -514,33 +569,131 @@ class NetworkController:
             }
 
         try:
-            cmd = ["nmcli", "dev", "wifi", "connect", ssid]
-            if password and password.strip():
-                cmd.extend(["password", password.strip()])
+            status_before = self.get_status()
+            was_hotspot = (status_before.get("mode") == "hotspot")
 
-            res = self._run_cmd(cmd, timeout=timeout)
-            if res.returncode == 0:
-                self._run_cmd(["nmcli", "connection", "modify", ssid, "connection.autoconnect", "yes", "connection.autoconnect-priority", "100"])
+            # Check if a connection profile already exists for this SSID
+            known_conns = self.get_known_wifi_connections()
+            existing_conn = None
+            for conn in known_conns:
+                if conn["ssid"].strip() == ssid or conn["name"].strip() == ssid:
+                    existing_conn = conn
+                    break
+
+            profile_name = existing_conn["name"] if existing_conn else ssid
+
+            # Update or create the connection profile with credentials and top autoconnect priority
+            if existing_conn:
+                mod_cmd = [
+                    "nmcli", "connection", "modify", profile_name,
+                    "802-11-wireless.ssid", ssid,
+                    "connection.autoconnect", "yes",
+                    "connection.autoconnect-priority", "100"
+                ]
+                if pwd:
+                    mod_cmd.extend([
+                        "802-11-wireless-security.key-mgmt", "wpa-psk",
+                        "802-11-wireless-security.psk", pwd
+                    ])
+                self._run_cmd(mod_cmd)
+            else:
+                add_cmd = [
+                    "nmcli", "connection", "add",
+                    "type", "wifi",
+                    "ifname", self.interface,
+                    "con-name", ssid,
+                    "ssid", ssid,
+                    "connection.autoconnect", "yes",
+                    "connection.autoconnect-priority", "100"
+                ]
+                if pwd:
+                    add_cmd.extend([
+                        "wifi-sec.key-mgmt", "wpa-psk",
+                        "wifi-sec.psk", pwd
+                    ])
+                add_res = self._run_cmd(add_cmd)
+                if add_res.returncode != 0:
+                    logger.warning(f"nmcli connection add warning: {add_res.stderr.strip()}")
+
+            # If Field-Hotspot is active on wlan0, tear it down so the radio switches to station mode
+            if was_hotspot:
+                logger.info(f"Releasing wlan0 from AP mode (Field-Hotspot) before connecting to '{ssid}'...")
+                self._run_cmd(["nmcli", "connection", "down", HOTSPOT_CON_NAME], timeout=10.0)
                 time.sleep(1.5)
+
+            # Bring up the target client connection
+            logger.info(f"Activating client connection '{profile_name}' for SSID '{ssid}'...")
+            res = self._run_cmd(["nmcli", "connection", "up", profile_name], timeout=timeout)
+
+            # Fallback attempt via direct dev wifi connect if profile activation failed
+            if res.returncode != 0:
+                logger.warning(f"Direct connection up failed ({res.stderr.strip()}). Retrying via dev wifi connect...")
+                direct_cmd = ["nmcli", "dev", "wifi", "connect", ssid]
+                if pwd:
+                    direct_cmd.extend(["password", pwd])
+                res = self._run_cmd(direct_cmd, timeout=timeout)
+
+            # Check outcome
+            if res.returncode == 0:
+                self._run_cmd([
+                    "nmcli", "connection", "modify", profile_name,
+                    "connection.autoconnect", "yes",
+                    "connection.autoconnect-priority", "100"
+                ])
+                time.sleep(2.0)
                 status = self.get_status()
+                assigned_ip = status.get("ip_address", "")
+                if not assigned_ip:
+                    time.sleep(2.0)
+                    status = self.get_status()
+                    assigned_ip = status.get("ip_address", "")
+
                 return {
                     "success": True,
                     "ssid": ssid,
-                    "ip": status.get("ip_address", ""),
-                    "message": f"Connected to '{ssid}' successfully. IP assigned: {status.get('ip_address', 'DHCP pending')}"
+                    "ip": assigned_ip or "DHCP pending",
+                    "message": f"Connected to '{ssid}' successfully. IP assigned: {assigned_ip or 'DHCP pending'}"
                 }
-            else:
-                err = res.stderr.strip() or res.stdout.strip()
-                if "Secrets were required" in err or "password" in err.lower():
-                    return {"success": False, "error": "Invalid Wi-Fi password. Please check credentials and retry.", "status_code": 401}
-                elif "No network with SSID" in err:
-                    return {"success": False, "error": f"Network '{ssid}' was not found in range.", "status_code": 404}
-                return {"success": False, "error": err or "Failed to connect to network", "status_code": 500}
+
+            # If connection failed: SAFETY ROLLBACK TO FIELD-HOTSPOT
+            err = res.stderr.strip() or res.stdout.strip()
+            logger.error(f"Failed to connect to '{ssid}': {err}")
+
+            if was_hotspot:
+                logger.warning(f"Connection to '{ssid}' failed. Restoring Field-Hotspot so user is not stranded...")
+                self._run_cmd(["nmcli", "connection", "up", HOTSPOT_CON_NAME], timeout=25.0)
+
+            if "Secrets were required" in err or "password" in err.lower():
+                return {
+                    "success": False,
+                    "error": f"Failed to connect to '{ssid}': Incorrect Wi-Fi password. Field-Hotspot was restored.",
+                    "status_code": 401
+                }
+            elif "No network with SSID" in err:
+                return {
+                    "success": False,
+                    "error": f"Network '{ssid}' was not found in range. Field-Hotspot was restored.",
+                    "status_code": 404
+                }
+            return {
+                "success": False,
+                "error": f"Failed to connect to '{ssid}' ({err}). Field-Hotspot was restored.",
+                "status_code": 500
+            }
 
         except subprocess.TimeoutExpired:
-            return {"success": False, "error": f"Connection to '{ssid}' timed out after {int(timeout)} seconds.", "status_code": 504}
+            logger.error(f"Connection to '{ssid}' timed out.")
+            if was_hotspot:
+                self._run_cmd(["nmcli", "connection", "up", HOTSPOT_CON_NAME], timeout=25.0)
+            return {
+                "success": False,
+                "error": f"Connection to '{ssid}' timed out after {int(timeout)}s. Field-Hotspot was restored.",
+                "status_code": 504
+            }
         except Exception as e:
             logger.error(f"Error connecting to Wi-Fi '{ssid}': {e}")
+            if was_hotspot:
+                self._run_cmd(["nmcli", "connection", "up", HOTSPOT_CON_NAME], timeout=25.0)
             return {"success": False, "error": str(e), "status_code": 500}
 
     # ==========================================================================
@@ -570,32 +723,39 @@ class NetworkController:
         if current_mode == "hotspot":
             self._disconnect_counter_sec = 0
             scanned = self.scan_networks()
-            scanned_ssids = {n["ssid"] for n in scanned}
+            scanned_ssids = {n["ssid"] for n in scanned if n.get("ssid")}
 
-            # Get known client SSIDs from NetworkManager
-            known_ssids = []
-            if self._has_nmcli and os.name != "nt":
-                res = self._run_cmd(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"])
-                if res.returncode == 0:
-                    for line in res.stdout.splitlines():
-                        p = line.split(":")
-                        if len(p) >= 2 and p[1] == "802-11-wireless" and p[0] != HOTSPOT_CON_NAME:
-                            known_ssids.append(p[0])
+            # Get known client SSIDs and connection profiles from NetworkManager
+            known_conns = self.get_known_wifi_connections()
+            target_profile = None
+            target_ssid = None
 
-            # Check if any known SSID is in range
-            target_known = None
-            for kn in known_ssids:
-                if kn in scanned_ssids:
-                    target_known = kn
+            for conn in known_conns:
+                conn_ssid = conn.get("ssid") or conn.get("name")
+                conn_name = conn.get("name")
+                if conn_ssid in scanned_ssids or conn_name in scanned_ssids:
+                    target_profile = conn_name
+                    target_ssid = conn_ssid
                     break
 
-            if target_known:
-                logger.info(f"[Watchdog] Known network '{target_known}' visible in scan! Reconnecting...")
-                self._run_cmd(["nmcli", "connection", "down", HOTSPOT_CON_NAME])
+            if target_profile:
+                logger.info(f"[Watchdog] Known network '{target_ssid}' ({target_profile}) visible in scan! Reconnecting...")
+                if not self._has_nmcli or os.name == "nt":
+                    self._sim_mode = "client"
+                    self._sim_connected_ssid = target_ssid
+                    log_audit("WATCHDOG", "AUTO_RECONNECT", f"Reconnected to client network '{target_ssid}' (simulation)")
+                    return {"action": "reconnect", "target": target_ssid, "success": True}
+
+                self._run_cmd(["nmcli", "connection", "down", HOTSPOT_CON_NAME], timeout=10.0)
                 time.sleep(1.5)
-                res = self._run_cmd(["nmcli", "connection", "up", target_known], timeout=20.0)
-                log_audit("WATCHDOG", "AUTO_RECONNECT", f"Reconnected to client network '{target_known}'")
-                return {"action": "reconnect", "target": target_known, "success": res.returncode == 0}
+                res = self._run_cmd(["nmcli", "connection", "up", target_profile], timeout=20.0)
+                if res.returncode == 0:
+                    log_audit("WATCHDOG", "AUTO_RECONNECT", f"Reconnected to client network '{target_ssid}'")
+                    return {"action": "reconnect", "target": target_ssid, "success": True}
+                else:
+                    logger.warning(f"[Watchdog] Reconnect to '{target_ssid}' failed. Restoring Field-Hotspot...")
+                    self._run_cmd(["nmcli", "connection", "up", HOTSPOT_CON_NAME], timeout=25.0)
+                    return {"action": "reconnect_failed", "target": target_ssid, "success": False}
 
             return {"action": "hotspot_active", "message": "Hotspot active, waiting for known Wi-Fi in scan"}
 
@@ -615,6 +775,8 @@ class NetworkController:
                 self._disconnect_counter_sec = 0
                 log_audit("WATCHDOG", "AUTO_FAILOVER", f"Triggered automatic failover to Field Hotspot: {res.get('message')}")
                 return {"action": "failover_triggered", "result": res}
+
+            return {"action": "counting", "disconnected_sec": self._disconnect_counter_sec, "threshold": threshold}
 
             return {"action": "counting", "disconnected_sec": self._disconnect_counter_sec, "threshold": threshold}
 

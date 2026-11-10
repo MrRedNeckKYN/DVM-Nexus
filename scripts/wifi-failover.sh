@@ -63,9 +63,12 @@ has_gateway_connectivity() {
     return 0  # Gateway present and IP assigned is considered connected
 }
 
-get_known_ssids() {
-    # Returns list of saved Wi-Fi connection names excluding the hotspot
-    nmcli -t -f NAME,TYPE connection show 2>/dev/null | awk -F: -v hot="$HOTSPOT_CON" '$2 == "802-11-wireless" && $1 != hot {print $1}'
+get_known_connections() {
+    # Returns list of saved Wi-Fi connections formatted as NAME:SSID excluding hotspot
+    nmcli -t -f NAME,802-11-wireless.ssid,TYPE connection show 2>/dev/null | awk -F: -v hot="$HOTSPOT_CON" '$3 == "802-11-wireless" && $1 != hot {
+        ssid = ($2 != "" ? $2 : $1);
+        print $1 ":" ssid;
+    }'
 }
 
 log "Starting Wi-Fi Failover Watchdog Daemon on interface $INTERFACE..."
@@ -92,25 +95,29 @@ while true; do
         nmcli dev wifi rescan >/dev/null 2>&1 || true
         AVAILABLE_SSIDS=$(nmcli -t -f SSID dev wifi list 2>/dev/null | grep -v '^--$' | sort -u)
 
-        KNOWN_LIST=$(get_known_ssids)
-        FOUND_KNOWN=""
+        KNOWN_LIST=$(get_known_connections)
+        TARGET_CON=""
+        TARGET_SSID=""
 
-        while IFS= read -r known; do
-            [[ -z "$known" ]] && continue
-            if echo "$AVAILABLE_SSIDS" | grep -Fqx "$known"; then
-                FOUND_KNOWN="$known"
+        while IFS=: read -r con_name con_ssid; do
+            [[ -z "$con_name" ]] && continue
+            [[ -z "$con_ssid" ]] && con_ssid="$con_name"
+            if echo "$AVAILABLE_SSIDS" | grep -Fqx "$con_ssid" || echo "$AVAILABLE_SSIDS" | grep -Fqx "$con_name"; then
+                TARGET_CON="$con_name"
+                TARGET_SSID="$con_ssid"
                 break
             fi
         done <<< "$KNOWN_LIST"
 
-        if [[ -n "$FOUND_KNOWN" ]]; then
-            log "Known network '$FOUND_KNOWN' detected in scan! Switching from Field-Hotspot back to client Wi-Fi..."
+        if [[ -n "$TARGET_CON" ]]; then
+            log "Known network '$TARGET_SSID' (profile '$TARGET_CON') detected in scan! Switching from Field-Hotspot back to client Wi-Fi..."
             nmcli connection down "$HOTSPOT_CON" >/dev/null 2>&1 || true
             sleep 2
-            if nmcli connection up "$FOUND_KNOWN" timeout 20 >/dev/null 2>&1; then
-                log "Successfully reconnected to client Wi-Fi '$FOUND_KNOWN'."
+            if nmcli connection up "$TARGET_CON" timeout 20 >/dev/null 2>&1; then
+                log "Successfully reconnected to client Wi-Fi '$TARGET_SSID'."
             else
-                log "Failed to connect to '$FOUND_KNOWN'. Will re-evaluate on next cycle."
+                log "Failed to connect to '$TARGET_CON'. Restoring Field-Hotspot to maintain connectivity..."
+                nmcli connection up "$HOTSPOT_CON" timeout 25 >/dev/null 2>&1 || true
             fi
         fi
 

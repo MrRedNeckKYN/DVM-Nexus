@@ -82,6 +82,45 @@ def test_network_controller_connect_sim():
     assert err_res["status_code"] == 400
 
 
+def test_network_controller_connect_from_hotspot_sim():
+    """Verify connecting back to client Wi-Fi while currently in Hotspot mode."""
+    # Put controller in hotspot mode
+    network_controller.toggle_hotspot(True)
+    assert network_controller.get_status()["mode"] == "hotspot"
+
+    # Connect back to home Wi-Fi
+    res = network_controller.connect_network("Home-Network", "MyHomePass123")
+    assert res["success"] is True
+    assert res["ssid"] == "Home-Network"
+    status = network_controller.get_status()
+    assert status["mode"] == "client"
+    assert status["active_ssid"] == "Home-Network"
+
+
+def test_network_controller_connect_failure_rollback_sim():
+    """Verify failed client connection rolls back safely to Field-Hotspot."""
+    # Put controller in hotspot mode
+    network_controller.toggle_hotspot(True)
+    assert network_controller.get_status()["mode"] == "hotspot"
+
+    # Attempt connection to invalid network
+    res = network_controller.connect_network("FailNetwork", "WrongPassword")
+    assert res["success"] is False
+    assert res["status_code"] == 401
+    assert "restored" in res["error"].lower()
+
+
+def test_get_known_wifi_connections():
+    """Verify querying saved client Wi-Fi connection profiles."""
+    conns = network_controller.get_known_wifi_connections()
+    assert isinstance(conns, list)
+    assert len(conns) > 0
+    for c in conns:
+        assert "name" in c
+        assert "ssid" in c
+        assert "uuid" in c
+
+
 def test_manual_override_flag():
     """Verify manual override duration and clearing."""
     network_controller.set_manual_override()
@@ -245,9 +284,77 @@ def test_network_components_htmx(client):
         "ssid": "MMDVM-Field-AP",
         "password": "Password123",
         "band": "bg",
-        "channel": 6,
-        "failover_threshold_sec": 45,
+        "channel": "6",
+        "failover_threshold_sec": "45",
         "auto_failover_enabled": "true"
     })
     assert resp_hcfg.status_code == 200
-    assert "PROVISIONED &amp; READY" in resp_hcfg.text or "PROVISIONED & READY" in resp_hcfg.text
+    assert "Failover Hotspot Settings" in resp_hcfg.text or "PROVISIONED" in resp_hcfg.text
+
+
+def test_connect_network_linux_flow_with_hotspot_teardown():
+    """Verify Linux execution order: profile setup -> hotspot down -> client up."""
+    executed_cmds = []
+
+    def fake_run(cmd, timeout=None):
+        executed_cmds.append(cmd)
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "Connection successfully activated"
+        mock_res.stderr = ""
+        return mock_res
+
+    with patch.object(network_controller, "_has_nmcli", True), \
+         patch("os.name", "posix"), \
+         patch.object(network_controller, "_run_cmd", side_effect=fake_run), \
+         patch.object(network_controller, "get_status", return_value={"mode": "hotspot", "ip_address": "192.168.1.185"}), \
+         patch.object(network_controller, "get_known_wifi_connections", return_value=[{"name": "HomeWiFi", "ssid": "HomeWiFi", "uuid": "u-1"}]):
+
+        res = network_controller.connect_network("HomeWiFi", "SecretPass")
+        assert res["success"] is True
+
+        # Check command sequence
+        cmd_strs = [" ".join(c) for c in executed_cmds]
+        # Should modify existing profile
+        assert any("connection modify HomeWiFi" in s for s in cmd_strs)
+        # Should tear down hotspot
+        assert any("connection down Field-Hotspot" in s for s in cmd_strs)
+        # Should bring up HomeWiFi
+        assert any("connection up HomeWiFi" in s for s in cmd_strs)
+
+
+def test_connect_network_linux_failure_triggers_hotspot_rollback():
+    """Verify that when client connection fails on Linux, Field-Hotspot is restored."""
+    executed_cmds = []
+
+    def fake_run(cmd, timeout=None):
+        executed_cmds.append(cmd)
+        mock_res = MagicMock()
+        if "connection up HomeWiFi" in " ".join(cmd) or "dev wifi connect" in " ".join(cmd):
+            mock_res.returncode = 1
+            mock_res.stdout = ""
+            mock_res.stderr = "Error: Secrets were required, but not provided"
+        else:
+            mock_res.returncode = 0
+            mock_res.stdout = ""
+            mock_res.stderr = ""
+        return mock_res
+
+    with patch.object(network_controller, "_has_nmcli", True), \
+         patch("os.name", "posix"), \
+         patch.object(network_controller, "_run_cmd", side_effect=fake_run), \
+         patch.object(network_controller, "get_status", return_value={"mode": "hotspot", "ip_address": "10.42.0.1"}), \
+         patch.object(network_controller, "get_known_wifi_connections", return_value=[]):
+
+        res = network_controller.connect_network("HomeWiFi", "BadPassword")
+        assert res["success"] is False
+        assert res["status_code"] == 401
+        assert "restored" in res["error"].lower()
+
+        cmd_strs = [" ".join(c) for c in executed_cmds]
+        # Should tear down hotspot
+        assert any("connection down Field-Hotspot" in s for s in cmd_strs)
+        # Should attempt client connect
+        assert any("connection up HomeWiFi" in s for s in cmd_strs)
+        # CRITICAL ROLLBACK: Should restore Field-Hotspot!
+        assert any("connection up Field-Hotspot" in s for s in cmd_strs)

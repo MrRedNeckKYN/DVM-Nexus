@@ -1,6 +1,6 @@
 # DVM Nexus
 
-[![Version](https://img.shields.io/badge/version-1.0.12-blue.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
+[![Version](https://img.shields.io/badge/version-1.0.13-blue.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
 [![Hardware](https://img.shields.io/badge/hardware-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/products/raspberry-pi-5/)
