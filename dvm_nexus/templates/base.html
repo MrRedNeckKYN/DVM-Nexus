@@ -124,7 +124,7 @@
       <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.8') }}</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.9') }}</div>
       </div>
     </aside>
 
@@ -140,7 +140,13 @@
           <div class="header-brand-mobile">
             <span class="mobile-logo-icon">N</span>
           </div>
-          <h1 class="page-title">{{ title }}</h1>
+          <div class="header-title-group">
+            <h1 class="page-title">{{ title }}</h1>
+            <span class="header-node-badge {% if service and service.is_running %}badge-node-online{% else %}badge-node-offline{% endif %}">
+              <span class="pulse-dot-small"></span>
+              <span class="node-badge-text">{% if service and service.is_running %}ONLINE &bull; {{ active_protocol|upper }}{% else %}OFFLINE{% endif %}</span>
+            </span>
+          </div>
         </div>
         <div class="header-right">
           <!-- Protocol Mode Switcher Capsule -->

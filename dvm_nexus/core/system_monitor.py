@@ -15,7 +15,7 @@ from typing import Dict, Any, Optional, Tuple
 
 # Target hardware specifications for Raspberry Pi 5
 TARGET_PI5_NAME = "Raspberry Pi 5"
-TARGET_PI5_CPU = "BCM2712 (Cortex-A76 4C)"
+TARGET_PI5_CPU = "BCM2712 Cortex-A76 4-Core"
 TARGET_PI5_RAM_GB = 2.0
 TARGET_PI5_RAM_MB = 2048.0
 TARGET_PI5_DISK_GB = 64.0
@@ -243,7 +243,7 @@ def get_memory_info() -> Tuple[float, float, float, str, str, str]:
         total_mb = TARGET_PI5_RAM_MB  # 2048.0 MB
         used_mb = round(total_mb * (percent / 100.0), 1)
         used_gb = round(TARGET_PI5_RAM_GB * (percent / 100.0), 1)
-        total_str = "2 GB"
+        total_str = "2.0 GB"
         used_str = f"{used_gb:.1f} GB"
         display_str = f"{used_str} / {total_str} ({percent}%)"
         return used_mb, total_mb, percent, used_str, total_str, display_str

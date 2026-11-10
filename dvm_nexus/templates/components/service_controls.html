@@ -1,31 +1,48 @@
-<div class="card">
+<div class="card service-control-card">
   <div class="card-header">
-    <div class="card-title">Radio Service Control</div>
+    <div class="card-title">⚙️ Radio Service Control</div>
     {% if service.is_running %}
-      <span class="badge badge-success">Running</span>
+      <span class="badge badge-success">
+        <span class="status-dot">●</span> Running
+      </span>
     {% else %}
-      <span class="badge badge-danger">Stopped</span>
+      <span class="badge badge-danger">
+        <span class="status-dot">■</span> Stopped
+      </span>
     {% endif %}
   </div>
   
-  <p style="font-size:0.875rem; color:var(--text-muted); margin-bottom:1rem;">
-    Direct management of <code>{{ service.service }}</code>. Changes to active configuration require a restart to apply.
+  <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem; line-height:1.5;">
+    Direct process control of <code class="font-mono">{{ service.service }}</code>. Switching modes or modifying RF bandplans gracefully restarts the daemon.
   </p>
 
-  <div style="display:flex; gap:0.75rem; align-items:center;">
+  <div class="service-action-buttons">
     {% if service.is_running %}
-      <form hx-post="/api/service/restart" hx-target="#service-controls-container" hx-swap="innerHTML">
-        <button type="submit" class="btn btn-secondary">🔄 Restart Service</button>
+      <form hx-post="/api/service/restart" hx-target="#service-controls-container" hx-swap="innerHTML" style="flex:1;">
+        <button type="submit" class="btn btn-secondary service-btn btn-restart">
+          <span>🔄</span> Restart Daemon
+        </button>
       </form>
-      <form hx-post="/api/service/stop" hx-target="#service-controls-container" hx-swap="innerHTML">
-        <button type="submit" class="btn btn-danger">⏹️ Stop Service</button>
+      <form hx-post="/api/service/stop" hx-target="#service-controls-container" hx-swap="innerHTML" style="flex:1;">
+        <button type="submit" class="btn btn-danger service-btn btn-stop">
+          <span>⏹️</span> Stop Daemon
+        </button>
       </form>
     {% else %}
-      <form hx-post="/api/service/start" hx-target="#service-controls-container" hx-swap="innerHTML">
-        <button type="submit" class="btn btn-primary">▶️ Start Service</button>
+      <form hx-post="/api/service/start" hx-target="#service-controls-container" hx-swap="innerHTML" style="flex:1;">
+        <button type="submit" class="btn btn-primary service-btn btn-start">
+          <span>▶️</span> Start Radio Daemon
+        </button>
       </form>
     {% endif %}
   </div>
+
+  {% if message %}
+    <div style="margin-top:1rem; font-size:0.85rem; padding:0.5rem 0.75rem; border-radius:var(--radius-sm); {% if is_success %}background:var(--success-bg); color:var(--success);{% else %}background:var(--danger-bg); color:var(--danger);{% endif %}">
+      {{ message }}
+    </div>
+  {% endif %}
+</div>
 
   {% if message %}
     <div style="margin-top:1rem; font-size:0.85rem; padding:0.5rem 0.75rem; border-radius:var(--radius-sm); {% if is_success %}background:var(--success-bg); color:var(--success);{% else %}background:var(--danger-bg); color:var(--danger);{% endif %}">

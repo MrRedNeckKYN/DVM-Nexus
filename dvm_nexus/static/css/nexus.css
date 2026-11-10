@@ -916,10 +916,10 @@ tr:hover td {
 }
 
 /* ==============================================================================
-   DESKTOP VIEWPORT RULES (769px and wider)
+   DESKTOP VIEWPORT RULES (1024px and up / lg:)
    Guarantees desktop sidebar and full status pill are visible, mobile elements hidden
    ============================================================================== */
-@media (min-width: 769px) {
+@media (min-width: 1024px) {
   .mobile-bottom-nav {
     display: none !important;
     visibility: hidden !important;
@@ -943,14 +943,20 @@ tr:hover td {
     top: 0 !important;
     bottom: 0 !important;
     left: 0 !important;
-    width: 250px !important;
+    width: 260px !important;
     box-shadow: none !important;
   }
 
   .main-content {
-    margin-left: 250px !important;
-    width: calc(100% - 250px) !important;
-    padding-bottom: 0 !important;
+    margin-left: 260px !important;
+    width: calc(100% - 260px) !important;
+    padding-bottom: 2rem !important;
+  }
+
+  .page-container {
+    padding: 1.5rem 1.75rem !important;
+    max-width: 1560px;
+    margin: 0 auto;
   }
 
   .status-text-full {
@@ -986,19 +992,9 @@ html.device-desktop .restart-text {
    RESPONSIVE DESIGN BREAKPOINTS
    ============================================================================== */
 
-/* Tablet & Intermediate Screens (1024px and down) */
-@media (max-width: 1024px) {
-  .grid-3 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .grid-4 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-/* Mobile Devices (768px and down) */
-@media (max-width: 768px) {
-  /* Mobile-only elements display on handset screens */
+/* Mobile / Tablet Handset & Slate Screens (< 1024px) */
+@media (max-width: 1023px) {
+  /* Mobile-only elements display on handset and tablet viewports */
   .mobile-bottom-nav {
     display: flex !important;
     visibility: visible !important;
@@ -1015,7 +1011,7 @@ html.device-desktop .restart-text {
   }
 
   .sidebar-close-btn {
-    display: block !important;
+    display: flex !important;
     visibility: visible !important;
   }
 
@@ -1039,11 +1035,15 @@ html.device-desktop .restart-text {
     left: 0;
     height: 100vh;
     height: 100dvh;
-    width: 85vw;
-    max-width: 320px;
+    width: 288px;
+    max-width: 85vw;
     z-index: 9999;
     transform: translateX(-100%);
     box-shadow: none;
+    background-color: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-right: 1px solid rgba(51, 65, 85, 0.8);
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -1064,10 +1064,32 @@ html.device-desktop .restart-text {
 
   /* Main content takes full screen with safe padding for bottom bar */
   .main-content {
-    margin-left: 0;
-    width: 100%;
+    margin-left: 0 !important;
+    width: 100% !important;
     /* Extra padding at bottom so fixed mobile bar never obstructs cards or buttons (pb-24) */
-    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Minimum touch target size 44x44px for touch ergonomics */
+  .mobile-nav-toggle,
+  .sidebar-close-btn,
+  .mobile-nav-link {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .btn,
+  .station-action-btn,
+  .service-btn,
+  .form-control {
+    min-height: 44px;
+  }
+
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   /* Compact Mobile Header with Overflow Prevention */
@@ -2038,4 +2060,184 @@ html.device-desktop .restart-text {
   background: var(--accent-cyan);
   box-shadow: 0 0 6px var(--accent-cyan);
   display: inline-block;
+}
+
+/* ==============================================================================
+   DUAL-VIEWPORT DASHBOARD GRID ARCHITECTURE
+   ============================================================================== */
+
+.dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.8fr) minmax(340px, 1.2fr);
+    grid-template-areas:
+      "hero      telemetry"
+      "params    service"
+      "logs      service";
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .dash-hero { grid-area: hero; }
+  .dash-telemetry { grid-area: telemetry; }
+  .dash-service { grid-area: service; }
+  .dash-params { grid-area: params; }
+  .dash-logs { grid-area: logs; }
+
+  /* In Desktop 1/3 column, telemetry HUD renders clean 2x2 grid */
+  .dash-telemetry .telemetry-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.85rem !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .dashboard-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+
+  .dash-telemetry .telemetry-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+}
+
+/* ==============================================================================
+   HEADER TITLE & NODE STATUS BADGE
+   ============================================================================== */
+
+.header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.header-node-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.badge-node-online {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+}
+
+.badge-node-offline {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+@media (max-width: 640px) {
+  .node-badge-text {
+    display: none;
+  }
+  .header-node-badge {
+    padding: 0.25rem;
+  }
+}
+
+/* ==============================================================================
+   TACTILE BUTTON STATES & SERVICE CONTROLS
+   ============================================================================== */
+
+.btn,
+.station-action-btn,
+.service-btn,
+.btn-switch-mode,
+.restart-btn {
+  transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn:active,
+.station-action-btn:active,
+.service-btn:active,
+.btn-switch-mode:active,
+.restart-btn:active {
+  transform: scale(0.98) !important;
+}
+
+.service-control-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.service-action-buttons {
+  display: flex;
+  gap: 0.65rem;
+  width: 100%;
+  align-items: center;
+}
+
+.service-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn-start {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.btn-start:hover {
+  background: #059669;
+}
+
+.btn-restart {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+}
+
+.btn-restart:hover {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.btn-stop {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
+}
+
+.btn-stop:hover {
+  background: #ef4444;
+  color: #fff;
 }
