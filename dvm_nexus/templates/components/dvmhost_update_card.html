@@ -6,6 +6,9 @@
           <strong style="font-size: 1.05rem;">🎉 New DVMHost Release Available!</strong>
           <div style="font-size: 0.85rem; margin-top: 0.25rem;">
             Official upstream release <strong>{{ dvmhost_updater.check.release_name }}</strong> is available for <code>{{ dvmhost_updater.installed_info.target_asset_arch }}</code>.
+            {% if dvmhost_updater.check.published_at %}
+              <span style="color: var(--text-dim); margin-left: 0.5rem;">(Published: {{ dvmhost_updater.check.published_at[:10] }})</span>
+            {% endif %}
           </div>
         </div>
         <span class="badge badge-success" style="font-size: 0.9rem; padding: 6px 12px;">
