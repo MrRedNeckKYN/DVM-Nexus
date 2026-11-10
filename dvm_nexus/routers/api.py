@@ -28,6 +28,12 @@ async def api_status():
     })
 
 
+@router.get("/system/metrics")
+async def api_system_metrics():
+    """Return JSON system metrics for local monitoring or remote agent telemetry."""
+    return JSONResponse(get_system_metrics())
+
+
 async def event_generator() -> AsyncIterator[str]:
     """SSE generator streaming system health and service status."""
     while True:

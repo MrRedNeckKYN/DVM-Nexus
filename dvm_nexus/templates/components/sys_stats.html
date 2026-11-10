@@ -34,7 +34,7 @@
     </div>
   </div>
 
-  <!-- Memory Usage Tile (Target: 2.0 GB LPDDR4X) -->
+  <!-- Memory Usage Tile -->
   <div class="telemetry-card">
     <div class="telemetry-header">
       <span class="telemetry-label">Memory (RAM)</span>
@@ -49,7 +49,7 @@
     </div>
   </div>
 
-  <!-- Storage Tile (Target: 64 GB Storage) -->
+  <!-- Storage Tile -->
   <div class="telemetry-card">
     <div class="telemetry-header">
       <span class="telemetry-label">Storage</span>
@@ -59,7 +59,7 @@
       <div class="telemetry-bar-fill bar-purple" style="width: {{ sys.disk_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span class="truncate font-mono">Disk: {{ sys.disk_used_gb }} / 64 GB</span>
+      <span class="truncate font-mono">Disk: {{ sys.disk_display|default(sys.disk_used_gb ~ ' / ' ~ sys.disk_total_gb ~ ' GB (' ~ sys.disk_percent ~ '%)') }}</span>
     </div>
   </div>
 </div>
@@ -74,6 +74,6 @@
   <div class="uptime-badge-item">
     <span class="pulse-dot-small"></span>
     <span class="uptime-label">Hardware:</span>
-    <strong class="uptime-val">Raspberry Pi 5 (2.0 GB / 64 GB)</strong>
+    <strong class="uptime-val">{{ sys.hardware_label|default('Raspberry Pi 5') }}</strong>
   </div>
 </div>
