@@ -5,8 +5,12 @@
       <span class="badge badge-success">
         <span class="status-dot">●</span> Running
       </span>
+    {% elif service.is_failed %}
+      <span class="badge badge-danger" title="Service failed or exited with error">
+        <span class="status-dot">⚠️</span> FAILED
+      </span>
     {% else %}
-      <span class="badge badge-danger">
+      <span class="badge badge-muted">
         <span class="status-dot">■</span> Stopped
       </span>
     {% endif %}
@@ -19,34 +23,47 @@
   <div class="service-action-buttons">
     {% if service.is_running %}
       <form hx-post="/api/service/restart" hx-target="#service-controls-container" hx-swap="innerHTML" style="flex:1;">
-        <button type="submit" class="btn btn-secondary service-btn btn-restart">
+        <button type="submit" class="btn btn-secondary service-btn btn-restart" onclick="this.classList.add('btn-loading');">
           <span>🔄</span> Restart Daemon
         </button>
       </form>
       <form hx-post="/api/service/stop" hx-target="#service-controls-container" hx-swap="innerHTML" style="flex:1;">
-        <button type="submit" class="btn btn-danger service-btn btn-stop">
+        <button type="submit" class="btn btn-danger service-btn btn-stop" onclick="this.classList.add('btn-loading');">
           <span>⏹️</span> Stop Daemon
         </button>
       </form>
     {% else %}
       <form hx-post="/api/service/start" hx-target="#service-controls-container" hx-swap="innerHTML" style="flex:1;">
-        <button type="submit" class="btn btn-primary service-btn btn-start">
+        <button type="submit" class="btn btn-primary service-btn btn-start" onclick="this.classList.add('btn-loading');">
           <span>▶️</span> Start Radio Daemon
         </button>
       </form>
+      {% if service.is_failed %}
+        <a href="/diagnostics" class="btn btn-outline-cyan service-btn" style="flex:1; text-align:center; display:flex; align-items:center; justify-content:center;">
+          <span>🩺 Diagnostics</span>
+        </a>
+      {% endif %}
     {% endif %}
   </div>
 
-  {% if message %}
-    <div style="margin-top:1rem; font-size:0.85rem; padding:0.5rem 0.75rem; border-radius:var(--radius-sm); {% if is_success %}background:var(--success-bg); color:var(--success);{% else %}background:var(--danger-bg); color:var(--danger);{% endif %}">
-      {{ message }}
+  {% if message and is_success %}
+    <div style="margin-top:1rem; font-size:0.85rem; padding:0.6rem 0.85rem; border-radius:var(--radius-sm); background:var(--success-bg); color:var(--success); border:1px solid rgba(16, 185, 129, 0.25);">
+      ✅ {{ message }}
     </div>
-  {% endif %}
-</div>
-
-  {% if message %}
-    <div style="margin-top:1rem; font-size:0.85rem; padding:0.5rem 0.75rem; border-radius:var(--radius-sm); {% if is_success %}background:var(--success-bg); color:var(--success);{% else %}background:var(--danger-bg); color:var(--danger);{% endif %}">
-      {{ message }}
+  {% elif message and not is_success %}
+    <div class="service-error-box" style="margin-top:1rem; background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.3); border-radius:var(--radius-sm); padding:0.75rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+        <span style="font-weight:600; color:var(--danger); font-size:0.85rem;">⚠️ Daemon Failed to Start</span>
+        <a href="/diagnostics" class="btn btn-xs btn-outline-cyan" style="font-size:0.75rem; padding:0.15rem 0.5rem;">Inspect Logs &rarr;</a>
+      </div>
+      <div style="font-size:0.8rem; color:var(--text-main); margin-bottom:0.5rem;">{{ message }}</div>
+      {% if recent_logs and recent_logs|length > 0 %}
+        <div style="background:var(--bg-main); border:1px solid var(--border-color); border-radius:4px; padding:0.5rem; font-size:0.75rem; max-height:120px; overflow-y:auto; color:var(--text-dim);" class="font-mono">
+          {% for line in recent_logs %}
+            <div style="{% if 'error' in line.lower() or 'fatal' in line.lower() or 'failed' in line.lower() %}color:#f87171; font-weight:600;{% endif %}">{{ line }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
     </div>
   {% endif %}
 </div>

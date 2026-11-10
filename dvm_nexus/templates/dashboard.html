@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 
 {% block content %}
+<!-- Top Area: Service Crash / Diagnostic Alert Banner (shows only when failed or errored) -->
+<div id="crash-banner-container" style="margin-bottom: 1.25rem;">
+  {% include "components/service_error_banner.html" %}
+</div>
+
 <div class="dashboard-grid">
   <!-- Area 1: Hero Radio Status (Desktop Left 2/3 / Mobile Top) -->
   <div class="dash-hero">

@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="diagnostics-page-container">
+
+  <!-- Page Header -->
+  <div class="page-header-row">
+    <div>
+      <h1 class="page-title">🩺 System Diagnostics &amp; Live Logs</h1>
+      <p class="page-subtitle">Real-time journalctl log stream, crash analysis, and automated health checks for DVMHost.</p>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <form hx-post="/components/diagnostics-autofix" hx-target="#diagnostics-main-container" hx-swap="innerHTML" style="margin:0;">
+        <button type="submit" class="btn btn-warning" onclick="this.classList.add('btn-loading');">
+          <span>⚡ 1-Click Auto-Repair</span>
+        </button>
+      </form>
+      <button type="button" class="btn btn-outline-cyan" onclick="refreshCurrentLogs()">
+        <span>🔄 Refresh</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="diagnostics-main-container">
+
+    <!-- Top Hero Card: Service Health & Systemd State -->
+    <div class="card diagnostics-hero-card" style="margin-bottom: 1.5rem;">
+      <div class="diag-hero-header flex-between">
+        <div class="diag-hero-title-group">
+          <div class="diag-mode-icon">
+            {% if service.is_running %}
+              🟢
+            {% elif service.is_failed %}
+              🔴
+            {% else %}
+              ⚪
+            {% endif %}
+          </div>
+          <div>
+            <div class="diag-hero-title font-mono">{{ service.service }}</div>
+            <div class="diag-hero-subtitle">
+              {% if service.is_running %}
+                Daemon is healthy and active under systemd supervision
+              {% elif service.is_failed %}
+                Daemon crashed or failed startup. Review crash logs below.
+              {% else %}
+                Daemon is inactive / stopped.
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          {% if service.is_running %}
+            <span class="badge-pill badge-client">
+              <span class="pulse-dot dot-success"></span> ACTIVE (RUNNING)
+            </span>
+          {% elif service.is_failed %}
+            <span class="badge-pill badge-hotspot">
+              <span class="pulse-dot dot-warning"></span> FAILED (ERROR)
+            </span>
+          {% else %}
+            <span class="badge-pill badge-standby">
+              <span class="pulse-dot dot-gray"></span> STOPPED
+            </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="diag-details-grid">
+        <div class="diag-detail-item">
+          <span class="diag-detail-label">Service State</span>
+          <span class="diag-detail-val font-mono">{{ service.state }}</span>
+        </div>
+        <div class="diag-detail-item">
+          <span class="diag-detail-label">Main PID</span>
+          <span class="diag-detail-val font-mono">{{ service.main_pid|default('None') }}</span>
+        </div>
+        <div class="diag-detail-item">
+          <span class="diag-detail-label">Exit Status Code</span>
+          <span class="diag-detail-val font-mono">
+            {% if service.exit_code is not none %}
+              <span class="text-danger font-mono font-bold">{{ service.exit_code }} ({{ service.exit_result|default('exited') }})</span>
+            {% else %}
+              <span class="text-dim">None (OK)</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="diag-detail-item">
+          <span class="diag-detail-label">Overall Health</span>
+          <span class="diag-detail-val">
+            {% if health.overall_status == 'healthy' %}
+              <span class="text-success font-bold">100% HEALTHY</span>
+            {% elif health.overall_status == 'warning' %}
+              <span class="text-warning font-bold">WARNINGS</span>
+            {% else %}
+              <span class="text-danger font-bold">CRITICAL ERRORS</span>
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Doctor Health Checklist Card -->
+    <div class="card doctor-card" style="margin-bottom: 1.5rem;">
+      <div class="card-header flex-between">
+        <div class="card-title-group">
+          <span class="card-icon">🩺</span>
+          <span class="card-title">System &amp; Configuration Doctor</span>
+        </div>
+        <div>
+          {% if health.overall_status == 'healthy' %}
+            <span class="badge badge-success">ALL CHECKS PASSED</span>
+          {% elif health.overall_status == 'warning' %}
+            <span class="badge badge-warning">WARNINGS</span>
+          {% else %}
+            <span class="badge badge-danger">ISSUES DETECTED</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div id="diagnostics-checks-container">
+          {% include "components/diagnostics_checks.html" %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Terminal Log Viewer -->
+    <div class="card terminal-card">
+      <div class="card-header flex-between" style="flex-wrap: wrap; gap: 0.75rem;">
+        <div class="card-title-group">
+          <span class="card-icon">💻</span>
+          <span class="card-title">Live Service Journal Logs</span>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="log-filter-controls">
+          <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline-cyan active-filter" id="filter-all"
+                    onclick="setLogFilter('all')">
+              All Logs
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-cyan" id="filter-errors"
+                    onclick="setLogFilter('errors')">
+              ⚠️ Errors Only
+            </button>
+          </div>
+
+          <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-secondary active-service" id="svc-dvmhost"
+                    onclick="setLogService('dvmhost')">
+              dvmhost
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary" id="svc-nexus"
+                    onclick="setLogService('dvm-nexus')">
+              dvm-nexus
+            </button>
+          </div>
+
+          <label class="auto-refresh-toggle">
+            <input type="checkbox" id="chk-auto-refresh" onchange="toggleAutoRefresh(this.checked)">
+            <span>Live Poll (5s)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card-body" id="diagnostics-log-stream">
+        {% include "components/diagnostics_logs.html" %}
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+let currentService = 'dvmhost';
+let currentFilter = 'all';
+let autoRefreshTimer = null;
+
+function setLogFilter(filter) {
+  currentFilter = filter;
+  document.getElementById('filter-all')?.classList.toggle('active-filter', filter === 'all');
+  document.getElementById('filter-errors')?.classList.toggle('active-filter', filter === 'errors');
+  fetchLogs();
+}
+
+function setLogService(svc) {
+  currentService = svc;
+  document.getElementById('svc-dvmhost')?.classList.toggle('active-service', svc === 'dvmhost');
+  document.getElementById('svc-nexus')?.classList.toggle('active-service', svc === 'dvm-nexus');
+  fetchLogs();
+}
+
+function fetchLogs() {
+  const container = document.getElementById('diagnostics-log-stream');
+  if (!container) return;
+  const url = `/components/diagnostics-logs?service=${encodeURIComponent(currentService)}&filter=${encodeURIComponent(currentFilter)}&lines=80`;
+  htmx.ajax('GET', url, { target: '#diagnostics-log-stream', swap: 'innerHTML' });
+}
+
+function refreshCurrentLogs() {
+  fetchLogs();
+  htmx.ajax('GET', '/components/diagnostics-checks', { target: '#diagnostics-checks-container', swap: 'innerHTML' });
+}
+
+function toggleAutoRefresh(enabled) {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+  if (enabled) {
+    autoRefreshTimer = setInterval(() => {
+      fetchLogs();
+    }, 5000);
+  }
+}
+
+function copyTerminalLogs(btn) {
+  const content = document.getElementById('terminal-log-content');
+  if (!content) return;
+  const text = content.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span>✅ Copied!</span>';
+    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+  });
+}
+</script>
+{% endblock %}

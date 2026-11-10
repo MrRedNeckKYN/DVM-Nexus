@@ -1,0 +1,49 @@
+{% if result %}
+  <div class="alert alert-{{ 'success' if result.success else 'danger' }}" style="margin-bottom: 1.5rem;">
+    <div style="font-weight: 600; margin-bottom: 0.25rem;">
+      {% if result.success %}✅ Auto-Repair Succeeded!{% else %}⚠️ Auto-Repair Notice{% endif %}
+    </div>
+    <div>{{ result.message }}</div>
+    {% if result.fixes_applied and result.fixes_applied|length > 0 %}
+      <ul style="margin: 0.5rem 0 0 1.25rem; font-size: 0.85rem;">
+        {% for fix in result.fixes_applied %}
+          <li>{{ fix }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="card doctor-card" style="margin-bottom: 1.5rem;">
+  <div class="card-header flex-between">
+    <div class="card-title-group">
+      <span class="card-icon">🩺</span>
+      <span class="card-title">System &amp; Configuration Doctor</span>
+    </div>
+    <div>
+      {% if health.overall_status == 'healthy' %}
+        <span class="badge badge-success">ALL SYSTEMS HEALTHY</span>
+      {% elif health.overall_status == 'warning' %}
+        <span class="badge badge-warning">WARNINGS DETECTED</span>
+      {% else %}
+        <span class="badge badge-danger">CRITICAL ISSUES FOUND</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+    {% include "components/diagnostics_checks.html" %}
+  </div>
+</div>
+
+<div class="card terminal-card">
+  <div class="card-header flex-between">
+    <div class="card-title-group">
+      <span class="card-icon">💻</span>
+      <span class="card-title">Live System Logs</span>
+    </div>
+  </div>
+  <div class="card-body" id="diagnostics-log-stream">
+    {% include "components/diagnostics_logs.html" %}
+  </div>
+</div>

@@ -14,6 +14,7 @@ from dvm_nexus.core.dvm_client import dvm_client
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 from dvm_nexus.config_engine.profile_manager import profile_manager
 from dvm_nexus.core.database import get_recent_audit_logs
+from dvm_nexus.core.diagnostics import diagnostics_engine
 
 router = APIRouter()
 
@@ -26,6 +27,7 @@ async def dashboard_page(request: Request):
     dvm_status = dvm_config_manager.get_quick_status()
     active_profile = profile_manager.get_active_profile()
     recent_logs = get_recent_audit_logs(limit=10)
+    health = diagnostics_engine.run_health_checks()
 
     # Attempt live query from DVMHost REST API
     live_rest = None
@@ -46,6 +48,7 @@ async def dashboard_page(request: Request):
             "profile": active_profile,
             "logs": recent_logs,
             "live_rest": live_rest,
+            "health": health,
         }
     )
 
@@ -81,7 +84,12 @@ async def service_start(request: Request):
     return render_template(
         request,
         "components/service_controls.html",
-        {"service": service_status, "message": res.get("message"), "is_success": res.get("success")}
+        {
+            "service": service_status,
+            "message": res.get("message"),
+            "is_success": res.get("success"),
+            "recent_logs": res.get("recent_logs", []),
+        }
     )
 
 
@@ -93,7 +101,12 @@ async def service_stop(request: Request):
     return render_template(
         request,
         "components/service_controls.html",
-        {"service": service_status, "message": res.get("message"), "is_success": res.get("success")}
+        {
+            "service": service_status,
+            "message": res.get("message"),
+            "is_success": res.get("success"),
+            "recent_logs": res.get("recent_logs", []),
+        }
     )
 
 
@@ -105,5 +118,10 @@ async def service_restart(request: Request):
     return render_template(
         request,
         "components/service_controls.html",
-        {"service": service_status, "message": res.get("message"), "is_success": res.get("success")}
+        {
+            "service": service_status,
+            "message": res.get("message"),
+            "is_success": res.get("success"),
+            "recent_logs": res.get("recent_logs", []),
+        }
     )

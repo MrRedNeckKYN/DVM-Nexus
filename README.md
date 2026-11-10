@@ -1,6 +1,6 @@
 # DVM Nexus
 
-[![Version](https://img.shields.io/badge/version-1.0.13-blue.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
+[![Version](https://img.shields.io/badge/version-1.0.14-blue.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
 [![Hardware](https://img.shields.io/badge/hardware-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/products/raspberry-pi-5/)
@@ -17,9 +17,15 @@ Instead of SSHing into your Raspberry Pi to edit YAML configs, manually calculat
 
 ### 📱 Modern Dashboard for Desktop & Mobile
 - **Live Hardware Stats:** Real-time SoC temperature in °F, CPU load, RAM usage, storage space, and uptime.
-- **Service Controls:** Start, stop, or restart `dvmhost` with one click and see live journalctl logs.
+- **Service Controls & Crash Alerts:** Start, stop, or restart `dvmhost` with one click. If the daemon crashes or fails to start, an instant alert banner appears with the exact exit code and crash cause.
 - **Phone Friendly:** Works seamlessly on mobile with a slide-out drawer, quick bottom navigation tabs, and touch-friendly controls so you can manage your station on the go.
 - **Live Event Feed:** Streams repeater activity, peer connection events, and radio traffic in real time without refreshing the page.
+
+### 🩺 System Diagnostics & Live Journal Logs
+- **No SSH Required for Errors:** View real-time `journalctl -u dvmhost.service` logs directly in a browser-based dark terminal console.
+- **Error Highlighting & Filtering:** Automatically filters and color-codes crashes, aborts, and warnings.
+- **Automated Health Check Doctor:** Audits `config.yml` flags (`iAgreeNotToBeStupid`, `daemon: false`), serial port availability (`/dev/ttyAMA0`), Linux serial console conflicts, and required data tables.
+- **1-Click Auto-Repair:** Automatically fixes configuration discrepancies, restores missing tables, and restarts the daemon with one tap.
 
 ### 📶 Automatic Failover Hotspot (Field-AP)
 - **Never get locked out:** If your home Wi-Fi drops or you take your hotspot to a field day event, the Pi automatically starts its own Wi-Fi hotspot (`MMDVM-Field-AP` at `10.42.0.1`).

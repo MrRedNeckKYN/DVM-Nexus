@@ -1,0 +1,30 @@
+<div class="doctor-checks-list">
+  {% for c in health.checks %}
+    <div class="doctor-check-item check-{{ c.status }}">
+      <div class="check-icon-col">
+        {% if c.status == 'pass' %}
+          <span class="check-icon check-pass">✅</span>
+        {% elif c.status == 'warn' %}
+          <span class="check-icon check-warn">⚠️</span>
+        {% else %}
+          <span class="check-icon check-fail">❌</span>
+        {% endif %}
+      </div>
+      
+      <div class="check-details-col">
+        <div class="check-header-row">
+          <span class="check-title font-mono">{{ c.name }}</span>
+          <span class="badge badge-{{ 'success' if c.status == 'pass' else ('warning' if c.status == 'warn' else 'danger') }}">
+            {{ c.badge }}
+          </span>
+        </div>
+        <div class="check-summary">{{ c.summary }}</div>
+        {% if c.remedy %}
+          <div class="check-remedy">
+            <strong>Suggested Fix:</strong> {{ c.remedy }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>

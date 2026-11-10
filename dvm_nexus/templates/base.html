@@ -120,6 +120,11 @@
             </a>
           </li>
           <li class="nav-item">
+            <a href="/diagnostics" class="nav-link {% if active_tab == 'diagnostics' %}active{% endif %}">
+              <span class="nav-icon">🩺</span> <span class="nav-label">Diagnostics &amp; Logs</span>
+            </a>
+          </li>
+          <li class="nav-item">
             <a href="/updates" class="nav-link {% if active_tab == 'updates' %}active{% endif %}">
               <span class="nav-icon">🔄</span> <span class="nav-label">System Updates</span>
             </a>
@@ -129,7 +134,7 @@
       <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.13') }}</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.14') }}</div>
       </div>
     </aside>
 

@@ -21,6 +21,7 @@ class ServiceController:
         self.has_systemctl = shutil.which("systemctl") is not None and os.name != "nt"
         # Simulated state for development/testing
         self._dev_simulated_running = False
+        self._dev_simulated_failed = False
         self._dev_simulated_start_time = None
 
     def get_status(self) -> Dict[str, Any]:
@@ -35,13 +36,17 @@ class ServiceController:
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
 
-            is_running = len(pids) > 0 or self._dev_simulated_running
+            is_running = (len(pids) > 0 or self._dev_simulated_running) and not self._dev_simulated_failed
+            state_str = "active (running)" if is_running else ("failed (failed)" if self._dev_simulated_failed else "inactive (dead)")
             return {
                 "service": self.service_name,
                 "is_running": is_running,
-                "state": "active (running)" if is_running else "inactive (dead)",
+                "is_failed": self._dev_simulated_failed,
+                "state": state_str,
                 "pids": pids,
-                "main_pid": pids[0] if pids else (9999 if self._dev_simulated_running else None),
+                "main_pid": pids[0] if pids else (9999 if is_running else None),
+                "exit_code": 1 if self._dev_simulated_failed else None,
+                "exit_result": "exit-code" if self._dev_simulated_failed else None,
                 "is_systemd": False,
                 "simulated": True,
             }
@@ -54,7 +59,10 @@ class ServiceController:
             is_active = state_str == "active"
 
             # Check detailed status
-            cmd_status = ["systemctl", "show", self.service_name, "--property=MainPID,ActiveState,SubState,ActiveEnterTimestamp"]
+            cmd_status = [
+                "systemctl", "show", self.service_name,
+                "--property=MainPID,ActiveState,SubState,ActiveEnterTimestamp,Result,ExecMainStatus,ExecMainCode"
+            ]
             res_status = subprocess.run(cmd_status, capture_output=True, text=True)
             props = {}
             for line in res_status.stdout.splitlines():
@@ -63,12 +71,20 @@ class ServiceController:
                     props[k.strip()] = v.strip()
 
             main_pid = int(props.get("MainPID", 0)) if props.get("MainPID", "0").isdigit() else 0
+            act_state = props.get("ActiveState", state_str)
+            sub_state = props.get("SubState", "")
+            result_str = props.get("Result", "")
+            is_failed = act_state == "failed" or sub_state == "failed" or (result_str not in ("", "success") and not is_active)
+            exit_code = int(props.get("ExecMainStatus", 0)) if props.get("ExecMainStatus", "0").isdigit() else None
 
             return {
                 "service": self.service_name,
                 "is_running": is_active,
-                "state": f"{props.get('ActiveState', state_str)} ({props.get('SubState', '')})",
+                "is_failed": is_failed,
+                "state": f"{act_state} ({sub_state})",
                 "main_pid": main_pid if main_pid > 0 else None,
+                "exit_code": exit_code,
+                "exit_result": result_str,
                 "active_since": props.get("ActiveEnterTimestamp", ""),
                 "is_systemd": True,
                 "simulated": False,
@@ -77,8 +93,11 @@ class ServiceController:
             return {
                 "service": self.service_name,
                 "is_running": False,
+                "is_failed": True,
                 "state": f"error: {str(e)}",
                 "main_pid": None,
+                "exit_code": None,
+                "exit_result": "error",
                 "is_systemd": True,
                 "simulated": False,
             }
@@ -96,9 +115,14 @@ class ServiceController:
             if res.returncode == 0:
                 return {"success": True, "message": f"{self.service_name} started successfully"}
             else:
-                return {"success": False, "message": res.stderr.strip() or f"systemctl start exited with code {res.returncode}"}
+                err = res.stderr.strip() or f"systemctl start exited with code {res.returncode}"
+                return {
+                    "success": False,
+                    "message": err,
+                    "recent_logs": self.get_recent_logs(lines=10),
+                }
         except Exception as e:
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": str(e), "recent_logs": [str(e)]}
 
     def stop(self) -> Dict[str, Any]:
         """Stop the dvmhost service."""
@@ -129,9 +153,14 @@ class ServiceController:
             if res.returncode == 0:
                 return {"success": True, "message": f"{self.service_name} restarted successfully"}
             else:
-                return {"success": False, "message": res.stderr.strip() or f"systemctl restart exited with code {res.returncode}"}
+                err = res.stderr.strip() or f"systemctl restart exited with code {res.returncode}"
+                return {
+                    "success": False,
+                    "message": err,
+                    "recent_logs": self.get_recent_logs(lines=10),
+                }
         except Exception as e:
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": str(e), "recent_logs": [str(e)]}
 
     def verify_running(self, timeout_sec: float = 6.0) -> bool:
         """Poll service for timeout_sec to verify it remains running."""

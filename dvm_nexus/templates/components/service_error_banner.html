@@ -1,0 +1,55 @@
+{% if service.is_failed or (not service.is_running and health.has_fails) %}
+<div class="service-crash-alert-card">
+  <div class="crash-alert-header">
+    <div class="crash-alert-title-group">
+      <span class="crash-alert-pulse-icon">⚠️</span>
+      <div>
+        <div class="crash-alert-title">
+          Radio Daemon Failed: {{ service.service|default('dvmhost.service') }}
+          {% if service.exit_code is not none %}
+            <span class="badge badge-danger" style="margin-left: 0.5rem;">Exit Code {{ service.exit_code }}</span>
+          {% endif %}
+        </div>
+        <div class="crash-alert-subtitle">
+          The control process exited with an error code. Check the automated diagnostics below or view full system logs.
+        </div>
+      </div>
+    </div>
+    
+    <div class="crash-alert-actions">
+      <form hx-post="/components/diagnostics-autofix" hx-target="#crash-banner-container" hx-swap="innerHTML" style="margin:0;">
+        <button type="submit" class="btn btn-warning btn-sm" onclick="this.classList.add('btn-loading');">
+          <span>⚡ 1-Click Auto-Fix &amp; Restart</span>
+        </button>
+      </form>
+      <a href="/diagnostics" class="btn btn-danger btn-sm">
+        <span>🩺 View Error Logs &rarr;</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Detected Diagnostic Root Causes -->
+  {% if health and health.checks %}
+    <div class="crash-alert-findings">
+      <div class="findings-header">🔍 Diagnostic Findings:</div>
+      <div class="findings-list">
+        {% for c in health.checks %}
+          {% if c.status == 'fail' %}
+            <div class="finding-item finding-fail">
+              <span class="finding-badge">CRITICAL</span>
+              <span class="finding-name font-mono">{{ c.name }}:</span>
+              <span class="finding-summary">{{ c.summary }}</span>
+            </div>
+          {% elif c.status == 'warn' %}
+            <div class="finding-item finding-warn">
+              <span class="finding-badge">WARN</span>
+              <span class="finding-name font-mono">{{ c.name }}:</span>
+              <span class="finding-summary">{{ c.summary }}</span>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endif %}

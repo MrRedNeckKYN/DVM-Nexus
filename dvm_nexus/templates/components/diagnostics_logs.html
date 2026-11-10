@@ -1,0 +1,29 @@
+<div class="log-terminal-header flex-between">
+  <div class="terminal-meta">
+    <span class="terminal-title">📜 journalctl -u {{ logs.service }}</span>
+    <span class="terminal-count">{{ logs.entries|length }} lines</span>
+  </div>
+  <div class="terminal-actions">
+    <button type="button" class="btn btn-sm btn-outline-cyan" onclick="copyTerminalLogs(this)">
+      <span>📋 Copy Logs</span>
+    </button>
+    <a href="/api/diagnostics/export?service={{ selected_service|default('dvmhost') }}&lines=200" class="btn btn-sm btn-secondary" target="_blank">
+      <span>💾 Download</span>
+    </a>
+  </div>
+</div>
+
+<div class="log-terminal-window" id="terminal-log-content">
+  {% if logs.entries and logs.entries|length > 0 %}
+    {% for entry in logs.entries %}
+      <div class="terminal-log-line log-level-{{ entry.level }}">
+        <span class="line-num font-mono">{{ loop.index }}</span>
+        <span class="line-text font-mono">{{ entry.raw }}</span>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="terminal-empty-state">
+      <span>No log entries match the selected filter.</span>
+    </div>
+  {% endif %}
+</div>
