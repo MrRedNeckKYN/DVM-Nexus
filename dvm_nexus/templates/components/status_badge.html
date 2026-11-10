@@ -1,9 +1,13 @@
 {% if service and service.is_running %}
-  <span class="badge badge-success">
-    ● DVMHost Running {% if service.main_pid %}(PID {{ service.main_pid }}){% endif %}
+  <span class="badge badge-success status-pill" title="DVMHost Running {% if service.main_pid %}(PID {{ service.main_pid }}){% endif %}">
+    <span class="status-dot">●</span>
+    <span class="status-text-full">DVMHost Running {% if service.main_pid %}(PID {{ service.main_pid }}){% endif %}</span>
+    <span class="status-text-mobile">Running</span>
   </span>
 {% else %}
-  <span class="badge badge-danger">
-    ■ DVMHost Inactive
+  <span class="badge badge-danger status-pill" title="DVMHost Inactive">
+    <span class="status-dot">■</span>
+    <span class="status-text-full">DVMHost Inactive</span>
+    <span class="status-text-mobile">Offline</span>
   </span>
 {% endif %}

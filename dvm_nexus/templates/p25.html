@@ -7,8 +7,8 @@
     <div class="card-title">⚡ Live Over-The-Air P25 Commands</div>
     <span class="badge badge-indigo">REST API Direct</span>
   </div>
-  <form hx-post="/p25/rids/action" hx-target="#toast-container" hx-swap="beforeend" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
-    <div style="flex:1; min-width:140px;">
+  <form hx-post="/p25/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
+    <div class="ota-cmd-field">
       <label class="form-label">Command</label>
       <select name="action" class="form-control">
         <option value="check">Radio Check</option>
@@ -18,17 +18,19 @@
         <option value="dyn-regrp">Dynamic Regroup</option>
       </select>
     </div>
-    <div style="flex:1; min-width:140px;">
+    <div class="ota-cmd-field">
       <label class="form-label">Target Radio ID (RID)</label>
       <input type="number" name="rid" class="form-control" placeholder="e.g. 1234567" required>
     </div>
-    <button type="submit" class="btn btn-primary" style="height:38px;">Send Command</button>
+    <div class="ota-cmd-btn-wrap">
+      <button type="submit" class="btn btn-primary ota-send-btn">Send Command</button>
+    </div>
   </form>
 </div>
 
 <!-- Active Frequency & Channel Info Pill -->
 {% if active_tx_mhz and active_rx_mhz %}
-<div class="card" style="background:var(--bg-secondary); border-color:var(--border-light); margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center;">
+<div class="card freq-banner-card" style="background:var(--bg-secondary); border-color:var(--border-light); margin-bottom:1.5rem;">
   <div>
     <div style="font-size:0.8rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Calculated Frequency from IDEN Bandplan</div>
     <div style="font-size:1.2rem; font-weight:700; margin-top:0.25rem;">
@@ -36,7 +38,7 @@
       RX: <span style="color:var(--success);">{{ active_rx_mhz }} MHz</span>
     </div>
   </div>
-  <div>
+  <div class="freq-banner-badge">
     <span class="badge badge-indigo">IDEN Ch #{{ sys.channelId }} / Slot {{ sys.channelNo }}</span>
   </div>
 </div>

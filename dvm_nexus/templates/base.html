@@ -2,80 +2,98 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="theme-color" content="#0b0f19">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>{{ title }} - DVM Nexus</title>
   <link rel="stylesheet" href="/static/css/nexus.css">
   <script src="/static/js/htmx.min.js"></script>
 </head>
 <body>
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
   <div class="app-container">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-icon">N</div>
-        <div>
-          <div class="brand-title">DVM Nexus</div>
-          <div class="brand-subtitle">Radio Network OS</div>
+    <!-- Sidebar / Off-Canvas Mobile Drawer -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-icon">N</div>
+          <div>
+            <div class="brand-title">DVM Nexus</div>
+            <div class="brand-subtitle">Radio Network OS</div>
+          </div>
         </div>
+        <button type="button" class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Close navigation">&times;</button>
       </div>
+
       <ul class="nav-menu">
         <li class="nav-item">
           <a href="/" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}">
-            <span>📊</span> Dashboard
+            <span class="nav-icon">📊</span> <span class="nav-label">Dashboard</span>
           </a>
         </li>
         <li class="nav-item">
           <a href="/wizard" class="nav-link {% if active_tab == 'wizard' %}active{% endif %}">
-            <span>✨</span> Network Builder
+            <span class="nav-icon">✨</span> <span class="nav-label">Network Builder</span>
           </a>
         </li>
         <li class="nav-item">
           <a href="/dmr" class="nav-link {% if active_tab == 'dmr' %}active{% endif %}">
-            <span>📻</span> DMR Management
+            <span class="nav-icon">📻</span> <span class="nav-label">DMR Management</span>
           </a>
         </li>
         <li class="nav-item">
           <a href="/p25" class="nav-link {% if active_tab == 'p25' %}active{% endif %}">
-            <span>⚡</span> P25 Management
+            <span class="nav-icon">⚡</span> <span class="nav-label">P25 Management</span>
           </a>
         </li>
         <li class="nav-item">
           <a href="/profiles" class="nav-link {% if active_tab == 'profiles' %}active{% endif %}">
-            <span>🔄</span> Radio Profiles
+            <span class="nav-icon">🔄</span> <span class="nav-label">Radio Profiles</span>
           </a>
         </li>
         <li class="nav-item">
           <a href="/modem" class="nav-link {% if active_tab == 'modem' %}active{% endif %}">
-            <span>📡</span> Modem & RF
+            <span class="nav-icon">📡</span> <span class="nav-label">Modem & RF</span>
           </a>
         </li>
         <li class="nav-item">
           <a href="/meshtastic" class="nav-link {% if active_tab == 'meshtastic' %}active{% endif %}">
-            <span>🌐</span> Meshtastic
+            <span class="nav-icon">🌐</span> <span class="nav-label">Meshtastic</span>
           </a>
         </li>
         <li class="nav-item">
           <a href="/config" class="nav-link {% if active_tab == 'config' %}active{% endif %}">
-            <span>⚙️</span> Config & History
+            <span class="nav-icon">⚙️</span> <span class="nav-label">Config & History</span>
           </a>
         </li>
         <li class="nav-item">
           <a href="/updates" class="nav-link {% if active_tab == 'updates' %}active{% endif %}">
-            <span>🔄</span> System Updates
+            <span class="nav-icon">🔄</span> <span class="nav-label">System Updates</span>
           </a>
         </li>
       </ul>
-      <div style="padding: 1rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-dim);">
+      <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan);">DVM Nexus v1.0.0</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v1.0.0</div>
       </div>
     </aside>
 
-    <!-- Main Content -->
+    <!-- Main Content Area -->
     <div class="main-content">
       <header class="top-header">
         <div class="header-left">
+          <button type="button" class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Open navigation menu">
+            <span class="hamburger-bar"></span>
+            <span class="hamburger-bar"></span>
+            <span class="hamburger-bar"></span>
+          </button>
+          <div class="header-brand-mobile">
+            <span class="mobile-logo-icon">N</span>
+          </div>
           <h1 class="page-title">{{ title }}</h1>
         </div>
         <div class="header-right">
@@ -83,8 +101,9 @@
             {% include "components/status_badge.html" %}
           </div>
           <form hx-post="/api/service/restart" hx-target="#service-controls-container" hx-swap="innerHTML" style="display:inline;">
-            <button type="submit" class="btn btn-secondary btn-sm" title="Restart DVMHost Service">
-              🔄 Restart Radio
+            <button type="submit" class="btn btn-secondary btn-sm restart-btn" title="Restart DVMHost Service">
+              <span class="restart-icon">🔄</span>
+              <span class="restart-text">Restart Radio</span>
             </button>
           </form>
         </div>
@@ -96,10 +115,65 @@
     </div>
   </div>
 
-  <!-- Toast Container -->
+  <!-- Mobile Bottom Navigation Bar (Fixed for Phones) -->
+  <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
+    <a href="/" class="mobile-nav-link {% if active_tab == 'dashboard' %}active{% endif %}">
+      <span class="mobile-nav-icon">📊</span>
+      <span class="mobile-nav-text">Dash</span>
+    </a>
+    <a href="/dmr" class="mobile-nav-link {% if active_tab == 'dmr' %}active{% endif %}">
+      <span class="mobile-nav-icon">📻</span>
+      <span class="mobile-nav-text">DMR</span>
+    </a>
+    <a href="/p25" class="mobile-nav-link {% if active_tab == 'p25' %}active{% endif %}">
+      <span class="mobile-nav-icon">⚡</span>
+      <span class="mobile-nav-text">P25</span>
+    </a>
+    <a href="/meshtastic" class="mobile-nav-link {% if active_tab == 'meshtastic' %}active{% endif %}">
+      <span class="mobile-nav-icon">🌐</span>
+      <span class="mobile-nav-text">Mesh</span>
+    </a>
+    <button type="button" class="mobile-nav-link" id="mobile-menu-trigger">
+      <span class="mobile-nav-icon">☰</span>
+      <span class="mobile-nav-text">Menu</span>
+    </button>
+  </nav>
+
+  <!-- Toast Notification Container -->
   <div id="toast-container"></div>
 
   <script>
+    // Responsive Mobile Drawer Navigation
+    (function() {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      const toggleBtn = document.getElementById('mobile-nav-toggle');
+      const closeBtn = document.getElementById('sidebar-close-btn');
+      const menuTrigger = document.getElementById('mobile-menu-trigger');
+
+      function openDrawer() {
+        sidebar.classList.add('open');
+        overlay.classList.add('active');
+        document.body.classList.add('drawer-open');
+      }
+
+      function closeDrawer() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        document.body.classList.remove('drawer-open');
+      }
+
+      if (toggleBtn) toggleBtn.addEventListener('click', openDrawer);
+      if (menuTrigger) menuTrigger.addEventListener('click', openDrawer);
+      if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+      if (overlay) overlay.addEventListener('click', closeDrawer);
+
+      // Auto-close on link click
+      document.querySelectorAll('#sidebar .nav-link').forEach(link => {
+        link.addEventListener('click', closeDrawer);
+      });
+    })();
+
     // Simple auto-dismiss toast handler
     document.body.addEventListener('htmx:afterSwap', function(evt) {
       const toasts = document.querySelectorAll('.toast');

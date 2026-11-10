@@ -7,8 +7,8 @@
     <div class="card-title">📡 Live Over-The-Air DMR Subscriber Commands</div>
     <span class="badge badge-cyan">REST API Direct</span>
   </div>
-  <form hx-post="/dmr/rids/action" hx-target="#toast-container" hx-swap="beforeend" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
-    <div style="flex:1; min-width:140px;">
+  <form hx-post="/dmr/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
+    <div class="ota-cmd-field">
       <label class="form-label">Command</label>
       <select name="action" class="form-control">
         <option value="check">Radio Check</option>
@@ -17,18 +17,20 @@
         <option value="uninhibit">Uninhibit (Revive)</option>
       </select>
     </div>
-    <div style="flex:1; min-width:140px;">
+    <div class="ota-cmd-field">
       <label class="form-label">Target Radio ID (RID)</label>
       <input type="number" name="rid" class="form-control" placeholder="e.g. 1234567" required>
     </div>
-    <div style="width:120px;">
+    <div class="ota-cmd-slot">
       <label class="form-label">Time Slot</label>
       <select name="slot" class="form-control">
         <option value="1">Slot 1</option>
         <option value="2">Slot 2</option>
       </select>
     </div>
-    <button type="submit" class="btn btn-primary" style="height:38px;">Send Command</button>
+    <div class="ota-cmd-btn-wrap">
+      <button type="submit" class="btn btn-primary ota-send-btn">Send Command</button>
+    </div>
   </form>
 </div>
 

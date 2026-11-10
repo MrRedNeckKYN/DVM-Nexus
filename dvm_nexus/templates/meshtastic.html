@@ -79,19 +79,23 @@
 
         <!-- Compose Form -->
         <form hx-post="/meshtastic/send" hx-target="#messages-container" hx-swap="innerHTML" class="message-composer" onsubmit="setTimeout(() => document.getElementById('msg-input-field').value='', 50)">
-          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-            <select name="channel" class="form-control" style="width: 120px;">
-              <option value="0">Ch 0 (Primary)</option>
-              <option value="1">Ch 1</option>
-              <option value="2">Ch 2</option>
-              <option value="3">Ch 3</option>
-            </select>
-            <input type="text" name="recipient" id="recipient-field" class="form-control" value="^all" placeholder="^all (Broadcast) or !node_id" style="width: 200px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('recipient-field').value='^all'">Broadcast</button>
+          <div class="composer-meta-row">
+            <div class="composer-channel-wrap">
+              <select name="channel" class="form-control">
+                <option value="0">Ch 0 (Primary)</option>
+                <option value="1">Ch 1</option>
+                <option value="2">Ch 2</option>
+                <option value="3">Ch 3</option>
+              </select>
+            </div>
+            <div class="composer-recipient-wrap">
+              <input type="text" name="recipient" id="recipient-field" class="form-control" value="^all" placeholder="^all or !node_id">
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm composer-broadcast-btn" onclick="document.getElementById('recipient-field').value='^all'">Broadcast</button>
           </div>
-          <div style="display: flex; gap: 0.5rem;">
+          <div class="composer-input-row">
             <input type="text" name="text" id="msg-input-field" class="form-control" placeholder="Type message to transmit over Meshtastic..." required autocomplete="off">
-            <button type="submit" class="btn btn-primary">Transmit ➔</button>
+            <button type="submit" class="btn btn-primary composer-send-btn">Transmit ➔</button>
           </div>
         </form>
 
@@ -99,10 +103,10 @@
         <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--border); font-size: 0.8rem; color: var(--text-dim);">
           <details>
             <summary style="cursor: pointer; color: var(--accent-cyan); font-weight: 600;">🧪 Testing Drawer: Inject Simulated Inbound Packet</summary>
-            <form hx-post="/meshtastic/simulate-inbound" hx-target="#messages-container" style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
-              <input type="text" name="sender" class="form-control form-control-sm" value="!4a12bc88" style="width: 130px;" title="Sender Node ID">
-              <input type="text" name="text" class="form-control form-control-sm" placeholder="Test text or command like !status, !help, !restart..." required>
-              <button type="submit" class="btn btn-secondary btn-sm">Inject Inbound</button>
+            <form hx-post="/meshtastic/simulate-inbound" hx-target="#messages-container" class="simulation-form" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <input type="text" name="sender" class="form-control form-control-sm sim-sender-input" value="!4a12bc88" title="Sender Node ID" style="flex: 0 1 120px; min-width: 100px;">
+              <input type="text" name="text" class="form-control form-control-sm sim-text-input" placeholder="Test text or command like !status, !help, !restart..." required style="flex: 1 1 180px; min-width: 140px;">
+              <button type="submit" class="btn btn-secondary btn-sm" style="white-space: nowrap;">Inject Inbound</button>
             </form>
           </details>
         </div>
@@ -196,14 +200,14 @@
         <div style="background: var(--bg-surface-2); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
           <h4 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--accent-cyan);">📡 Transmit Text to Radio Network</h4>
           <form hx-post="/meshtastic/send-radio-text" hx-target="#bridged-messages-container" onsubmit="setTimeout(() => document.getElementById('web-radio-text-input').value='', 50)">
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <select name="protocol" class="form-control" style="width: 110px;">
+            <div class="bridge-action-row mb-2">
+              <select name="protocol" class="form-control" style="flex: 1 1 80px; min-width: 75px;">
                 <option value="dmr">DMR</option>
                 <option value="p25">P25</option>
               </select>
-              <input type="number" name="dest_id" class="form-control" value="3100" placeholder="Target TG" style="width: 130px;" title="Target Talkgroup">
-              <label style="display: flex; align-items: center; font-size: 0.75rem; white-space: nowrap;">
-                <input type="checkbox" name="forward_to_mesh" value="1" checked style="margin-right: 4px;"> Mirror to Mesh
+              <input type="number" name="dest_id" class="form-control" value="3100" placeholder="Target TG" style="flex: 1 1 100px; min-width: 90px;" title="Target Talkgroup">
+              <label style="display: flex; align-items: center; font-size: 0.75rem; white-space: nowrap; margin: 0;">
+                <input type="checkbox" name="forward_to_mesh" value="1" checked style="margin-right: 4px;"> Mirror
               </label>
             </div>
             <div style="display: flex; gap: 0.5rem;">
@@ -217,17 +221,17 @@
         <div style="background: var(--bg-surface-2); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
           <h4 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--accent-orange);">🧪 Testing: Simulate Inbound Radio SMS</h4>
           <form hx-post="/meshtastic/simulate-radio-text" hx-target="#bridged-messages-container" onsubmit="setTimeout(() => document.getElementById('sim-radio-text-input').value='', 50)">
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <select name="protocol" class="form-control" style="width: 100px;">
+            <div class="bridge-action-row mb-2">
+              <select name="protocol" class="form-control" style="flex: 1 1 80px; min-width: 75px;">
                 <option value="dmr">DMR</option>
                 <option value="p25">P25</option>
               </select>
-              <input type="number" name="src_id" class="form-control" value="12345" placeholder="From RID" style="width: 110px;" title="Sender Radio ID">
-              <input type="number" name="dest_id" class="form-control" value="3100" placeholder="To TG" style="width: 110px;" title="Target Talkgroup">
+              <input type="number" name="src_id" class="form-control" value="12345" placeholder="From RID" style="flex: 1 1 95px; min-width: 85px;" title="Sender Radio ID">
+              <input type="number" name="dest_id" class="form-control" value="3100" placeholder="To TG" style="flex: 1 1 95px; min-width: 85px;" title="Target Talkgroup">
             </div>
             <div style="display: flex; gap: 0.5rem;">
               <input type="text" name="text" id="sim-radio-text-input" class="form-control" placeholder="Simulate text sent from radio handheld..." required>
-              <button type="submit" class="btn btn-secondary btn-sm" style="white-space: nowrap;">Inject Radio SMS</button>
+              <button type="submit" class="btn btn-secondary btn-sm" style="white-space: nowrap;">Inject SMS</button>
             </div>
           </form>
         </div>
