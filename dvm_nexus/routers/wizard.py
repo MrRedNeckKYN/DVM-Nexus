@@ -3,6 +3,7 @@ DVM Nexus - Network Builder Wizard Router
 Guides the user through creating complete DMR or P25 networks with automated configuration generation.
 """
 
+import asyncio
 import yaml
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -242,9 +243,9 @@ async def wizard_apply(
             finally:
                 conn.close()
 
-        # Restart service safely and verify
-        service_controller.restart()
-        verified = service_controller.verify_running(timeout_sec=4.0)
+        # Restart service safely and verify (non-blocking thread)
+        await asyncio.to_thread(service_controller.restart)
+        verified = await asyncio.to_thread(service_controller.verify_running, 4.0)
 
         log_audit("WIZARD", "APPLY", f"Applied new network '{network_name}' ({protocol.upper()})")
 
@@ -259,11 +260,12 @@ async def wizard_apply(
             }
         )
     except Exception as e:
-        # Rollback on failure
-        backup_manager.rollback(revision_id=1)
+        # Rollback safely to pre-wizard snapshot
+        backup_manager.restore_from_directory(backup_dir, summary=f"Rollback after failed wizard {network_name}")
+        await asyncio.to_thread(service_controller.restart)
         log_audit("WIZARD", "APPLY_ERROR", f"Failed applying wizard: {e}", status="error")
         return render_template(
             request,
             "components/wizard_error.html",
-            {"errors": [f"Failed to apply configuration: {e}. Configuration was rolled back."]}
+            {"errors": [f"Failed to apply configuration: {e}. Configuration was safely rolled back."]}
         )

@@ -2,10 +2,12 @@
 Unit and Integration Tests for System Auto-Updater
 """
 
+import os
 import pytest
 from starlette.testclient import TestClient
 from dvm_nexus.main import app
 from dvm_nexus.core.database import init_db
+from dvm_nexus.core.config import settings
 from dvm_nexus.core.updater import system_updater
 
 
@@ -17,10 +19,11 @@ def client():
 
 
 def test_updater_engine():
+    os.environ["NEXUS_TEST_DRY_RUN"] = "1"
     init_db()
     info = system_updater.get_repo_info()
     assert "version" in info
-    assert info["version"] == "1.0.0"
+    assert info["version"] == settings.app_version
     assert "github_repo" in info
 
     # Check for updates

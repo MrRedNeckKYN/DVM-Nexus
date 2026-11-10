@@ -3,6 +3,7 @@ DVM Nexus - Profile Management Router
 Allows switching between saved DMR and P25 profiles with hardware mutual exclusion and rollback.
 """
 
+import asyncio
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -40,7 +41,7 @@ async def profiles_page(request: Request):
 @router.post("/profiles/activate/{profile_id}", response_class=HTMLResponse)
 async def profiles_activate(request: Request, profile_id: str):
     """Activate a saved profile."""
-    result = profile_manager.activate_profile(profile_id)
+    result = await asyncio.to_thread(profile_manager.activate_profile, profile_id)
     profiles = profile_manager.list_profiles()
     active_prof = profile_manager.get_active_profile()
     service_status = service_controller.get_status()

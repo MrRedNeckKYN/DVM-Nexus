@@ -8,6 +8,7 @@ import os
 import json
 import shutil
 import time
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -25,6 +26,7 @@ class ProfileManager:
         self.profiles_dir = profiles_dir or settings.profiles_dir
         self.dvm_dir = dvm_dir or settings.dvm_dir
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
+        self._switch_lock = threading.Lock()
         # Ensure database tables exist before querying profiles
         init_db()
         self._ensure_default_profiles_exist()
@@ -209,7 +211,7 @@ class ProfileManager:
 
     def activate_profile(self, profile_id: str) -> Dict[str, Any]:
         """
-        Switch to the specified profile:
+        Switch to the specified profile with thread-safe concurrency locking:
         1. Pre-switch validation
         2. Backup current configuration
         3. Stop dvmhost safely (releasing modem serial port)
@@ -217,71 +219,69 @@ class ProfileManager:
         5. Start dvmhost
         6. Verify successful startup; rollback if failed.
         """
-        prof = self.get_profile(profile_id)
-        if not prof:
-            return {"success": False, "error": f"Profile '{profile_id}' not found"}
+        with self._switch_lock:
+            prof = self.get_profile(profile_id)
+            if not prof:
+                return {"success": False, "error": f"Profile '{profile_id}' not found"}
 
-        source_dir = self.profiles_dir / profile_id
-        if not (source_dir / "config.yml").exists():
-            return {"success": False, "error": f"Profile '{profile_id}' is missing config.yml"}
+            source_dir = self.profiles_dir / profile_id
+            if not (source_dir / "config.yml").exists():
+                return {"success": False, "error": f"Profile '{profile_id}' is missing config.yml"}
 
-        log_audit("PROFILE", "SWITCH_START", f"Initiating switch to profile '{prof['name']}' ({prof['protocol'].upper()})")
+            log_audit("PROFILE", "SWITCH_START", f"Initiating switch to profile '{prof['name']}' ({prof['protocol'].upper()})")
 
-        # Step 2: Backup current active state
-        prev_backup = backup_manager.create_backup(
-            summary=f"Pre-switch backup before activating '{prof['name']}'",
-            profile_name=prof["name"]
-        )
+            # Step 2: Backup current active state
+            prev_backup = backup_manager.create_backup(
+                summary=f"Pre-switch backup before activating '{prof['name']}'",
+                profile_name=prof["name"]
+            )
 
-        # Step 3: Stop dvmhost service safely
-        stop_res = service_controller.stop()
-        if not stop_res.get("success"):
-            log_audit("PROFILE", "SWITCH_FAILED", f"Could not stop dvmhost: {stop_res.get('message')}", status="error")
-            return {"success": False, "error": f"Failed to stop dvmhost service: {stop_res.get('message')}"}
+            # Step 3: Stop dvmhost service safely
+            stop_res = service_controller.stop()
+            if not stop_res.get("success"):
+                log_audit("PROFILE", "SWITCH_FAILED", f"Could not stop dvmhost: {stop_res.get('message')}", status="error")
+                return {"success": False, "error": f"Failed to stop dvmhost service: {stop_res.get('message')}"}
 
-        # Step 4: Copy profile files into active location
-        try:
-            for fname in ["config.yml", "iden_table.dat", "talkgroup_rules.yml", "rid_acl.dat"]:
-                src = source_dir / fname
-                if src.exists():
-                    shutil.copy2(src, self.dvm_dir / fname)
-        except Exception as e:
-            # Restore files from backup immediately
-            for src in prev_backup.iterdir():
-                if src.is_file():
-                    shutil.copy2(src, self.dvm_dir / src.name)
-            service_controller.start()
-            return {"success": False, "error": f"Failed copying profile files: {e}"}
+            # Step 4: Copy profile files into active location safely
+            try:
+                for fname in ["config.yml", "iden_table.dat", "talkgroup_rules.yml", "rid_acl.dat"]:
+                    src = source_dir / fname
+                    if src.exists():
+                        try:
+                            backup_manager.atomic_write(self.dvm_dir / fname, src.read_text(encoding="utf-8"))
+                        except UnicodeDecodeError:
+                            shutil.copy2(src, self.dvm_dir / fname)
+            except Exception as e:
+                # Restore files from backup immediately
+                backup_manager.restore_from_directory(prev_backup, summary="Rollback on file copy failure")
+                service_controller.start()
+                return {"success": False, "error": f"Failed copying profile files: {e}"}
 
-        # Step 5: Start dvmhost service
-        start_res = service_controller.start()
-        if not start_res.get("success"):
-            # Rollback
-            log_audit("PROFILE", "SWITCH_ROLLBACK", f"Service failed to start on new profile, rolling back", status="warning")
-            for src in prev_backup.iterdir():
-                if src.is_file():
-                    shutil.copy2(src, self.dvm_dir / src.name)
-            service_controller.start()
-            return {"success": False, "error": f"dvmhost failed to start: {start_res.get('message')}. Rolled back to previous profile."}
+            # Step 5: Start dvmhost service
+            start_res = service_controller.start()
+            if not start_res.get("success"):
+                # Rollback
+                log_audit("PROFILE", "SWITCH_ROLLBACK", f"Service failed to start on new profile, rolling back", status="warning")
+                backup_manager.restore_from_directory(prev_backup, summary="Rollback on service start failure")
+                service_controller.start()
+                return {"success": False, "error": f"dvmhost failed to start: {start_res.get('message')}. Rolled back to previous profile."}
 
-        # Step 6: Verify service stays running
-        if not service_controller.verify_running(timeout_sec=4.0):
-            # Rollback on crash after startup
-            log_audit("PROFILE", "SWITCH_ROLLBACK", f"Service died after start, rolling back", status="error")
-            for src in prev_backup.iterdir():
-                if src.is_file():
-                    shutil.copy2(src, self.dvm_dir / src.name)
-            service_controller.restart()
-            return {"success": False, "error": "dvmhost died shortly after start. Rolled back to previous configuration."}
+            # Step 6: Verify service stays running
+            if not service_controller.verify_running(timeout_sec=4.0):
+                # Rollback on crash after startup
+                log_audit("PROFILE", "SWITCH_ROLLBACK", f"Service died after start, rolling back", status="error")
+                backup_manager.restore_from_directory(prev_backup, summary="Rollback on service crash")
+                service_controller.restart()
+                return {"success": False, "error": "dvmhost died shortly after start. Rolled back to previous configuration."}
 
-        # Step 7: Update DB active flags
-        conn = get_db_connection()
-        try:
-            with conn:
-                conn.execute("UPDATE profiles SET is_active = 0")
-                conn.execute("UPDATE profiles SET is_active = 1 WHERE id = ?", (profile_id,))
-        finally:
-            conn.close()
+            # Step 7: Update DB active flags
+            conn = get_db_connection()
+            try:
+                with conn:
+                    conn.execute("UPDATE profiles SET is_active = 0")
+                    conn.execute("UPDATE profiles SET is_active = 1 WHERE id = ?", (profile_id,))
+            finally:
+                conn.close()
 
         log_audit("PROFILE", "SWITCH_SUCCESS", f"Activated profile '{prof['name']}' successfully")
 

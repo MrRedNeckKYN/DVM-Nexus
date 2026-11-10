@@ -330,13 +330,50 @@ class BLETransport(BaseMeshtasticTransport):
             return False
 
     def get_nodes(self) -> List[Dict[str, Any]]:
-        return []
+        if not self.is_connected():
+            return []
+        nodes = []
+        raw_nodes = getattr(self.interface, "nodes", {}) or {}
+        for num, data in raw_nodes.items():
+            user = data.get("user", {})
+            metrics = data.get("deviceMetrics", {})
+            pos = data.get("position", {})
+            nodes.append({
+                "num": num,
+                "id": user.get("id", f"!{num:08x}"),
+                "long_name": user.get("longName", "Unknown Node"),
+                "short_name": user.get("shortName", "????"),
+                "hw_model": user.get("hwModel", "Unknown"),
+                "battery": metrics.get("batteryLevel", None),
+                "voltage": metrics.get("voltage", None),
+                "snr": data.get("snr", None),
+                "latitude": pos.get("latitude", None),
+                "longitude": pos.get("longitude", None),
+                "altitude": pos.get("altitude", None),
+                "last_heard": data.get("lastHeard", None)
+            })
+        return nodes
 
     def get_my_node_info(self) -> Dict[str, Any]:
         return {"connected": self.is_connected(), "transport": "ble", "address": self.address}
 
     def _handle_rx(self, packet: Any, interface: Any = None):
-        pass
+        if not self._on_message_callback:
+            return
+        try:
+            decoded = packet.get("decoded", {})
+            if "text" in decoded or decoded.get("portnum") in ("TEXT_MESSAGE_APP", 1):
+                self._on_message_callback({
+                    "sender": packet.get("fromId", f"!{packet.get('from', 0):08x}"),
+                    "recipient": packet.get("toId", "^all"),
+                    "channel": packet.get("channel", 0),
+                    "text": decoded.get("text", ""),
+                    "snr": packet.get("rxSnr"),
+                    "rssi": packet.get("rxRssi"),
+                    "timestamp": time.time()
+                })
+        except Exception as e:
+            logger.error("Error processing Meshtastic BLE packet: %s", e)
 
 
 class MockTransport(BaseMeshtasticTransport):

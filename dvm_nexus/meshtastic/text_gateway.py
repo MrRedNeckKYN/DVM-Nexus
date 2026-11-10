@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from dvm_nexus.core.database import get_db_connection, log_audit
 from dvm_nexus.core.dvm_client import dvm_client
-from dvm_nexus.config_engine.profile_manager import ProfileManager
+from dvm_nexus.config_engine.profile_manager import profile_manager
 
 logger = logging.getLogger("dvm_nexus.meshtastic.text_gateway")
 
@@ -101,8 +101,7 @@ class RadioTextGateway:
 
         # 3. Fallback: forward all primary channel traffic to the active radio protocol
         if not target_protocol and cfg.get("forward_all_to_active", "1") == "1":
-            pm = ProfileManager()
-            active_prof = pm.get_active_profile()
+            active_prof = profile_manager.get_active_profile()
             if active_prof:
                 target_protocol = active_prof.get("protocol", "dmr")
                 default_tg = cfg.get(f"default_{target_protocol}_tg", "3100" if target_protocol == "dmr" else "101")

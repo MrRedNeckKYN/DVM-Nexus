@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>{{ title }} - DVM Nexus</title>
-  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.1') }}">
+  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.3') }}">
   <script src="/static/js/htmx.min.js"></script>
   <script>
     // Immediate Device Detection (executes before paint to prevent layout flashes)
@@ -97,7 +97,7 @@
       <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v1.0.1</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v1.0.3</div>
       </div>
     </aside>
 
@@ -119,7 +119,7 @@
           <div id="service-badge-container" hx-get="/components/service-badge" hx-trigger="every 5s">
             {% include "components/status_badge.html" %}
           </div>
-          <form hx-post="/api/service/restart" hx-target="#service-controls-container" hx-swap="innerHTML" style="display:inline;">
+          <form hx-post="/api/service/restart" hx-swap="none" style="display:inline;">
             <button type="submit" class="btn btn-secondary btn-sm restart-btn" title="Restart DVMHost Service">
               <span class="restart-icon">🔄</span>
               <span class="restart-text">Restart Radio</span>

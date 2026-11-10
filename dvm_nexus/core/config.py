@@ -18,14 +18,14 @@ class Settings(BaseModel):
     """Nexus application runtime settings."""
 
     app_name: str = "DVM Nexus"
-    app_version: str = "1.0.0"
+    app_version: str = "1.0.3"
     debug: bool = Field(default_factory=lambda: os.getenv("NEXUS_DEBUG", "0") in ("1", "true", "True"))
 
     # Active DVMHost files location (/opt/dvm on standard Linux install)
     dvm_dir: Path = Field(
         default_factory=lambda: (
             Path("/opt/dvm")
-            if os.path.exists("/opt/dvm/config.yml") or os.name != "nt"
+            if os.path.exists("/opt/dvm") or os.path.exists("/opt/dvm/config.yml")
             else ACTIVE_CONFIG_DIR_DEV
         )
     )
@@ -38,6 +38,11 @@ class Settings(BaseModel):
     db_path: Path = Field(
         default_factory=lambda: Path(os.getenv("NEXUS_DB_PATH", str(DATA_DIR / "nexus.db")))
     )
+
+    # Optional Web UI Authentication
+    auth_enabled: bool = Field(default_factory=lambda: os.getenv("NEXUS_AUTH_ENABLED", "0") in ("1", "true", "True"))
+    auth_username: str = Field(default_factory=lambda: os.getenv("NEXUS_AUTH_USER", "admin"))
+    auth_password: str = Field(default_factory=lambda: os.getenv("NEXUS_AUTH_PASSWORD", "nexusadmin"))
 
     # DVMHost REST API connection
     dvmhost_api_host: str = Field(default_factory=lambda: os.getenv("DVMHOST_API_HOST", "127.0.0.1"))

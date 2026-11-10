@@ -73,18 +73,20 @@ async def connect_transport(
     badge_class = "badge-success" if res.get("success") else "badge-danger"
     status_text = f"Connected ({transport_type.upper()})" if res.get("success") else f"Failed: {res.get('error')}"
 
-    return HTMLResponse(
-        f'<span class="badge {badge_class}" id="meshtastic-status-badge">{status_text}</span>'
-        f'<script>location.reload();</script>'
+    return Response(
+        content=f'<span class="badge {badge_class}" id="meshtastic-status-badge">{status_text}</span>',
+        headers={"HX-Refresh": "true"},
+        media_type="text/html"
     )
 
 
 @router.post("/disconnect", response_class=HTMLResponse)
 async def disconnect_transport(request: Request):
     meshtastic_manager.disconnect()
-    return HTMLResponse(
-        '<span class="badge badge-warning" id="meshtastic-status-badge">Disconnected</span>'
-        '<script>location.reload();</script>'
+    return Response(
+        content='<span class="badge badge-warning" id="meshtastic-status-badge">Disconnected</span>',
+        headers={"HX-Refresh": "true"},
+        media_type="text/html"
     )
 
 

@@ -5,7 +5,7 @@ two-step confirmation tokens for disruptive actions, and audit logging.
 """
 
 import time
-import random
+import secrets
 import string
 import logging
 from datetime import datetime, timezone, timedelta
@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, Tuple
 from dvm_nexus.core.database import get_db_connection, log_audit
 from dvm_nexus.core.system_monitor import get_system_metrics
 from dvm_nexus.core.service_controller import service_controller
-from dvm_nexus.config_engine.profile_manager import ProfileManager
+from dvm_nexus.config_engine.profile_manager import profile_manager
 
 logger = logging.getLogger("dvm_nexus.meshtastic.remote_admin")
 
@@ -119,8 +119,7 @@ class RemoteAdminProcessor:
     def _cmd_status(self) -> str:
         telemetry = get_system_metrics()
         svc_status = service_controller.get_status()
-        pm = ProfileManager()
-        active_prof = pm.get_active_profile()
+        active_prof = profile_manager.get_active_profile()
         prof_name = active_prof.get("name") if active_prof else "Unknown"
         protocol = active_prof.get("protocol", "unknown").upper() if active_prof else "N/A"
 
@@ -128,7 +127,7 @@ class RemoteAdminProcessor:
         return (
             f"[Nexus Status]\n"
             f"Radio: {prof_name} ({protocol})\n"
-            f"DVMHost: {svc_status.get('status', 'unknown').upper()}\n"
+            f"DVMHost: {svc_status.get('state', 'unknown').upper()}\n"
             f"Pi 5 Temp: {temp_str}\n"
             f"CPU: {telemetry.get('cpu_percent', 0)}% | RAM: {telemetry.get('memory_percent', 0)}%\n"
             f"Uptime: {telemetry.get('uptime', 'N/A')}"
@@ -136,7 +135,7 @@ class RemoteAdminProcessor:
 
     def _cmd_modem(self) -> str:
         svc_status = service_controller.get_status()
-        active = svc_status.get("active", False)
+        active = svc_status.get("is_running", False)
         return (
             f"[Modem Diagnostics]\n"
             f"Device: /dev/ttyAMA0 (UART 115200)\n"
@@ -146,8 +145,7 @@ class RemoteAdminProcessor:
         )
 
     def _cmd_profiles(self) -> str:
-        pm = ProfileManager()
-        profs = pm.list_profiles()
+        profs = profile_manager.list_profiles()
         lines = ["[Saved Profiles]"]
         for p in profs:
             mark = "* " if p.get("is_active") else "  "
@@ -175,8 +173,7 @@ class RemoteAdminProcessor:
                       f"Node {sender_id} lacked profile switch permission", status="rejected")
             return "[Nexus] Permission denied: You do not have radio profile switch privileges."
 
-        pm = ProfileManager()
-        profs = pm.list_profiles()
+        profs = profile_manager.list_profiles()
         match = next((p for p in profs if p["name"].lower() == target_name.lower() or p["id"] == target_name), None)
         if not match:
             return f"[Nexus] Profile '{target_name}' not found. Send '!profiles' to view list."
@@ -194,7 +191,7 @@ class RemoteAdminProcessor:
         )
 
     def _generate_token(self, node_id: str, action: str) -> str:
-        token = "".join(random.choices(string.digits, k=4))
+        token = "".join(secrets.choice(string.digits) for _ in range(4))
         expires_at = (datetime.now(timezone.utc) + timedelta(seconds=60)).isoformat()
         now_str = datetime.now(timezone.utc).isoformat()
 
@@ -244,13 +241,12 @@ class RemoteAdminProcessor:
 
             elif action.startswith("switch_profile:"):
                 target_id = action.split(":", 1)[1]
-                pm = ProfileManager()
-                prof = pm.get_profile(target_id)
+                prof = profile_manager.get_profile(target_id)
                 prof_name = prof.get("name", target_id) if prof else target_id
 
                 log_audit("MESHTASTIC_ADMIN", "PROFILE_SWITCH_EXECUTED",
                           f"Profile switch to '{prof_name}' confirmed by {sender_id}")
-                res = pm.activate_profile(target_id)
+                res = profile_manager.activate_profile(target_id)
                 if res.get("success"):
                     return f"[Nexus SUCCESS] Profile '{prof_name}' activated and DVMHost restarted."
                 else:

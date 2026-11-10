@@ -33,3 +33,15 @@
     </div>
   {% endif %}
 </div>
+
+<div id="service-badge-container" hx-swap-oob="true" hx-get="/components/service-badge" hx-trigger="every 5s">
+  {% include "components/status_badge.html" %}
+</div>
+
+{% if message %}
+<div id="toast-container" hx-swap-oob="beforeend">
+  <div class="toast toast-{{ 'success' if is_success else 'error' }}">
+    {{ message }}
+  </div>
+</div>
+{% endif %}

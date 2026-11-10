@@ -3,6 +3,7 @@ DVM Nexus - Dashboard Router
 Provides overview stats, service controls, and reactive HTMX widgets.
 """
 
+import asyncio
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 
@@ -75,7 +76,7 @@ async def service_badge_component(request: Request):
 @router.post("/api/service/start", response_class=HTMLResponse)
 async def service_start(request: Request):
     """Start dvmhost service."""
-    res = service_controller.start()
+    res = await asyncio.to_thread(service_controller.start)
     service_status = service_controller.get_status()
     return render_template(
         request,
@@ -87,7 +88,7 @@ async def service_start(request: Request):
 @router.post("/api/service/stop", response_class=HTMLResponse)
 async def service_stop(request: Request):
     """Stop dvmhost service."""
-    res = service_controller.stop()
+    res = await asyncio.to_thread(service_controller.stop)
     service_status = service_controller.get_status()
     return render_template(
         request,
@@ -99,7 +100,7 @@ async def service_stop(request: Request):
 @router.post("/api/service/restart", response_class=HTMLResponse)
 async def service_restart(request: Request):
     """Restart dvmhost service."""
-    res = service_controller.restart()
+    res = await asyncio.to_thread(service_controller.restart)
     service_status = service_controller.get_status()
     return render_template(
         request,

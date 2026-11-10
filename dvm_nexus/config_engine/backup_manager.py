@@ -56,8 +56,26 @@ class BackupManager:
         finally:
             conn.close()
 
+        # Prune old backups to avoid SD card exhaustion
+        self.prune_backups(keep=40)
+
         log_audit("BACKUP", "CREATE", f"Snapshot {stamp} saved ({len(saved_files)} files): {summary}")
         return target_dir
+
+    def prune_backups(self, keep: int = 40):
+        """Rotate and prune backups to preserve disk space and SD card endurance."""
+        try:
+            dirs = [d for d in self.backup_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+            dirs.sort(key=lambda d: d.name)
+            if len(dirs) > keep:
+                to_delete = dirs[:len(dirs) - keep]
+                for d in to_delete:
+                    try:
+                        shutil.rmtree(d, ignore_errors=True)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     def atomic_write(self, target_path: Path, content: str):
         """Write content to target_path safely using an atomic temporary file."""
@@ -66,8 +84,14 @@ class BackupManager:
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
         mode = 0o640
+        uid, gid = None, None
         if target_path.exists():
-            mode = target_path.stat().st_mode & 0o7777
+            st = target_path.stat()
+            mode = st.st_mode & 0o7777
+            uid, gid = st.st_uid, st.st_gid
+        elif target_path.parent.exists():
+            st = target_path.parent.stat()
+            uid, gid = st.st_uid, st.st_gid
 
         fd, temp_path = tempfile.mkstemp(prefix=f".{target_path.name}.", dir=str(target_path.parent))
         temp_p = Path(temp_path)
@@ -80,6 +104,11 @@ class BackupManager:
                 temp_p.chmod(mode)
             except Exception:
                 pass
+            if uid is not None and gid is not None and hasattr(os, "chown") and os.name != "nt":
+                try:
+                    os.chown(str(temp_p), uid, gid)
+                except Exception:
+                    pass
             os.replace(str(temp_p), str(target_path))
         except Exception:
             if temp_p.exists():
@@ -99,6 +128,25 @@ class BackupManager:
             return [dict(row) for row in cursor.fetchall()]
         finally:
             conn.close()
+
+    def restore_from_directory(self, backup_dir: Path, summary: str = "Rollback restore") -> Dict[str, Any]:
+        """Atomically restore active configuration files from a backup directory."""
+        if not backup_dir.exists():
+            return {"success": False, "error": f"Backup directory '{backup_dir}' does not exist"}
+
+        restored = []
+        for src in backup_dir.iterdir():
+            if src.is_file() and not src.name.startswith("."):
+                dest = self.dvm_dir / src.name
+                try:
+                    text = src.read_text(encoding="utf-8")
+                    self.atomic_write(dest, text)
+                except UnicodeDecodeError:
+                    shutil.copy2(src, dest)
+                restored.append(src.name)
+
+        log_audit("ROLLBACK", "RESTORE", f"Restored {len(restored)} files from {backup_dir.name} ({summary})")
+        return {"success": True, "restored_files": restored, "message": f"Successfully restored {len(restored)} files"}
 
     def rollback(self, revision_id: int) -> Dict[str, Any]:
         """Rollback active configuration to a historical revision."""
@@ -121,16 +169,10 @@ class BackupManager:
         # First backup current state before rolling back
         self.create_backup(summary=f"Pre-rollback backup before restoring revision #{revision_id}")
 
-        backup_p = Path(backup_path_str)
-        restored = []
-        for src in backup_p.iterdir():
-            if src.is_file() and not src.name.startswith("."):
-                dest = self.dvm_dir / src.name
-                shutil.copy2(src, dest)
-                restored.append(src.name)
-
-        log_audit("ROLLBACK", "RESTORE", f"Restored revision #{revision_id} ({summary})")
-        return {"success": True, "restored_files": restored, "message": f"Successfully rolled back to revision #{revision_id}"}
+        res = self.restore_from_directory(Path(backup_path_str), summary=f"Restored revision #{revision_id} ({summary})")
+        if res.get("success"):
+            res["message"] = f"Successfully rolled back to revision #{revision_id}"
+        return res
 
 
 backup_manager = BackupManager()

@@ -240,7 +240,7 @@ class SystemUpdater:
 
         # Step 2: Code update via Git
         repo_info = self.get_repo_info()
-        if repo_info["is_git"]:
+        if repo_info["is_git"] and os.environ.get("NEXUS_TEST_DRY_RUN") != "1":
             log(f"Updating source code from Git origin/{channel}...")
             try:
                 # Add safe directory globally to ensure full immunity
@@ -273,6 +273,8 @@ class SystemUpdater:
                 log(f"Execution error running git: {e}")
                 self._state = "error"
                 return {"success": False, "error": str(e), "logs": self._logs}
+        elif os.environ.get("NEXUS_TEST_DRY_RUN") == "1":
+            log("Test dry-run mode active: git stash and git pull skipped safely.")
         else:
             log("Non-git installation detected. Code files verified.")
 

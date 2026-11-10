@@ -22,6 +22,8 @@ def init_db():
     conn = get_db_connection()
     try:
         with conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS profiles (
                     id TEXT PRIMARY KEY,

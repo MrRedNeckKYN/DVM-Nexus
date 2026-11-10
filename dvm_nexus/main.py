@@ -4,10 +4,14 @@ FastAPI Application Entry Point
 """
 
 import os
+import secrets
+import base64
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from dvm_nexus.core.config import settings
 from dvm_nexus.core.database import init_db, log_audit
@@ -44,6 +48,44 @@ async def lifespan(app: FastAPI):
     log_audit("SYSTEM", "SHUTDOWN", "DVM Nexus shutdown")
 
 
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    """Optional HTTP Basic Authentication for remote web access."""
+    async def dispatch(self, request, call_next):
+        if not settings.auth_enabled:
+            return await call_next(request)
+        if request.url.path.startswith("/static"):
+            return await call_next(request)
+
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Basic "):
+            return Response(
+                "Unauthorized",
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="DVM Nexus Admin"'}
+            )
+
+        try:
+            encoded_credentials = auth_header.split(" ", 1)[1]
+            decoded = base64.b64decode(encoded_credentials).decode("utf-8")
+            username, _, password = decoded.partition(":")
+            correct_user = secrets.compare_digest(username, settings.auth_username)
+            correct_password = secrets.compare_digest(password, settings.auth_password)
+            if not (correct_user and correct_password):
+                return Response(
+                    "Invalid credentials",
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="DVM Nexus Admin"'}
+                )
+        except Exception:
+            return Response(
+                "Invalid authorization header",
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="DVM Nexus Admin"'}
+            )
+
+        return await call_next(request)
+
+
 def create_app() -> FastAPI:
     """FastAPI Application Factory."""
     app = FastAPI(
@@ -52,6 +94,9 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         lifespan=lifespan,
     )
+
+    # Optional Basic Auth
+    app.add_middleware(BasicAuthMiddleware)
 
     # Static files
     if STATIC_DIR.exists():

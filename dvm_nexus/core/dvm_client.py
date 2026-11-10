@@ -3,6 +3,7 @@ DVM Nexus - Atomic DVMHost REST API Client
 Guarantees thread-safe token serialization to respect DVMHost's single-token-per-IP constraint.
 """
 
+import os
 import hashlib
 import json
 import logging
@@ -94,7 +95,15 @@ class DVMHostClient:
                                 json=data,
                                 timeout=3.0
                             )
-                            return retry_resp.json()
+                            try:
+                                retry_payload = retry_resp.json()
+                            except Exception:
+                                retry_payload = {"raw": retry_resp.text}
+                            return {
+                                "success": retry_resp.status_code in (200, 201),
+                                "status_code": retry_resp.status_code,
+                                "data": retry_payload
+                            }
                     return {"success": False, "error": "Unauthorized (401)", "status": 401}
 
                 return {
@@ -142,8 +151,10 @@ class DVMHostClient:
         }
         res = self.request("PUT", endpoint, payload)
         if not res.get("success"):
-            logger.info("[Simulated DMR TMS TX] Slot %d -> %s %d: '%s'", slot, "TG" if is_group else "RID", tg_or_rid, text)
-            return {"success": True, "simulated": True, "target": tg_or_rid, "text": text}
+            if settings.debug or os.name == "nt":
+                logger.info("[Simulated DMR TMS TX] Slot %d -> %s %d: '%s'", slot, "TG" if is_group else "RID", tg_or_rid, text)
+                return {"success": True, "simulated": True, "target": tg_or_rid, "text": text}
+            return {"success": False, "error": res.get("error", "DVMHost REST API unreachable"), "target": tg_or_rid, "text": text}
         return res
 
     def p25_send_text(self, text: str, tg_or_rid: int, is_group: bool = True) -> Dict[str, Any]:
@@ -156,8 +167,10 @@ class DVMHostClient:
         }
         res = self.request("PUT", endpoint, payload)
         if not res.get("success"):
-            logger.info("[Simulated P25 TMS TX] -> %s %d: '%s'", "TG" if is_group else "Unit", tg_or_rid, text)
-            return {"success": True, "simulated": True, "target": tg_or_rid, "text": text}
+            if settings.debug or os.name == "nt":
+                logger.info("[Simulated P25 TMS TX] -> %s %d: '%s'", "TG" if is_group else "Unit", tg_or_rid, text)
+                return {"success": True, "simulated": True, "target": tg_or_rid, "text": text}
+            return {"success": False, "error": res.get("error", "DVMHost REST API unreachable"), "target": tg_or_rid, "text": text}
         return res
 
     def get_dmr_affiliations(self) -> Dict[str, Any]:

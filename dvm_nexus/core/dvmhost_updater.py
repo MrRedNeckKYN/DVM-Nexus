@@ -251,7 +251,7 @@ class DVMHostUpdater:
 
         time.sleep(2)
         svc_status = service_controller.get_status()
-        if not svc_status.get("active") and os.name != "nt":
+        if not svc_status.get("is_running") and os.name != "nt":
             # If service crashed, perform emergency automatic rollback
             log("ALERT: dvmhost failed to start or crashed after update! Triggering rollback...")
             if binary_backup and binary_backup.exists():
