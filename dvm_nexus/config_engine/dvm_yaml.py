@@ -37,25 +37,33 @@ class DVMConfigManager:
 
     def ensure_active_config_exists(self):
         """Ensure active directory has baseline configuration files."""
+        self.dvm_dir.mkdir(parents=True, exist_ok=True)
         if not self.config_path.exists():
-            example = DEFAULT_CONFIGS_DIR / "config.example.yml"
-            if example.exists():
-                backup_manager.atomic_write(self.config_path, example.read_text(encoding="utf-8"))
+            dmr_src = PROFILES_DIR / "default_dmr" / "config.yml"
+            if dmr_src.exists():
+                backup_manager.atomic_write(self.config_path, dmr_src.read_text(encoding="utf-8"))
+            else:
+                example = DEFAULT_CONFIGS_DIR / "config.example.yml"
+                if example.exists():
+                    backup_manager.atomic_write(self.config_path, example.read_text(encoding="utf-8"))
 
         if not self.iden_path.exists():
-            example_iden = DEFAULT_CONFIGS_DIR / "iden_table.example.dat"
-            if example_iden.exists():
-                backup_manager.atomic_write(self.iden_path, example_iden.read_text(encoding="utf-8"))
+            dmr_iden = PROFILES_DIR / "default_dmr" / "iden_table.dat"
+            src = dmr_iden if dmr_iden.exists() else (DEFAULT_CONFIGS_DIR / "iden_table.example.dat")
+            if src.exists():
+                backup_manager.atomic_write(self.iden_path, src.read_text(encoding="utf-8"))
 
         if not self.tg_rules_path.exists():
-            example_tg = DEFAULT_CONFIGS_DIR / "talkgroup_rules.example.yml"
-            if example_tg.exists():
-                backup_manager.atomic_write(self.tg_rules_path, example_tg.read_text(encoding="utf-8"))
+            dmr_tg = PROFILES_DIR / "default_dmr" / "talkgroup_rules.yml"
+            src = dmr_tg if dmr_tg.exists() else (DEFAULT_CONFIGS_DIR / "talkgroup_rules.example.yml")
+            if src.exists():
+                backup_manager.atomic_write(self.tg_rules_path, src.read_text(encoding="utf-8"))
 
         if not self.rid_acl_path.exists():
-            example_rid = DEFAULT_CONFIGS_DIR / "rid_acl.example.dat"
-            if example_rid.exists():
-                backup_manager.atomic_write(self.rid_acl_path, example_rid.read_text(encoding="utf-8"))
+            dmr_rid = PROFILES_DIR / "default_dmr" / "rid_acl.dat"
+            src = dmr_rid if dmr_rid.exists() else (DEFAULT_CONFIGS_DIR / "rid_acl.example.dat")
+            if src.exists():
+                backup_manager.atomic_write(self.rid_acl_path, src.read_text(encoding="utf-8"))
 
     def load_config_raw(self) -> str:
         """Read config.yml text."""

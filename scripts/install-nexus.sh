@@ -51,16 +51,24 @@ python3 -m venv "${INSTALL_DIR}/venv"
 "${INSTALL_DIR}/venv/bin/pip" install --upgrade pip -q
 "${INSTALL_DIR}/venv/bin/pip" install -r "${INSTALL_DIR}/requirements.txt" -q
 
-# Step 5: Initialize SQLite database and default profiles
-echo -e "${YELLOW}[*] Initializing DVM Nexus database and profiles...${NC}"
+# Step 5: Initialize SQLite database, baseline config in /opt/dvm, and default profiles
+echo -e "${YELLOW}[*] Initializing DVM Nexus database and deploying baseline config to /opt/dvm...${NC}"
 cd "${INSTALL_DIR}"
 "${INSTALL_DIR}/venv/bin/python" -c "
 from dvm_nexus.core.database import init_db
+from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 from dvm_nexus.config_engine.profile_manager import ProfileManager
 init_db()
+dvm_config_manager.ensure_active_config_exists()
 pm = ProfileManager()
 print('Seeded profiles:', [p['id'] for p in pm.list_profiles()])
 "
+
+# Ensure permissions on /opt/dvm
+chmod -R 755 "${DVM_DIR}" 2>/dev/null || true
+if [[ -f "${DVM_DIR}/config.yml" ]]; then
+    chmod 644 "${DVM_DIR}/config.yml" 2>/dev/null || true
+fi
 
 # Step 6: Install and activate systemd service
 echo -e "${YELLOW}[*] Registering systemd service...${NC}"
