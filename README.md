@@ -1,321 +1,156 @@
 # DVM Nexus
 
-[![Version: 1.0.12](https://img.shields.io/badge/version-1.0.12-blue.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Version](https://img.shields.io/badge/version-1.0.12-blue.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
+[![Hardware](https://img.shields.io/badge/hardware-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/products/raspberry-pi-5/)
+[![Modem](https://img.shields.io/badge/modem-MMDVM%20Duplex%20Hat-blueviolet.svg)](#hardware-setup)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Hardware: RPi 5](https://img.shields.io/badge/Hardware-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/products/raspberry-pi-5/)
-[![Modem: MMDVM Duplex](https://img.shields.io/badge/Modem-AURSINC%20Duplex%20Hat-blueviolet.svg)](#hardware-architecture)
-[![Tests: 53 Passed](https://img.shields.io/badge/tests-53%20passed-success.svg)](#automated-testing)
 
-**DVM Nexus** is a modernized, router-grade web management interface, telemetry dashboard, and configuration engine engineered specifically for the [DVMProject](https://github.com/DVMProject) ecosystem centered around `dvmhost`.
+**DVM Nexus** is a web management interface and configuration manager for [DVMHost](https://github.com/DVMProject/dvmhost). 
 
-Instead of manually editing YAML files, calculating IDEN frequency tables by hand, or debugging disconnected Wi-Fi in the field over a serial cable, DVM Nexus provides a guided, web-first administrative experience with automatic failover Wi-Fi hotspot support, real-time telemetry HUD, and transport-independent Meshtastic bridging.
+Instead of SSHing into your Raspberry Pi to edit YAML configs, manually calculating P25 frequency tables, or getting locked out when your Wi-Fi changes in the field, DVM Nexus gives you a router-grade web interface to control your repeater, switch modes, monitor hardware, and manage connections from any phone, tablet, or PC.
 
 ---
 
-## Key Features
+## What It Does
 
-### 1. Dual-Viewport Responsive Router Dashboard
-- **Desktop Viewport ($\ge 1024\text{px}$ / `lg:`):**
-  - Persistent 260px fixed vertical navigation sidebar with categorized menus and live hardware status.
-  - Asymmetric multi-column grid docking the Radio Status Hero and Activity Log on the left, with the Hardware Telemetry HUD and Service Controls neatly docked on the right.
-- **Mobile & Tablet Viewport ($< 1024\text{px}$):**
-  - Off-canvas slide-over drawer navigation with semi-transparent dark backdrop blur (`w-72 bg-slate-900/95`), accessible via hamburger button or bottom "Menu" tab, with ESC key and tap-outside dismissal.
-  - Persistent bottom navigation bar with safe-area inset padding (`pb-[calc(0.5rem+env(safe-area-inset-bottom))]`) providing quick 1-touch tabs: **Dash**, **DMR**, **P25**, **Mesh**, and **Menu**.
-  - Padded layout (`pb-24`) preventing the bottom bar from obscuring interactive controls.
-- **Touch Ergonomics:** Enforces a minimum $44\times 44\text{px}$ touch target on all mobile buttons, links, and form inputs, with tactile press response (`active:scale-[0.98]`).
-- **Live Activity Feed:** Server-Sent Events (SSE) stream delivering real-time peer connections, RF transmissions, and system diagnostics without client polling.
+### 📱 Modern Dashboard for Desktop & Mobile
+- **Live Hardware Stats:** Real-time SoC temperature in °F, CPU load, RAM usage, storage space, and uptime.
+- **Service Controls:** Start, stop, or restart `dvmhost` with one click and see live journalctl logs.
+- **Phone Friendly:** Works seamlessly on mobile with a slide-out drawer, quick bottom navigation tabs, and touch-friendly controls so you can manage your station on the go.
+- **Live Event Feed:** Streams repeater activity, peer connection events, and radio traffic in real time without refreshing the page.
 
-### 2. Automatic Failover Access Point (Field Hotspot) & Wi-Fi Manager (100% Web UI Driven)
-- **Zero Terminal Setup:** DVM Nexus automatically provisions the NetworkManager `Field-Hotspot` profile on first launch. No terminal commands, bash scripts, or SSH sessions are required!
-- **Field Hotspot (`MMDVM-Field-AP`):** Powered by NetworkManager (`nmcli`) and `dnsmasq` shared IPv4 routing (`10.42.0.1/24`), enabling direct wireless connections from smartphones, tablets, or laptops in the field.
-- **Embedded Async Watchdog Daemon:**
-  - Built directly into the DVM Nexus backend as an async background task (and available as an optional standalone systemd service).
-  - Monitors client Wi-Fi association and gateway reachability continuously.
-  - If disconnected from client Wi-Fi for $> 45$ seconds (configurable), automatically activates `Field-Hotspot`.
-  - While in Hotspot mode, conducts background Wi-Fi scans. When a saved station/home Wi-Fi network comes back into range, it automatically tears down the hotspot and restores client Wi-Fi.
-  - **Manual Override Protection:** Web UI manual toggles activate a 5-minute override flag (`/tmp/wifi-manual.override`) to ensure the watchdog doesn't interrupt intentional configuration sessions.
-- **Full Web UI Network & Hotspot Management (`/network`):**
-  - **Live Status Hero Card:** Active mode badge (Client vs. Field AP), assigned IP, gateway, signal percentage, interface (`wlan0`), and MAC address.
-  - **1-Click Tactile Mode Switch:** Instant toggle between **Switch to Field Hotspot** and **Switch to Client Wi-Fi**.
-  - **Hotspot Settings & Provisioning Panel:** Customize Hotspot SSID (`MMDVM-Field-AP`), passphrase, Wi-Fi Band (2.4 GHz vs. 5 GHz), Channel (1, 6, 11, 36), and Failover Timeout directly from the Web UI!
-  - **1-Click Priority Sync Button:** Re-syncs all saved station Wi-Fi networks to priority `100` with one click.
-  - **Live Wi-Fi Scanner:** Scans channels, removes hidden SSIDs, deduplicates, and sorts by signal strength.
-  - **Quick Connect Form:** Autocomplete from scanned networks, password visibility toggle (`👁️`), and connection safety alerts.
+### 📶 Automatic Failover Hotspot (Field-AP)
+- **Never get locked out:** If your home Wi-Fi drops or you take your hotspot to a field day event, the Pi automatically starts its own Wi-Fi hotspot (`MMDVM-Field-AP` at `10.42.0.1`).
+- **Scan & Connect on your phone:** Connect to the hotspot from your phone, open the web UI, scan for available local Wi-Fi networks, and connect with a single tap.
+- **Auto-reconnect home:** When you bring your gear back home and your saved Wi-Fi comes back in range, the hotspot shuts off and reconnects automatically.
+- **100% Web UI Driven:** No bash scripts, terminal commands, or SSH required. You can customize the hotspot name, password, Wi-Fi channel, and disconnect timers directly from the **Wi-Fi & Hotspot** page.
 
-### 3. Dynamic Hardware Telemetry (Raspberry Pi 5 Target & Remote Agent)
-- **Dynamic RAM Detection:** Reads real-time kernel memory directly from `/proc/meminfo` or `psutil`, dynamically adapting to 2 GB, 4 GB, 8 GB, or 16 GB Pi 5 boards without hardcoded limits:
-  $$\text{format: } \texttt{\{used\_gb:.1f\} GB / \{total\_gb:.1f\} GB (\{percent\}\%)}$$
-- **Dynamic Storage Detection:** Automatically inspects the root mount point (`/`) via `shutil.disk_usage('/')` or `statvfs`, dynamically handling 32 GB, 64 GB, 128 GB, 256 GB MicroSD cards, NVMe SSDs, or USB drives:
-  $$\text{format: } \texttt{\{used\_storage\_gb:.1f\} / \{total\_storage\_gb:.1f\} GB (\{percent\}\%)}$$
-- **SoC Temperature (°F):** Real-time thermal reading converted to Fahrenheit:
-  $$T_{\text{°F}} = \left(T_{\text{°C}} \times \frac{9}{5}\right) + 32$$
-  Categorized with dynamic visual alerts:
-  - 🟢 **Cool:** $< 122^\circ\text{F}$
-  - 🟡 **Warm:** $122^\circ\text{F}\text{--}158^\circ\text{F}$
-  - 🔴 **Hot:** $> 158^\circ\text{F}$
-- **Remote vs. Local Guard (`RemoteTelemetryAgent`):**
-  - When running on a remote dev machine or secondary server, queries the remote Pi agent via REST API (`/api/system/metrics`), SSH, or serial links.
-  - Prevents the host machine's hardware (e.g. AMD64, 32 GB RAM, 1 TB disk) from leaking into the dashboard telemetry.
+### 🔄 1-Click Radio Profile Switching
+- **Hardware Protection:** An MMDVM Duplex hat cannot decode DMR and P25 simultaneously due to shared hardware registers. DVM Nexus manages this cleanly.
+- **Safe Mode Switching:** Switch between saved profiles (e.g., *DMR Duplex* and *P25 Phase 1*). Nexus creates a safety snapshot, releases the serial port (`/dev/ttyAMA0`), applies the new configuration, restarts the service, and verifies it came up cleanly. If anything fails, it automatically rolls back.
 
-### 4. Guided Network Builder (Wizard)
-- 7-step guided configuration wizard for deploying new DMR or P25 networks from scratch:
-  1. **Protocol Selection:** Choose between DMR Duplex or P25 Phase 1 Conventional / Repeater.
-  2. **System Identifiers:** Configure DMR Color Code (0–15), Network ID, or P25 NAC (`$293`), System ID (`$001`), and WACN (`$BB800`).
-  3. **IDEN Bandplan Calculator:** Built-in APCO P25 bandplan generator (`iden_table.dat`) computing Base Frequency, TX Offset, Channel Spacing (12.5 kHz), and Channel Numbers for 700MHz, 800MHz, and UHF bands.
-  4. **Talkgroup Rules:** Provision group voice talkgroups, timeslots (TS1 / TS2), and network routing rules (`talkgroup_rules.yml`).
-  5. **Radio ID Access Control (ACL):** Maintain authorized subscriber lists (`rid_acl.dat`) with permit/deny flags.
-  6. **Visual Diff Inspection:** Review exact line-by-line configuration diffs before committing any changes to disk.
-  7. **Atomic Apply & Verify:** Applies changes safely with automated rollback if the service fails to verify.
+### 🛠️ Network Builder Wizard
+- Guided 7-step setup for new repeater deployments.
+- **Automatic IDEN Bandplan Generator:** Computes APCO P25 base frequencies, TX offsets, and channel spacings (12.5 kHz) for 700MHz, 800MHz, and UHF bands.
+- **Talkgroups & Access Control:** Manage talkgroup routing rules (`talkgroup_rules.yml`) and authorized Radio IDs (`rid_acl.dat`) without touching raw text files.
+- **Visual Diff:** Review line-by-line configuration changes before saving.
 
-### 5. Radio Profile Management & Mutual Hardware Exclusion
-- **Shared Hardware Resource Management:** A single MMDVM Duplex modem (dual ADF7021 transceivers) cannot decode DMR and P25 simultaneously due to shared STM32 DSP filters and baseband registers.
-- **1-Click Profile Switching:** Seamlessly switch between saved profiles (e.g., *Default DMR Duplex* and *Default P25 Phase 1*).
-- **Zero-Corruption Switching Pipeline:**
-  1. Validates destination profile configuration.
-  2. Creates a timestamped snapshot of the active configuration.
-  3. Safely shuts down `dvmhost.service` to release `/dev/ttyAMA0`.
-  4. Atomically replaces `config.yml`, `iden_table.dat`, `talkgroup_rules.yml`, and `rid_acl.dat`.
-  5. Starts `dvmhost.service`.
-  6. Polls service health; automatically restores previous files and restarts if the new profile crashes.
+### 🌐 Meshtastic LoRa Integration
+- Connect any Meshtastic node via USB serial (`/dev/ttyUSB0`) or network/TCP (`port 4403`).
+- **Two-Way Text Gateway:** Send and receive text messages between DMR/P25 handheld radios (TMS/SMS) and Meshtastic LoRa channels.
+- **Mesh Messenger & Node List:** Chat directly on mesh channels and view discovered nodes, signal quality (SNR), battery levels, and GPS positions.
+- **Remote Mesh Commands:** Operators can send secure commands over the mesh (`!status`, `!restart`, `!profile <name>`) to manage the repeater when out of cell/internet range.
 
-### 6. Protocol-Specific Management Screens
-- **DMR Management:** Configure Color Codes, callhang timers, timeslot mapping, talkgroups, peer connections, and issue over-the-air commands (Radio Check, Radio Inhibit, Radio Uninhibit, Alert Page).
-- **P25 Phase 1 Management:** Configure NAC, WACN, System ID, Site ID, low-speed data, talkgroup rules, IDEN bandplan tables, and over-the-air subscriber commands.
-- **Modem & ADF7021 Transceiver Tuning:** Adjust UART baud rates (115200 bps), serial ports (`/dev/ttyAMA0`), TX/RX inversion, frequency correction offsets (`rxFreqCorrection`, `txFreqCorrection`), and filter bandwidths.
-
-### 7. Transport-Independent Meshtastic Integration
-- **Transport Agnostic:** Supports USB Serial (`/dev/ttyUSB0`), TCP / Network (`port 4403`), BLE, and simulated mesh modes.
-- **Live Mesh Messenger:** Interactive chat panel with real-time RX/TX activity, channel selection (Ch 0–7), direct messaging, and broadcast messaging.
-- **Node Directory & Telemetry:** Discovered nodes table displaying Node ID, Name, Model, Battery Level (%), Battery Voltage, SNR (dB), and GPS coordinates.
-- **Bidirectional Radio $\leftrightarrow$ Meshtastic Text Gateway:**
-  - **Radio ➔ Meshtastic:** Over-the-air text messages (DMR TMS or P25 PDU) are translated and transmitted onto the designated Meshtastic channel.
-  - **Meshtastic ➔ Radio:** Messages typed on Meshtastic handsets (prefixed with `#dmr` or `#p25`) are broadcast over-the-air to the target Talkgroup.
-- **Guarded Remote Management:** Authorized operators can issue whitelisted commands over the mesh (`!status`, `!modem`, `!profiles`, `!restart`, `!profile <name>`) with anti-replay protection and 2-step confirmation.
+### 🚀 1-Click In-Place Updates
+- Check for updates and install new releases of DVM Nexus and DVMHost directly from the **System Updates** page.
+- Backs up your settings, pulls the update, runs any migrations, and restarts the service automatically.
 
 ---
 
-## Hardware Architecture & Raspberry Pi 5 Pinout
+## Hardware Setup
 
-DVM Nexus is optimized for the **AURSINC MMDVM Duplex Hotspot Module Dual Hat** mounted on a **Raspberry Pi 5**:
+DVM Nexus is designed for a **Raspberry Pi 5** paired with an **AURSINC MMDVM Duplex Hotspot Hat** (or any compatible STM32 ADF7021 duplex board):
 
-- **Transceivers:** Dual Analog Devices ADF7021 on-board transceivers (enabling full duplex transmit and receive on DMR TS1/TS2 or P25 FDMA).
-- **Oscillator (TCXO):** 14.7456 MHz (`ECS-TXO-3225-147.4-TR`).
-- **Modem Selection:** `STM32_HS_GPIO`.
-- **Interface:** Raspberry Pi 40-Pin GPIO Header UART (`/dev/ttyAMA0`).
+- **Modem:** `STM32_HS_GPIO` (dual ADF7021 transceivers for full-duplex DMR TS1/TS2 and P25 FDMA).
+- **Oscillator (TCXO):** 14.7456 MHz.
+- **Port:** Raspberry Pi 40-pin GPIO UART (`/dev/ttyAMA0` @ 115200 bps).
 
-### GPIO Header Pinout
+### GPIO Pin Connections
 
-| Pin # | Signal Name | Raspberry Pi 5 Header | MMDVM Hat Header | Notes |
+| Pin | Signal | Pi 5 Pin | Hat Pin | Description |
 |:---:|:---:|:---:|:---:|:---|
-| **01** | `3.3V DC` | Physical Pin 1 | 3.3V Power | Powers STM32 logic |
-| **02** | `5.0V DC` | Physical Pin 2 | 5V Power | Powers ADF7021 RF stages |
-| **06** | `GND` | Physical Pin 6 | Ground | Common system ground |
-| **08** | `TXD` | GPIO 14 (Physical 8) | Modem RXD | Pi transmits commands to Modem |
-| **10** | `RXD` | GPIO 15 (Physical 10) | Modem TXD | Modem sends packets to Pi |
+| **01** | `3.3V` | Pin 1 | 3.3V | Powers STM32 logic |
+| **02** | `5.0V` | Pin 2 | 5V | Powers ADF7021 RF stages |
+| **06** | `GND` | Pin 6 | GND | Ground reference |
+| **08** | `TXD` | GPIO 14 (Pin 8) | RXD | Pi sends data to modem |
+| **10** | `RXD` | GPIO 15 (Pin 10) | TXD | Modem sends data to Pi |
 
 ---
 
-## Quickstart (Local Development & Testing)
+## Installation on Raspberry Pi
 
-DVM Nexus includes fallback mock drivers for hardware telemetry, Wi-Fi networking, and service controllers, enabling full cross-platform testing on any OS (Linux, macOS, Windows).
-
-### 1. Clone & Set Up Virtual Environment
-
-```bash
-git clone https://github.com/MrRedNeckKYN/DVM-Nexus.git
-cd DVM-Nexus
-
-python3 -m venv venv
-# Linux / macOS:
-source venv/bin/activate
-# Windows (PowerShell):
-.\venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-```
-
-### 2. Automated Testing
-
-Run the full pytest suite (49 automated unit and integration tests):
-
-```bash
-python -m pytest tests -v
-```
-
-Tests cover:
-- NetworkManager client scanning, failover hotspot toggling, and connect handling (`test_network_manager.py`).
-- Dynamic RAM `/proc/meminfo` detection across 2GB, 4GB, 8GB, and 16GB Pi 5 configs (`test_system_monitor.py`).
-- Dynamic storage calculations across 32GB, 64GB, 128GB, and 256GB media (`test_system_monitor.py`).
-- Remote telemetry agent and host PC leak guard (`test_system_monitor.py`).
-- P25 IDEN frequency bandplan calculation (`test_iden_calculator.py`).
-- YAML atomic config read/write and snapshot backups (`test_config_engine.py`).
-- Mutual exclusion profile switching pipeline (`test_profile_manager.py`).
-- Meshtastic text bridging and remote admin whitelists (`test_meshtastic.py`).
-- Dual auto-updater pipeline (`test_updater.py`).
-
-### 3. Launch Development Server
-
-```bash
-python run_nexus.py --host 0.0.0.0 --port 8080 --reload
-```
-
-Open your browser and navigate to `http://localhost:8080`.
-
----
-
-## Raspberry Pi 5 Auto-Installer & Wi-Fi Failover Setup
-
-### 1. Install DVM Nexus on Raspberry Pi OS (Bookworm)
-
-On a fresh **Raspberry Pi 5**, run the one-line automated installer:
+On a fresh install of Raspberry Pi OS (Debian 12 Bookworm):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/MrRedNeckKYN/DVM-Nexus/main/install.sh | sudo bash
 ```
 
-Alternatively, from a cloned repository:
+Or from a cloned repository:
 
 ```bash
+git clone https://github.com/MrRedNeckKYN/DVM-Nexus.git
+cd DVM-Nexus
 sudo ./install.sh
 ```
 
-**The installer automatically:**
-1. Configures Raspberry Pi 5 GPIO UART (`/dev/ttyAMA0`) and disables serial consoles.
-2. Deploys DVM Nexus to `/opt/dvm-nexus` with an isolated virtual environment.
-3. Initializes the SQLite database, default DMR/P25 profiles, and Meshtastic routes.
-4. Registers and starts `dvm-nexus.service` on boot.
-5. Installs the `/usr/local/bin/dvm-nexus` CLI management utility.
+### What gets installed:
+1. Configures the Pi 5 GPIO serial port (`/dev/ttyAMA0`) and disables the Linux serial console.
+2. Sets up DVM Nexus in `/opt/dvm-nexus` with an isolated Python environment.
+3. Initializes the database and sets up default DMR and P25 profiles.
+4. Automatically provisions the failover hotspot profile (`MMDVM-Field-AP`).
+5. Enables and starts the `dvm-nexus` systemd service on boot.
 
-### 2. Field Hotspot & Failover Watchdog (100% Web UI Driven)
-
-**No manual terminal setup needed!**
-When DVM Nexus starts up on your Raspberry Pi, it automatically verifies and provisions the `Field-Hotspot` NetworkManager connection profile and activates the embedded background failover watchdog.
-
-You can customize the SSID, passphrase, Wi-Fi channel, and failover timeouts directly from the Web UI under **Hardware & Network $\rightarrow$ Wi-Fi & Hotspot** (`http://<ip>:8080/network`) with one-click provisioning.
-
-*(Optional)* If you prefer running a standalone systemd watchdog daemon (`wifi-failover.service`) outside of Python, an optional setup script is also bundled:
-
-```bash
-sudo bash scripts/setup_hotspot.sh
-```
-
----
-
-## REST API Reference
-
-DVM Nexus provides a comprehensive JSON REST API:
-
-### Network & Wi-Fi Management
-- `GET /api/network/status`: Returns current mode (`client` vs. `hotspot`), active SSID, IP address, gateway, signal strength, MAC, and watchdog status.
-- `POST /api/network/hotspot/toggle`: Payload `{"enable": true|false}`. Activates or deactivates the `Field-Hotspot` AP and sets the manual override flag.
-- `GET /api/network/scan`: Returns a deduplicated, signal-sorted JSON list of available Wi-Fi networks.
-- `POST /api/network/connect`: Payload `{"ssid": "...", "password": "..."}`. Connects to Wi-Fi and marks it with priority 100.
-- `GET /api/network/hotspot/config`: Returns active hotspot configuration (SSID, passphrase, band, channel, threshold) and provisioning status.
-- `POST /api/network/hotspot/config`: Updates hotspot settings and immediately applies them to NetworkManager.
-- `POST /api/network/hotspot/provision`: Triggers 1-click auto-provisioning of `Field-Hotspot` in NetworkManager.
-- `POST /api/network/hotspot/sync-priorities`: Elevates autoconnect priority to `100` on all saved station Wi-Fi networks.
-
-### System Telemetry & Monitoring
-- `GET /api/system/metrics`: Returns real-time SoC temperature (°F and °C), dynamic RAM (`used / total GB`), dynamic storage (`used / total GB`), CPU load, uptime, and hardware label.
-- `GET /api/status`: Returns consolidated status including system metrics, `dvmhost.service` status, and active profile metadata.
-- `GET /api/stream/events`: Server-Sent Events (SSE) streaming live health telemetry and service state.
-
-### Radio & DVMHost Control
-- `GET /api/dvm/status`: Real-time status from DVMHost's REST API.
-- `POST /api/dvm/mode`: Switch active operating mode (`dmr`, `p25`, `idle`, `lockout`).
-- `POST /api/dvm/service/restart`: Gracefully restart `dvmhost.service`.
-
----
-
-## System Architecture
-
+Once installed, open your browser from any device on your local network:
 ```text
-+---------------------------------------------------------------------------------------+
-|                                  DVM Nexus Web UI                                     |
-|     Dual-Viewport Interface: Desktop Persistent Sidebar + Mobile Off-Canvas Drawer     |
-|     (HTMX + Jinja2 Templates + Dark Slate Router CSS + 44px Touch Targets)            |
-+-------------------------------------------+-------------------------------------------+
-                                            | HTTP / SSE
-                                            v
-+---------------------------------------------------------------------------------------+
-|                                 FastAPI Application                                   |
-|   - Dashboard Router (/ )                 - DMR Management Router (/dmr)              |
-|   - Wi-Fi & Hotspot Router (/network)     - P25 Management Router (/p25)              |
-|   - Network Builder Wizard (/wizard)      - Modem & Transceiver Router (/modem)       |
-|   - Profile Switcher Router (/profiles)   - Meshtastic Router (/meshtastic)           |
-|   - Config History / Diff (/config)       - Auto-Updater Router (/updates)            |
-|   - System Telemetry & REST API (/api)                                                |
-+-------------------------------------------+-------------------------------------------+
-                                            |
-        +-----------------------------------+-----------------------------------+
-        v                                                                       v
-+-------------------------------+                               +-------------------------------+
-|     DVM Nexus Config Engine   |                               |         Nexus Core            |
-| - IDEN Calculator             |                               | - Dynamic Telemetry (Pi 5)    |
-| - Network Schema Validator    |                               | - NetworkManager Controller   |
-| - Atomic Backup Manager       |                               | - Service Controller (systemd)|
-| - Line-by-Line Diff Engine    |                               | - DVMHost REST API Client     |
-| - Profile Manager             |                               | - SQLite Revision DB          |
-+---------------+---------------+                               +---------------+---------------+
-                |                                                               |
-                v                                                               v
-+-------------------------------+       +-------------------------------+       +---------------+
-|  Active DVM Files (/opt/dvm)  |       |        DVMHost Service        |       | NetworkManager|
-| - config.yml                  | <---> | - REST API (Port 9990)        | <---> | (nmcli)       |
-| - iden_table.dat              |       | - Serial UART (/dev/ttyAMA0)  |       | Field-Hotspot |
-| - talkgroup_rules.yml         |       +---------------+---------------+       +---------------+
-| - rid_acl.dat                 |                       |                               |
-+-------------------------------+                       v                               v
-                                        +-------------------------------+       +---------------+
-                                        |   AURSINC MMDVM Duplex Hat    |       | wifi-failover |
-                                        | - STM32_HS_GPIO Modem         |       |    daemon     |
-                                        | - Dual ADF7021 Transceivers   |       |   (systemd)   |
-                                        | - 14.7456 MHz TCXO            |       +---------------+
-                                        +-------------------------------+
+http://<your-pi-ip>:8080
 ```
 
 ---
 
-## Service Management & Troubleshooting
+## Local Development & Testing
 
-### Systemd Commands
+DVM Nexus includes built-in mock drivers for hardware telemetry, Wi-Fi networking, and radio daemons, so you can develop and test on Windows, macOS, or Linux without needing a physical Pi or MMDVM hat attached.
 
 ```bash
-# Check DVM Nexus web daemon status
-sudo systemctl status dvm-nexus
+# 1. Clone repository
+git clone https://github.com/MrRedNeckKYN/DVM-Nexus.git
+cd DVM-Nexus
 
-# Follow live DVM Nexus logs
+# 2. Create virtual environment
+python3 -m venv venv
+# Linux / macOS:
+source venv/bin/activate
+# Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Run automated tests
+python -m pytest tests -v
+
+# 5. Start dev server
+python run_nexus.py --host 0.0.0.0 --port 8080 --reload
+```
+
+---
+
+## Common Commands & File Paths
+
+### Helpful Service Commands
+
+```bash
+# Web UI service status & logs
+sudo systemctl status dvm-nexus
 sudo journalctl -u dvm-nexus -f
 
-# Check Wi-Fi failover watchdog daemon status
-sudo systemctl status wifi-failover
-
-# Follow live Wi-Fi watchdog logs
-sudo journalctl -u wifi-failover -f
-
-# Check DVMHost radio daemon status
+# DVMHost radio daemon status & logs
 sudo systemctl status dvmhost
-
-# Follow live DVMHost radio logs
 sudo journalctl -u dvmhost -f
 ```
 
-### Configuration & File Locations
+### Important File Locations
 
 - **Active DVMHost Config:** `/opt/dvm/config.yml`
 - **IDEN Bandplan Table:** `/opt/dvm/iden_table.dat`
 - **Talkgroup Rules:** `/opt/dvm/talkgroup_rules.yml`
 - **Radio ID ACL:** `/opt/dvm/rid_acl.dat`
-- **Nexus SQLite Database:** `/opt/dvm-nexus/dvm_nexus/data/nexus.db`
-- **Hotspot Configuration:** `/opt/dvm-nexus/dvm_nexus/data/hotspot_config.json`
-- **Configuration Backups:** `/opt/dvm-nexus/dvm_nexus/data/backups/`
-- **Saved Radio Profiles:** `/opt/dvm-nexus/dvm_nexus/data/profiles/`
-- **Wi-Fi Manual Override Flag:** `/tmp/wifi-manual.override`
-- **Wi-Fi Watchdog Script:** `/usr/local/bin/wifi-failover.sh`
-- **Wi-Fi Watchdog Service:** `/etc/systemd/system/wifi-failover.service`
-- **Sudoers nmcli Permissions:** `/etc/sudoers.d/010_dvm_nexus_nmcli`
+- **Nexus Database:** `/opt/dvm-nexus/dvm_nexus/data/nexus.db`
+- **Hotspot Settings:** `/opt/dvm-nexus/dvm_nexus/data/hotspot_config.json`
+- **Config Backups:** `/opt/dvm-nexus/dvm_nexus/data/backups/`
+- **Radio Profiles:** `/opt/dvm-nexus/dvm_nexus/data/profiles/`
 
 ---
 
