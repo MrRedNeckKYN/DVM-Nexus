@@ -31,14 +31,14 @@ def test_wizard_route(client):
 def test_dmr_route(client):
     resp = client.get("/dmr")
     assert resp.status_code == 200
-    assert "DMR Protocol Parameters" in resp.text
+    assert "DMR Identity" in resp.text or "DMR Protocol Parameters" in resp.text
     assert "Talkgroup Management" in resp.text
 
 
 def test_p25_route(client):
     resp = client.get("/p25")
     assert resp.status_code == 200
-    assert "P25 Phase 1 Parameters" in resp.text
+    assert "P25 Network Identity" in resp.text or "P25 Phase 1 Parameters" in resp.text
     assert "IDEN Frequency Bandplan Table" in resp.text
 
 

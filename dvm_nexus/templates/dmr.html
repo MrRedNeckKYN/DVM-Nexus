@@ -61,13 +61,14 @@
 </div>
 
 <!-- DMR Parameters Form -->
-<div class="card">
-  <div class="card-header">
-    <div class="card-title">⚙️ DMR Protocol Parameters</div>
-    <span style="font-size:0.85rem; color:var(--text-dim);">Stored in <code>config.yml</code></span>
-  </div>
+<form hx-post="/dmr/save" hx-target="#toast-container" hx-swap="beforeend">
+  <!-- Section 1: General & Network Identity -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">⚙️ DMR Identity &amp; Channel Routing</div>
+      <span style="font-size:0.85rem; color:var(--text-dim);">Core DMR Network &amp; Repeater Settings</span>
+    </div>
 
-  <form hx-post="/dmr/save" hx-target="#toast-container" hx-swap="beforeend">
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">DMR Mode</label>
@@ -86,46 +87,143 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">DMR Network ID</label>
+        <label class="form-label">DMR Network ID (Peer ID)</label>
         <input type="number" name="dmr_net_id" class="form-control" value="{{ sys.dmrNetId or 1 }}" required>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Site ID</label>
+        <label class="form-label">Site ID (1 - 255)</label>
         <input type="number" name="site_id" class="form-control" value="{{ sys.siteId or 1 }}" required>
       </div>
     </div>
 
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Time Slot 1 Traffic</label>
+        <label class="form-label">Slot 1 Network Traffic</label>
         <select name="slot1" class="form-control">
-          <option value="true" {% if net.slot1 %}selected{% endif %}>Pass Traffic</option>
-          <option value="false" {% if not net.slot1 %}selected{% endif %}>Block</option>
+          <option value="true" {% if net.slot1 is not defined or net.slot1 %}selected{% endif %}>Pass Traffic</option>
+          <option value="false" {% if net.slot1 is defined and not net.slot1 %}selected{% endif %}>Block</option>
         </select>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Time Slot 2 Traffic</label>
+        <label class="form-label">Slot 2 Network Traffic</label>
         <select name="slot2" class="form-control">
-          <option value="true" {% if net.slot2 %}selected{% endif %}>Pass Traffic</option>
-          <option value="false" {% if not net.slot2 %}selected{% endif %}>Block</option>
+          <option value="true" {% if net.slot2 is not defined or net.slot2 %}selected{% endif %}>Pass Traffic</option>
+          <option value="false" {% if net.slot2 is defined and not net.slot2 %}selected{% endif %}>Block</option>
         </select>
       </div>
 
+      <div class="form-group">
+        <label class="form-label">Default Idle Network TGID</label>
+        <input type="number" name="default_net_idle_tg" class="form-control" value="{{ sys.defaultNetIdleTalkgroup or 0 }}" placeholder="0 for promiscuous / FCFS">
+        <small class="form-hint">TGID 0 enables promiscuous first-come-first-serve network routing.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Max DMR Network Jitter (ms)</label>
+        <input type="number" name="jitter" class="form-control" value="{{ net.jitter or 360 }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Timers, Thresholds & Buffer Sizes -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">⏱️ Hang Timers &amp; Audio Silence Thresholds</div>
+      <span style="font-size:0.85rem; color:var(--text-dim);">DVMHost Air Interface Buffers</span>
+    </div>
+
+    <div class="form-row">
       <div class="form-group">
         <label class="form-label">Call Hang Time (seconds)</label>
         <input type="number" name="call_hang" class="form-control" value="{{ dmr.callHang or 5 }}">
+        <small class="form-hint">Time to hang channel after voice call ends.</small>
       </div>
 
       <div class="form-group">
         <label class="form-label">TX Hang Time (seconds)</label>
         <input type="number" name="tx_hang" class="form-control" value="{{ dmr.txHang or 8 }}">
+        <small class="form-hint">Time transmitter continues unmodulated carrier after call.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">BER Silence Threshold</label>
+        <input type="number" name="silence_threshold" class="form-control" value="{{ dmr.silenceThreshold or 21 }}">
+        <small class="form-hint">BER threshold for silencing packets (0 or 141 disables, default 21).</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Frame Loss Threshold</label>
+        <input type="number" name="frame_loss_threshold" class="form-control" value="{{ dmr.frameLossThreshold or 2 }}">
+        <small class="form-hint">Lost frames before call termination (default 2).</small>
       </div>
     </div>
 
-    <!-- Roaming Beacons & Modem Parameters -->
     <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Internal Data Queue Size (frames)</label>
+        <input type="number" name="queue_size" class="form-control" value="{{ dmr.queueSize or 31 }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Repeat DMR Data Packets (IP / SMS)</label>
+        <select name="repeat_data_packet" class="form-control">
+          <option value="true" {% if dmr.repeatDataPacket is not defined or dmr.repeatDataPacket %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if dmr.repeatDataPacket is defined and not dmr.repeatDataPacket %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Dump Talker Alias (TA) Data</label>
+        <select name="dump_ta_data" class="form-control">
+          <option value="true" {% if dmr.dumpTAData is not defined or dmr.dumpTAData %}selected{% endif %}>Enabled (Log to console)</option>
+          <option value="false" {% if dmr.dumpTAData is defined and not dmr.dumpTAData %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Embedded LC Only</label>
+        <select name="embedded_lc_only" class="form-control">
+          <option value="false" {% if not dmr.embeddedLCOnly %}selected{% endif %}>Disabled (Standard)</option>
+          <option value="true" {% if dmr.embeddedLCOnly %}selected{% endif %}>Enabled (RF Embedded Only)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Timeslot Control Channel (TSCC) & Roaming Beacons -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📡 TSCC Control Channel &amp; Roaming Beacons</div>
+      <span style="font-size:0.85rem; color:var(--text-dim);">DVMHost Trunking &amp; Roaming Options</span>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Timeslot Control Channel (TSCC)</label>
+        <select name="tscc_enable" class="form-control">
+          <option value="false" {% if not dmr.control or not dmr.control.enable %}selected{% endif %}>Disabled</option>
+          <option value="true" {% if dmr.control and dmr.control.enable %}selected{% endif %}>Enabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">TSCC Timeslot</label>
+        <select name="tscc_slot" class="form-control">
+          <option value="1" {% if not dmr.control or dmr.control.slot == 1 %}selected{% endif %}>Slot 1</option>
+          <option value="2" {% if dmr.control and dmr.control.slot == 2 %}selected{% endif %}>Slot 2</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Dedicated TSCC</label>
+        <select name="tscc_dedicated" class="form-control">
+          <option value="false" {% if not dmr.control or not dmr.control.dedicated %}selected{% endif %}>No (Non-dedicated)</option>
+          <option value="true" {% if dmr.control and dmr.control.dedicated %}selected{% endif %}>Yes (Dedicated CC)</option>
+        </select>
+      </div>
+
       <div class="form-group">
         <label class="form-label">Roaming Beacons</label>
         <select name="beacon_enable" class="form-control">
@@ -133,10 +231,17 @@
           <option value="true" {% if dmr.beacons and dmr.beacons.enable %}selected{% endif %}>Enabled</option>
         </select>
       </div>
+    </div>
 
+    <div class="form-row">
       <div class="form-group">
         <label class="form-label">Beacon Interval (sec)</label>
         <input type="number" name="beacon_interval" class="form-control" value="{{ dmr.beacons.interval if dmr.beacons else 60 }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Beacon Burst Duration (sec)</label>
+        <input type="number" name="beacon_duration" class="form-control" value="{{ dmr.beacons.duration if dmr.beacons else 3 }}">
       </div>
 
       <div class="form-group">
@@ -145,16 +250,25 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">ADF7021 DMR Disc BW</label>
+        <label class="form-label">ADF7021 Discriminator BW Adj</label>
         <input type="number" name="dmr_disc_bw" class="form-control" value="{{ hotspot.dmrDiscBWAdj or 0 }}">
       </div>
     </div>
 
-    <div style="display:flex; justify-content:flex-end;">
-      <button type="submit" class="btn btn-primary">💾 Save DMR Settings</button>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">ADF7021 Post-Demod BW Adj</label>
+        <input type="number" name="dmr_post_bw" class="form-control" value="{{ hotspot.dmrPostBWAdj or 0 }}">
+      </div>
     </div>
-  </form>
-</div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top: 1rem;">
+      <button type="submit" class="btn btn-primary" style="padding: 0.65rem 1.75rem; font-weight:700;">
+        💾 Save All DMR Configuration
+      </button>
+    </div>
+  </div>
+</form>
 
 <!-- DMR Talkgroups & Radio ID ACLs -->
 <div class="grid-2">

@@ -60,13 +60,24 @@ async def dmr_save(
     color_code: int = Form(1),
     dmr_net_id: int = Form(1),
     site_id: int = Form(1),
+    default_net_idle_tg: int = Form(0),
     slot1: bool = Form(True),
     slot2: bool = Form(True),
+    jitter: int = Form(360),
     call_hang: int = Form(5),
     tx_hang: int = Form(8),
+    silence_threshold: int = Form(21),
+    frame_loss_threshold: int = Form(2),
+    queue_size: int = Form(31),
     beacon_enable: bool = Form(False),
     beacon_interval: int = Form(60),
     beacon_duration: int = Form(3),
+    tscc_enable: bool = Form(False),
+    tscc_slot: int = Form(1),
+    tscc_dedicated: bool = Form(False),
+    repeat_data_packet: bool = Form(True),
+    dump_ta_data: bool = Form(True),
+    embedded_lc_only: bool = Form(False),
     dmr_rx_delay: int = Form(7),
     dmr_disc_bw: int = Form(0),
     dmr_post_bw: int = Form(0),
@@ -87,19 +98,33 @@ async def dmr_save(
         c.setdefault("protocols", {}).setdefault("dmr", {})
         c["protocols"]["dmr"]["callHang"] = call_hang
         c["protocols"]["dmr"]["txHang"] = tx_hang
+        c["protocols"]["dmr"]["silenceThreshold"] = silence_threshold
+        c["protocols"]["dmr"]["frameLossThreshold"] = frame_loss_threshold
+        c["protocols"]["dmr"]["queueSize"] = queue_size
+        c["protocols"]["dmr"]["repeatDataPacket"] = repeat_data_packet
+        c["protocols"]["dmr"]["dumpTAData"] = dump_ta_data
+        c["protocols"]["dmr"]["embeddedLCOnly"] = embedded_lc_only
+
         c["protocols"]["dmr"].setdefault("beacons", {})
         c["protocols"]["dmr"]["beacons"]["enable"] = beacon_enable
         c["protocols"]["dmr"]["beacons"]["interval"] = beacon_interval
         c["protocols"]["dmr"]["beacons"]["duration"] = beacon_duration
 
+        c["protocols"]["dmr"].setdefault("control", {})
+        c["protocols"]["dmr"]["control"]["enable"] = tscc_enable
+        c["protocols"]["dmr"]["control"]["slot"] = tscc_slot
+        c["protocols"]["dmr"]["control"]["dedicated"] = tscc_dedicated
+
         c.setdefault("system", {}).setdefault("config", {})
         c["system"]["config"]["colorCode"] = color_code
         c["system"]["config"]["dmrNetId"] = dmr_net_id
         c["system"]["config"]["siteId"] = site_id
+        c["system"]["config"]["defaultNetIdleTalkgroup"] = default_net_idle_tg
 
         c.setdefault("network", {})
         c["network"]["slot1"] = slot1
         c["network"]["slot2"] = slot2
+        c["network"]["jitter"] = jitter
 
         c.setdefault("system", {}).setdefault("modem", {})
         c["system"]["modem"]["dmrRxDelay"] = dmr_rx_delay

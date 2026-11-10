@@ -10,7 +10,7 @@
            style="width: {{ sys.cpu_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span>Raspberry Pi 5 Quad Cortex-A76</span>
+      <span>{{ sys.cpu_model|default('Host CPU') }}</span>
     </div>
   </div>
 
@@ -30,7 +30,7 @@
            style="width: {% if sys.cpu_temp_c %}{{ (sys.cpu_temp_c / 85.0 * 100.0)|round(0) }}{% else %}0{% endif %}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span>BCM2712 Hardware Thermal</span>
+      <span>{{ sys.temp_source|default('Hardware Thermal') }}</span>
     </div>
   </div>
 

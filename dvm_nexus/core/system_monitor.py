@@ -12,15 +12,19 @@ from pathlib import Path
 import psutil
 from typing import Dict, Any, Optional, Tuple
 
+# In-memory cache for Windows WMI queries to prevent subshell overhead during fast polling
+_win_temp_cache: Optional[Tuple[float, float]] = None  # (timestamp, temp_c)
+
 
 def get_cpu_temperature() -> Optional[float]:
     """
     Read CPU/SoC temperature in Celsius accurately across Raspberry Pi 5 / 4 / 3,
-    standard Linux distributions, and cross-platform fallback environments.
+    standard Linux distributions, and Windows ACPI thermal zones.
     """
-    # Method 1: Scan all thermal zones in Linux sysfs
-    # On Raspberry Pi 5, thermal_zone0 is often the RP1 I/O southbridge chip (or ADC),
-    # while thermal_zone1 or thermal_zone2 is the main BCM2712 Cortex-A76 SoC.
+    global _win_temp_cache
+
+    # Method 1: Linux sysfs thermal zones (Raspberry Pi 5 / 4 / 3 and generic Linux)
+    # Raspberry Pi 5 uses bcm2712 thermal zone (often thermal_zone1 or thermal_zone2)
     try:
         thermal_base = Path("/sys/class/thermal")
         if thermal_base.exists() and thermal_base.is_dir():
@@ -35,11 +39,9 @@ def get_cpu_temperature() -> Optional[float]:
                         zone_type = ""
                     try:
                         val = float(temp_file.read_text(encoding="utf-8").strip())
-                        # Values in /sys are in millidegrees C (e.g. 45200 for 45.2 C)
                         temp_c = val / 1000.0 if val > 200 else val
                         if 10.0 <= temp_c <= 115.0:
                             priority = 0
-                            # Highest priority: BCM2712 (Pi 5), CPU, SoC, Core, Package
                             if any(k in zone_type for k in ["bcm2712", "cpu", "soc", "pkg", "core"]):
                                 priority = 3
                             elif "rp1" in zone_type:
@@ -61,7 +63,6 @@ def get_cpu_temperature() -> Optional[float]:
         if os.path.exists(vcgencmd):
             res = subprocess.run([vcgencmd, "measure_temp"], capture_output=True, text=True, timeout=1.5)
             if res.returncode == 0 and "temp=" in res.stdout:
-                # Format: "temp=48.2'C"
                 raw = res.stdout.strip().replace("temp=", "").replace("'C", "")
                 val = float(raw)
                 if 10.0 <= val <= 115.0:
@@ -69,7 +70,31 @@ def get_cpu_temperature() -> Optional[float]:
     except Exception:
         pass
 
-    # Method 3: psutil sensors_temperatures
+    # Method 3: Windows ACPI WMI thermal query (with 2.5s caching)
+    if os.name == "nt":
+        now = time.time()
+        if _win_temp_cache and (now - _win_temp_cache[0]) < 2.5:
+            return _win_temp_cache[1]
+        try:
+            cmd = [
+                "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                "(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue).CurrentTemperature"
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=2.0)
+            if res.returncode == 0 and res.stdout.strip():
+                tokens = res.stdout.strip().split()
+                if tokens:
+                    raw = float(tokens[0])
+                    # WMI returns temperature in tenths of Kelvin (e.g. 2932 for 293.2 K = 20.1 C)
+                    celsius = (raw / 10.0) - 273.15
+                    if 0.0 <= celsius <= 125.0:
+                        temp_rounded = round(celsius, 1)
+                        _win_temp_cache = (now, temp_rounded)
+                        return temp_rounded
+        except Exception:
+            pass
+
+    # Method 4: psutil sensors_temperatures fallback
     try:
         if hasattr(psutil, "sensors_temperatures"):
             temps = psutil.sensors_temperatures()
@@ -91,13 +116,13 @@ def get_cpu_temperature() -> Optional[float]:
 
 def get_memory_info() -> Tuple[float, float, float, str, str, str]:
     """
-    Compute accurate used memory without miscounting Linux page cache/buffers.
+    Compute accurate used memory and clean display formatting.
     Returns: (used_mb, total_mb, percent, used_str, total_str, display_str)
     """
     total_bytes = 0
     available_bytes = 0
 
-    # On Linux, inspect /proc/meminfo directly for the authoritative kernel numbers
+    # On Linux, inspect /proc/meminfo directly for kernel-level accuracy
     meminfo_path = Path("/proc/meminfo")
     if meminfo_path.exists():
         try:
@@ -108,7 +133,7 @@ def get_memory_info() -> Tuple[float, float, float, str, str, str]:
                     key = parts[0].strip()
                     val_parts = parts[1].strip().split()
                     if val_parts:
-                        info[key] = int(val_parts[0]) * 1024  # convert kB to bytes
+                        info[key] = int(val_parts[0]) * 1024
             if "MemTotal" in info and "MemAvailable" in info:
                 total_bytes = info["MemTotal"]
                 available_bytes = info["MemAvailable"]
@@ -127,18 +152,25 @@ def get_memory_info() -> Tuple[float, float, float, str, str, str]:
     used_mb = round(used_bytes / (1024 * 1024), 1)
     total_mb = round(total_bytes / (1024 * 1024), 1)
 
-    # Format human-readable strings (e.g. "1.4 GB / 8.0 GB" or "450 MB / 4.0 GB")
-    if total_bytes >= 1024 * 1024 * 1024:
-        total_str = f"{total_bytes / (1024 ** 3):.1f} GB"
+    # Detect installed physical RAM capacity by snapping to standard RAM module sizes
+    usable_gb = total_bytes / (1024 ** 3)
+    standard_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+    installed_gb = usable_gb
+    for sz in standard_sizes:
+        if 0.80 * sz <= usable_gb <= sz * 1.05:
+            installed_gb = float(sz)
+            break
+
+    used_gb = used_bytes / (1024 ** 3)
+    if installed_gb >= 1.0:
+        total_str = f"{installed_gb:.0f} GB" if installed_gb == int(installed_gb) else f"{installed_gb:.1f} GB"
+        used_str = f"{used_gb:.1f} GB"
+        display_str = f"{used_str} / {total_str} ({percent}%)"
     else:
         total_str = f"{total_mb:.0f} MB"
-
-    if used_bytes >= 1024 * 1024 * 1024:
-        used_str = f"{used_bytes / (1024 ** 3):.1f} GB"
-    else:
         used_str = f"{used_mb:.0f} MB"
+        display_str = f"{used_str} / {total_str} ({percent}%)"
 
-    display_str = f"{used_str} / {total_str}"
     return used_mb, total_mb, percent, used_str, total_str, display_str
 
 
@@ -162,13 +194,30 @@ def get_system_metrics() -> Dict[str, Any]:
         except Exception:
             load_avg = []
 
+    # Dynamic CPU & Thermal labels based on platform
+    is_arm = platform.machine().lower().startswith(("arm", "aarch"))
+    if is_arm:
+        cpu_model = "Quad-Core Cortex-A76"
+        temp_source = "BCM2712 SoC Thermal"
+    elif os.name == "nt":
+        cores = psutil.cpu_count(logical=False) or 4
+        threads = psutil.cpu_count(logical=True) or 4
+        cpu_model = f"{platform.machine()} {cores}C/{threads}T"
+        temp_source = "ACPI Thermal Zone"
+    else:
+        cores = psutil.cpu_count(logical=False) or 4
+        cpu_model = f"{platform.machine()} {cores}-Core"
+        temp_source = "Hardware Thermal Zone"
+
     return {
         "hostname": platform.node(),
         "os": f"{platform.system()} {platform.release()}",
         "arch": platform.machine(),
         "cpu_percent": round(cpu_percent, 1),
+        "cpu_model": cpu_model,
         "cpu_temp_c": temp_c,
         "cpu_temp_display": f"{temp_c:.1f} °C" if temp_c is not None else "N/A",
+        "temp_source": temp_source,
         "memory_used_mb": used_mb,
         "memory_total_mb": total_mb,
         "memory_percent": mem_percent,

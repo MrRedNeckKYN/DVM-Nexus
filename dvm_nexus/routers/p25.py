@@ -90,8 +90,25 @@ async def p25_save(
     site_id: int = Form(1),
     channel_id: int = Form(0),
     channel_no: int = Form(1),
+    authoritative: bool = Form(True),
+    default_net_idle_tg: int = Form(0),
     call_hang: int = Form(5),
     tdu_preambles: int = Form(6),
+    immediate_call_term: bool = Form(True),
+    silence_threshold: int = Form(124),
+    frame_loss_threshold: int = Form(6),
+    queue_size: int = Form(12),
+    cc_enable: bool = Form(False),
+    cc_broadcast: bool = Form(True),
+    cc_interval: int = Form(300),
+    cc_duration: int = Form(1),
+    cc_ack_requests: bool = Form(True),
+    cc_notify_active_tg: bool = Form(False),
+    cc_dedicated: bool = Form(False),
+    inhibit_unauthorized: bool = Form(False),
+    disable_deny_response: bool = Form(False),
+    repeat_data_packet: bool = Form(True),
+    unit_to_unit_avail_check: bool = Form(False),
     p25_corr_count: int = Form(2),
     p25_disc_bw: int = Form(0),
     p25_post_bw: int = Form(0),
@@ -120,6 +137,23 @@ async def p25_save(
         c.setdefault("protocols", {}).setdefault("p25", {})
         c["protocols"]["p25"]["callHang"] = call_hang
         c["protocols"]["p25"]["tduPreambleCount"] = tdu_preambles
+        c["protocols"]["p25"]["immediateCallTerm"] = immediate_call_term
+        c["protocols"]["p25"]["silenceThreshold"] = silence_threshold
+        c["protocols"]["p25"]["frameLossThreshold"] = frame_loss_threshold
+        c["protocols"]["p25"]["queueSize"] = queue_size
+        c["protocols"]["p25"]["inhibitUnauthorized"] = inhibit_unauthorized
+        c["protocols"]["p25"]["disableDenyResponse"] = disable_deny_response
+        c["protocols"]["p25"]["repeatDataPacket"] = repeat_data_packet
+        c["protocols"]["p25"]["unitToUnitAvailCheck"] = unit_to_unit_avail_check
+
+        c["protocols"]["p25"].setdefault("control", {})
+        c["protocols"]["p25"]["control"]["enable"] = cc_enable
+        c["protocols"]["p25"]["control"]["broadcast"] = cc_broadcast
+        c["protocols"]["p25"]["control"]["interval"] = cc_interval
+        c["protocols"]["p25"]["control"]["duration"] = cc_duration
+        c["protocols"]["p25"]["control"]["ackRequests"] = cc_ack_requests
+        c["protocols"]["p25"]["control"]["notifyActiveTG"] = cc_notify_active_tg
+        c["protocols"]["p25"]["control"]["dedicated"] = cc_dedicated
 
         c.setdefault("system", {}).setdefault("config", {})
         c["system"]["config"]["nac"] = nac
@@ -134,6 +168,8 @@ async def p25_save(
         c["system"]["config"]["siteId"] = site_id
         c["system"]["config"]["channelId"] = channel_id
         c["system"]["config"]["channelNo"] = channel_no
+        c["system"]["config"]["authoritative"] = authoritative
+        c["system"]["config"]["defaultNetIdleTalkgroup"] = default_net_idle_tg
 
         c.setdefault("system", {}).setdefault("modem", {})
         c["system"]["modem"]["p25CorrCount"] = p25_corr_count
