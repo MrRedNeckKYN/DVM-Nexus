@@ -7,8 +7,27 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>{{ title }} - DVM Nexus</title>
-  <link rel="stylesheet" href="/static/css/nexus.css">
+  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.1') }}">
   <script src="/static/js/htmx.min.js"></script>
+  <script>
+    // Immediate Device Detection (executes before paint to prevent layout flashes)
+    (function() {
+      function evaluateDevice() {
+        const isMobileScreen = window.innerWidth <= 768;
+        const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const root = document.documentElement;
+        if (isMobileScreen || isMobileUA) {
+          root.classList.add('device-mobile');
+          root.classList.remove('device-desktop');
+        } else {
+          root.classList.add('device-desktop');
+          root.classList.remove('device-mobile');
+        }
+      }
+      evaluateDevice();
+      window.addEventListener('resize', evaluateDevice);
+    })();
+  </script>
 </head>
 <body>
   <!-- Mobile Sidebar Backdrop Overlay -->
@@ -78,7 +97,7 @@
       <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v1.0.0</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v1.0.1</div>
       </div>
     </aside>
 
@@ -115,7 +134,7 @@
     </div>
   </div>
 
-  <!-- Mobile Bottom Navigation Bar (Fixed for Phones) -->
+  <!-- Mobile Bottom Navigation Bar (Hidden on Desktop via CSS & Device Detection) -->
   <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
     <a href="/" class="mobile-nav-link {% if active_tab == 'dashboard' %}active{% endif %}">
       <span class="mobile-nav-icon">📊</span>
@@ -152,12 +171,14 @@
       const menuTrigger = document.getElementById('mobile-menu-trigger');
 
       function openDrawer() {
+        if (!sidebar || !overlay) return;
         sidebar.classList.add('open');
         overlay.classList.add('active');
         document.body.classList.add('drawer-open');
       }
 
       function closeDrawer() {
+        if (!sidebar || !overlay) return;
         sidebar.classList.remove('open');
         overlay.classList.remove('active');
         document.body.classList.remove('drawer-open');
