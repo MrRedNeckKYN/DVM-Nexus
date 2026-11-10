@@ -53,7 +53,7 @@ class Settings(BaseModel):
     )
 
     # GitHub repository & auto-updater settings
-    github_repo: str = Field(default_factory=lambda: os.getenv("NEXUS_GITHUB_REPO", "DVMProject/dvm-nexus"))
+    github_repo: str = Field(default_factory=lambda: os.getenv("NEXUS_GITHUB_REPO", "MrRedNeckKYN/DVM-Nexus"))
     update_channel: str = Field(default_factory=lambda: os.getenv("NEXUS_UPDATE_CHANNEL", "main"))
 
     @property

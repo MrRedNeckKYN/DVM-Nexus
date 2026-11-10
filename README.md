@@ -100,8 +100,8 @@ DVM Nexus includes fallback mock drivers for hardware telemetry and service cont
 ### 1. Clone & Set Up Virtual Environment
 
 ```bash
-git clone https://github.com/DVMProject/dvm-nexus.git
-cd dvm-nexus
+git clone https://github.com/MrRedNeckKYN/DVM-Nexus.git
+cd DVM-Nexus
 
 python3 -m venv venv
 # Linux / macOS:
@@ -135,7 +135,7 @@ Open your browser and navigate to `http://localhost:8080`.
 On a fresh **Raspberry Pi 5** running Raspberry Pi OS (Debian 12 Bookworm), run the automated installer:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/DVMProject/dvm-nexus/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/MrRedNeckKYN/DVM-Nexus/main/install.sh | sudo bash
 ```
 
 Alternatively, if you have already cloned the repository:

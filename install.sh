@@ -3,7 +3,7 @@
 # DVM Nexus - Unified Raspberry Pi 5 Auto-Installer
 # Optimized for Raspberry Pi 5 running Debian 12 (Bookworm) and MMDVM Duplex Hat.
 # Can be run directly via:
-#   curl -sSL https://raw.githubusercontent.com/DVMProject/dvm-nexus/main/install.sh | sudo bash
+#   curl -sSL https://raw.githubusercontent.com/MrRedNeckKYN/DVM-Nexus/main/install.sh | sudo bash
 # Or from a cloned repository:
 #   sudo ./install.sh
 # ==============================================================================
@@ -19,7 +19,7 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-REPO_URL="https://github.com/DVMProject/dvm-nexus.git"
+REPO_URL="https://github.com/MrRedNeckKYN/DVM-Nexus.git"
 INSTALL_DIR="/opt/dvm-nexus"
 DVM_DIR="/opt/dvm"
 BRANCH="main"
