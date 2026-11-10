@@ -51,6 +51,24 @@ class SystemUpdater:
                 return c
         return "git"
 
+    def _run_git(self, args: List[str], timeout: int = 15) -> subprocess.CompletedProcess:
+        """
+        Execute git commands with safe.directory configured to prevent
+        'fatal: detected dubious ownership in repository' errors across root/pi users.
+        """
+        cmd = [
+            self.git_bin,
+            "-c", f"safe.directory={self.repo_dir}",
+            "-c", "safe.directory=*",
+        ] + args
+        return subprocess.run(
+            cmd,
+            cwd=str(self.repo_dir),
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+
     def get_repo_info(self) -> Dict[str, Any]:
         """Detect local Git repository status and current version."""
         git_dir = self.repo_dir / ".git"
@@ -62,33 +80,15 @@ class SystemUpdater:
 
         if is_git:
             try:
-                res = subprocess.run(
-                    [self.git_bin, "rev-parse", "--short", "HEAD"],
-                    cwd=str(self.repo_dir),
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
+                res = self._run_git(["rev-parse", "--short", "HEAD"], timeout=5)
                 if res.returncode == 0:
                     commit_hash = res.stdout.strip()
 
-                b_res = subprocess.run(
-                    [self.git_bin, "branch", "--show-current"],
-                    cwd=str(self.repo_dir),
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
+                b_res = self._run_git(["branch", "--show-current"], timeout=5)
                 if b_res.returncode == 0 and b_res.stdout.strip():
                     branch = b_res.stdout.strip()
 
-                d_res = subprocess.run(
-                    [self.git_bin, "log", "-1", "--format=%cd", "--date=short"],
-                    cwd=str(self.repo_dir),
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
+                d_res = self._run_git(["log", "-1", "--format=%cd", "--date=short"], timeout=5)
                 if d_res.returncode == 0:
                     commit_date = d_res.stdout.strip()
             except Exception as e:
@@ -129,43 +129,19 @@ class SystemUpdater:
         # Method 1: Git-based check (if local repo has .git and network access)
         if repo_info["is_git"]:
             try:
-                fetch_res = subprocess.run(
-                    [self.git_bin, "fetch", "origin", channel],
-                    cwd=str(self.repo_dir),
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
+                fetch_res = self._run_git(["fetch", "origin", channel], timeout=15)
                 if fetch_res.returncode == 0:
-                    rev_res = subprocess.run(
-                        [self.git_bin, "rev-list", f"HEAD..origin/{channel}", "--count"],
-                        cwd=str(self.repo_dir),
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
+                    rev_res = self._run_git(["rev-list", f"HEAD..origin/{channel}", "--count"], timeout=5)
                     if rev_res.returncode == 0:
                         behind = int(rev_res.stdout.strip() or 0)
                         if behind > 0:
                             update_info["update_available"] = True
                             update_info["commits_behind"] = behind
                             # Get log of new commits
-                            log_res = subprocess.run(
-                                [self.git_bin, "log", f"HEAD..origin/{channel}", "--oneline", "-n", "10"],
-                                cwd=str(self.repo_dir),
-                                capture_output=True,
-                                text=True,
-                                timeout=5
-                            )
+                            log_res = self._run_git(["log", f"HEAD..origin/{channel}", "--oneline", "-n", "10"], timeout=5)
                             update_info["release_notes"] = log_res.stdout.strip()
                             # Get latest remote hash
-                            hash_res = subprocess.run(
-                                [self.git_bin, "rev-parse", "--short", f"origin/{channel}"],
-                                cwd=str(self.repo_dir),
-                                capture_output=True,
-                                text=True,
-                                timeout=5
-                            )
+                            hash_res = self._run_git(["rev-parse", "--short", f"origin/{channel}"], timeout=5)
                             if hash_res.returncode == 0:
                                 update_info["latest_commit"] = hash_res.stdout.strip()
 
@@ -267,16 +243,25 @@ class SystemUpdater:
         if repo_info["is_git"]:
             log(f"Updating source code from Git origin/{channel}...")
             try:
+                # Add safe directory globally to ensure full immunity
+                try:
+                    subprocess.run(
+                        [self.git_bin, "config", "--global", "--add", "safe.directory", str(self.repo_dir)],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    subprocess.run(
+                        [self.git_bin, "config", "--global", "--add", "safe.directory", "*"],
+                        capture_output=True,
+                        timeout=5
+                    )
+                except Exception:
+                    pass
+
                 # Stash any dirty tracked files
-                subprocess.run([self.git_bin, "stash"], cwd=str(self.repo_dir), capture_output=True, timeout=10)
+                self._run_git(["stash"], timeout=10)
                 # Pull latest
-                pull = subprocess.run(
-                    [self.git_bin, "pull", "origin", channel],
-                    cwd=str(self.repo_dir),
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
+                pull = self._run_git(["pull", "origin", channel], timeout=30)
                 if pull.returncode != 0:
                     err = pull.stderr.strip() or pull.stdout.strip()
                     log(f"Git pull error: {err}")

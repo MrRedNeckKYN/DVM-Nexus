@@ -185,8 +185,12 @@ pm = ProfileManager()
 print('Initialized radio profiles:', [p['name'] for p in pm.list_profiles()])
 "
 
-# Set ownership
+# Set ownership and Git safe.directory exception (prevents dubious ownership errors)
 chown -R "${TARGET_USER}:${TARGET_USER}" "${INSTALL_DIR}" 2>/dev/null || true
+git config --global --add safe.directory "${INSTALL_DIR}" 2>/dev/null || true
+if [[ -n "${TARGET_USER}" ]]; then
+    su - "${TARGET_USER}" -c "git config --global --add safe.directory '${INSTALL_DIR}'" 2>/dev/null || true
+fi
 
 # 9. Register Systemd Service
 echo -e "${YELLOW}[*] Installing systemd service...${NC}"
