@@ -208,10 +208,14 @@ sudo bash scripts/setup_hotspot.sh
 DVM Nexus provides a comprehensive JSON REST API:
 
 ### Network & Wi-Fi Management
-- `GET /api/network/status`: Returns current mode (`client` vs. `hotspot`), active SSID, IP address, gateway, signal strength, and MAC.
+- `GET /api/network/status`: Returns current mode (`client` vs. `hotspot`), active SSID, IP address, gateway, signal strength, MAC, and watchdog status.
 - `POST /api/network/hotspot/toggle`: Payload `{"enable": true|false}`. Activates or deactivates the `Field-Hotspot` AP and sets the manual override flag.
 - `GET /api/network/scan`: Returns a deduplicated, signal-sorted JSON list of available Wi-Fi networks.
 - `POST /api/network/connect`: Payload `{"ssid": "...", "password": "..."}`. Connects to Wi-Fi and marks it with priority 100.
+- `GET /api/network/hotspot/config`: Returns active hotspot configuration (SSID, passphrase, band, channel, threshold) and provisioning status.
+- `POST /api/network/hotspot/config`: Updates hotspot settings and immediately applies them to NetworkManager.
+- `POST /api/network/hotspot/provision`: Triggers 1-click auto-provisioning of `Field-Hotspot` in NetworkManager.
+- `POST /api/network/hotspot/sync-priorities`: Elevates autoconnect priority to `100` on all saved station Wi-Fi networks.
 
 ### System Telemetry & Monitoring
 - `GET /api/system/metrics`: Returns real-time SoC temperature (°F and °C), dynamic RAM (`used / total GB`), dynamic storage (`used / total GB`), CPU load, uptime, and hardware label.
@@ -305,8 +309,10 @@ sudo journalctl -u dvmhost -f
 - **Talkgroup Rules:** `/opt/dvm/talkgroup_rules.yml`
 - **Radio ID ACL:** `/opt/dvm/rid_acl.dat`
 - **Nexus SQLite Database:** `/opt/dvm-nexus/dvm_nexus/data/nexus.db`
+- **Hotspot Configuration:** `/opt/dvm-nexus/dvm_nexus/data/hotspot_config.json`
 - **Configuration Backups:** `/opt/dvm-nexus/dvm_nexus/data/backups/`
 - **Saved Radio Profiles:** `/opt/dvm-nexus/dvm_nexus/data/profiles/`
+- **Wi-Fi Manual Override Flag:** `/tmp/wifi-manual.override`
 - **Wi-Fi Watchdog Script:** `/usr/local/bin/wifi-failover.sh`
 - **Wi-Fi Watchdog Service:** `/etc/systemd/system/wifi-failover.service`
 - **Sudoers nmcli Permissions:** `/etc/sudoers.d/010_dvm_nexus_nmcli`
