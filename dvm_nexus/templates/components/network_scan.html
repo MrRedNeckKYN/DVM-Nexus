@@ -1,0 +1,49 @@
+{% if networks and networks|length > 0 %}
+  <div class="scanned-networks-list">
+    {% for n in networks %}
+      <div class="network-row-card {% if n.in_use %}network-row-active{% endif %}"
+           onclick="selectNetwork('{{ n.ssid|escape }}', '{{ n.security }}')">
+        <div class="net-row-left">
+          <div class="net-row-signal-icon">
+            {% if n.signal >= 75 %}
+              <span class="signal-icon signal-excellent" title="{{ n.signal }}%">📶</span>
+            {% elif n.signal >= 50 %}
+              <span class="signal-icon signal-good" title="{{ n.signal }}%">📶</span>
+            {% elif n.signal >= 25 %}
+              <span class="signal-icon signal-fair" title="{{ n.signal }}%">📶</span>
+            {% else %}
+              <span class="signal-icon signal-weak" title="{{ n.signal }}%">📶</span>
+            {% endif %}
+          </div>
+          <div class="net-row-info">
+            <div class="net-row-ssid font-mono">
+              {{ n.ssid }}
+              {% if n.in_use %}
+                <span class="badge-pill badge-client" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; margin-left: 0.5rem;">CONNECTED</span>
+              {% endif %}
+            </div>
+            <div class="net-row-meta">
+              <span class="net-security-badge">{{ n.security }}</span>
+              <span class="net-signal-text font-mono">{{ n.signal }}% Signal ({{ n.bars|default('') }})</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="net-row-right">
+          <button type="button" class="btn btn-sm btn-outline-cyan net-select-btn"
+                  onclick="event.stopPropagation(); selectNetwork('{{ n.ssid|escape }}', '{{ n.security }}')">
+            {% if n.in_use %}Active{% else %}Select{% endif %}
+          </button>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-scan-state">
+    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📡</div>
+    <div style="font-weight: 600; color: var(--text-main);">No Wi-Fi Networks Found</div>
+    <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem;">
+      Make sure the Wi-Fi antenna is connected, or click "Scan for Networks" to refresh.
+    </div>
+  </div>
+{% endif %}

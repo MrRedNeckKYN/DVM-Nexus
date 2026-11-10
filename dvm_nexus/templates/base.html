@@ -91,6 +91,11 @@
         <div class="nav-section-label">HARDWARE &amp; NETWORK</div>
         <ul class="nav-list">
           <li class="nav-item">
+            <a href="/network" class="nav-link {% if active_tab == 'network' %}active{% endif %}">
+              <span class="nav-icon">📶</span> <span class="nav-label">Wi-Fi &amp; Hotspot</span>
+            </a>
+          </li>
+          <li class="nav-item">
             <a href="/modem" class="nav-link {% if active_tab == 'modem' %}active{% endif %}">
               <span class="nav-icon">📡</span> <span class="nav-label">Modem &amp; RF Tuning</span>
             </a>
@@ -124,7 +129,7 @@
       <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.10') }}</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.11') }}</div>
       </div>
     </aside>
 

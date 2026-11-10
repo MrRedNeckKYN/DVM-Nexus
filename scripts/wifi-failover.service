@@ -1,0 +1,18 @@
+[Unit]
+Description=DVM Nexus Wi-Fi Failover Watchdog Daemon
+Documentation=https://github.com/MrRedNeckKYN/DVM-Nexus
+After=network.target NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/wifi-failover.sh
+Restart=always
+RestartSec=10
+KillMode=process
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

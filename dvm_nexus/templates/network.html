@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="network-page-container">
+
+  <!-- Breadcrumbs & Title -->
+  <div class="page-header-row">
+    <div>
+      <h1 class="page-title">Wi-Fi &amp; Field Hotspot</h1>
+      <p class="page-subtitle">Configure client Wi-Fi connections, scan local networks, and manage the automatic failover access point.</p>
+    </div>
+    <div>
+      <button type="button" class="btn btn-outline-cyan"
+              hx-get="/components/network-status"
+              hx-target="#network-status-container"
+              hx-swap="innerHTML">
+        <span>🔄 Refresh Status</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Live Status Hero Card Container (HTMX polled every 12s) -->
+  <div id="network-status-container"
+       hx-get="/components/network-status"
+       hx-trigger="every 12s"
+       hx-swap="innerHTML">
+    {% include "components/network_status.html" %}
+  </div>
+
+  <!-- Dual Column Grid: Scanner & Quick Connect -->
+  <div class="network-grid">
+
+    <!-- Column 1: Scanned Networks -->
+    <div class="card network-scan-card">
+      <div class="card-header flex-between">
+        <div class="card-title-group">
+          <span class="card-icon">📶</span>
+          <span class="card-title">Available Networks</span>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-cyan" id="btn-scan"
+                hx-get="/components/network-scan"
+                hx-target="#network-scan-container"
+                hx-indicator="#scan-spinner"
+                hx-swap="innerHTML">
+          <span id="scan-btn-text">🔍 Scan for Networks</span>
+        </button>
+      </div>
+
+      <div class="card-body">
+        <div id="scan-spinner" class="htmx-indicator" style="display:none; text-align:center; padding:1.25rem 0;">
+          <div class="spinner"></div>
+          <div style="font-size:0.85rem; color:var(--accent-cyan); margin-top:0.5rem; font-weight:600;">Scanning Wi-Fi channels...</div>
+        </div>
+
+        <div id="network-scan-container">
+          {% include "components/network_scan.html" %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Column 2: Quick Connect & Hotspot Information -->
+    <div class="network-connect-col">
+
+      <!-- Quick Connect Form Card -->
+      <div class="card network-connect-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">⚡</span>
+            <span class="card-title">Quick Connect</span>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <!-- Connection Warning Alert -->
+          <div class="network-warning-box">
+            <div class="warning-box-icon">⚠️</div>
+            <div class="warning-box-content">
+              <strong>Network IP Change Notice:</strong>
+              <div>Connecting to a new network may change the Pi's assigned IP address. If connection fails, the Pi will automatically revert to <strong>Field-Hotspot</strong> within 60 seconds.</div>
+            </div>
+          </div>
+
+          <form id="wifi-connect-form"
+                hx-post="/components/network-connect"
+                hx-target="#network-status-container"
+                hx-swap="innerHTML"
+                hx-indicator="#connect-spinner"
+                onsubmit="onConnectSubmit(event)">
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label for="ssid-input" class="form-label">Network Name (SSID) *</label>
+              <div class="input-with-action">
+                <input type="text" id="ssid-input" name="ssid" class="form-control font-mono"
+                       placeholder="Select from list or type SSID..." required autocomplete="off">
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label for="password-input" class="form-label">Wi-Fi Password (WPA2/WPA3)</label>
+              <div class="input-password-wrapper">
+                <input type="password" id="password-input" name="password" class="form-control font-mono"
+                       placeholder="Enter network passphrase (or leave empty if open)..." autocomplete="current-password">
+                <button type="button" class="btn-password-toggle" id="btn-toggle-pwd" onclick="togglePasswordVisibility()" title="Show/Hide password">
+                  <span id="eye-icon">👁️</span>
+                </button>
+              </div>
+              <div class="form-help-text">Leave blank if connecting to an open / unencrypted network.</div>
+            </div>
+
+            <div id="connect-spinner" class="htmx-indicator" style="display:none; text-align:center; padding:0.75rem 0;">
+              <div class="spinner"></div>
+              <div style="font-size:0.85rem; color:var(--accent-cyan); margin-top:0.5rem; font-weight:600;" id="connect-status-text">
+                Connecting to Wi-Fi network...
+              </div>
+            </div>
+
+            <div class="form-actions" style="margin-top: 1.5rem;">
+              <button type="submit" class="btn btn-primary btn-block" id="btn-connect-submit">
+                <span>Connect to Network</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Field-Hotspot Technical Architecture Card -->
+      <div class="card network-info-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">🛡️</span>
+            <span class="card-title">Failover Hotspot Architecture</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="hotspot-spec-list">
+            <div class="hotspot-spec-item">
+              <span class="spec-label">Hotspot SSID:</span>
+              <strong class="spec-val font-mono">MMDVM-Field-AP</strong>
+            </div>
+            <div class="hotspot-spec-item">
+              <span class="spec-label">Hotspot Passphrase:</span>
+              <strong class="spec-val font-mono">FieldPassword123</strong>
+            </div>
+            <div class="hotspot-spec-item">
+              <span class="spec-label">Gateway IP Address:</span>
+              <strong class="spec-val font-mono">10.42.0.1</strong>
+            </div>
+            <div class="hotspot-spec-item">
+              <span class="spec-label">DHCP Server Method:</span>
+              <span class="spec-val">NetworkManager shared (dnsmasq)</span>
+            </div>
+            <div class="hotspot-spec-item">
+              <span class="spec-label">Watchdog Service:</span>
+              <span class="spec-val font-mono">wifi-failover.service</span>
+            </div>
+            <div class="hotspot-spec-item">
+              <span class="spec-label">Failover Policy:</span>
+              <span class="spec-val">Autoconnect Priority 1 vs. Client 100</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+function selectNetwork(ssid, security) {
+  const ssidInput = document.getElementById('ssid-input');
+  const pwdInput = document.getElementById('password-input');
+  if (ssidInput) {
+    ssidInput.value = ssid;
+    ssidInput.focus();
+  }
+  if (pwdInput && security && security.toLowerCase().includes('open')) {
+    pwdInput.value = '';
+    pwdInput.placeholder = 'Open network (no password needed)';
+  } else if (pwdInput) {
+    pwdInput.placeholder = 'Enter network passphrase...';
+  }
+}
+
+function togglePasswordVisibility() {
+  const pwdInput = document.getElementById('password-input');
+  const eyeIcon = document.getElementById('eye-icon');
+  if (!pwdInput) return;
+  if (pwdInput.type === 'password') {
+    pwdInput.type = 'text';
+    if (eyeIcon) eyeIcon.textContent = '🙈';
+  } else {
+    pwdInput.type = 'password';
+    if (eyeIcon) eyeIcon.textContent = '👁️';
+  }
+}
+
+function onConnectSubmit(e) {
+  const ssid = document.getElementById('ssid-input')?.value;
+  const statusText = document.getElementById('connect-status-text');
+  if (statusText && ssid) {
+    statusText.textContent = 'Connecting to "' + ssid + '"... This may take up to 20 seconds.';
+  }
+}
+</script>
+{% endblock %}

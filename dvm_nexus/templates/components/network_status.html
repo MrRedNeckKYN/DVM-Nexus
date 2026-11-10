@@ -1,0 +1,104 @@
+{% if flash_message %}
+  <div class="alert alert-{{ flash_type|default('info') }}" style="margin-bottom: 1.25rem;">
+    {% if flash_type == 'danger' %}⚠️{% else %}✅{% endif %} {{ flash_message }}
+  </div>
+{% endif %}
+
+<div class="network-hero-card">
+  <div class="network-hero-header">
+    <div class="network-hero-title-group">
+      <div class="network-mode-icon">
+        {% if net.mode == 'hotspot' %}📡{% elif net.mode == 'client' %}📶{% else %}🔌{% endif %}
+      </div>
+      <div>
+        <div class="network-hero-title">Network Interface ({{ net.interface|default('wlan0') }})</div>
+        <div class="network-hero-subtitle">
+          {% if net.mode == 'hotspot' %}
+            Failover Access Point Mode Active
+          {% elif net.mode == 'client' %}
+            Station Client Connected to Local Network
+          {% else %}
+            Wi-Fi Disconnected / Scanning
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Visual Status Badge Pill -->
+    <div class="network-status-badge">
+      {% if net.mode == 'hotspot' %}
+        <span class="badge-pill badge-hotspot">
+          <span class="pulse-dot dot-warning"></span>
+          FIELD AP ACTIVE • {{ net.active_ssid|default('MMDVM-Field-AP') }}
+        </span>
+      {% elif net.mode == 'client' and net.is_connected %}
+        <span class="badge-pill badge-client">
+          <span class="pulse-dot dot-success"></span>
+          CLIENT MODE • CONNECTED TO {{ net.active_ssid }}
+        </span>
+      {% else %}
+        <span class="badge-pill badge-standby">
+          <span class="pulse-dot dot-gray"></span>
+          DISCONNECTED / STANDBY
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Telemetry / Details Grid -->
+  <div class="network-details-grid">
+    <div class="net-detail-item">
+      <span class="net-detail-label">Assigned IP</span>
+      <span class="net-detail-val font-mono">{{ net.ip_address|default('No IP Assigned') }}</span>
+    </div>
+    <div class="net-detail-item">
+      <span class="net-detail-label">Gateway</span>
+      <span class="net-detail-val font-mono">{{ net.gateway|default('None') }}</span>
+    </div>
+    <div class="net-detail-item">
+      <span class="net-detail-label">Signal Quality</span>
+      <span class="net-detail-val font-mono">
+        {% if net.mode == 'hotspot' %}
+          100% (Local AP)
+        {% elif net.signal_quality %}
+          {{ net.signal_quality }}%
+        {% else %}
+          --
+        {% endif %}
+      </span>
+    </div>
+    <div class="net-detail-item">
+      <span class="net-detail-label">MAC Address</span>
+      <span class="net-detail-val font-mono">{{ net.mac_address|default('--') }}</span>
+    </div>
+  </div>
+
+  <!-- Hero Card Action Footer -->
+  <div class="network-hero-actions">
+    <div class="net-override-info">
+      {% if net.manual_override %}
+        <span class="override-pill">🔒 Manual Override Active (Watchdog Paused)</span>
+      {% else %}
+        <span class="watchdog-active-pill">🛡️ Failover Watchdog Active (45s Auto-AP)</span>
+      {% endif %}
+    </div>
+
+    <div class="net-action-buttons">
+      {% if net.mode == 'hotspot' %}
+        <form hx-post="/components/network-toggle" hx-target="#network-status-container" hx-swap="innerHTML" style="margin:0;">
+          <input type="hidden" name="enable" value="false">
+          <button type="submit" class="btn btn-primary net-toggle-btn" onclick="this.classList.add('btn-loading');">
+            <span>🔄 Switch to Client Wi-Fi</span>
+          </button>
+        </form>
+      {% else %}
+        <form hx-post="/components/network-toggle" hx-target="#network-status-container" hx-swap="innerHTML" style="margin:0;">
+          <input type="hidden" name="enable" value="true">
+          <button type="submit" class="btn btn-warning net-toggle-btn" onclick="return confirm('Switch to Field-Hotspot? This will start MMDVM-Field-AP at 10.42.0.1 and disconnect from client Wi-Fi.');">
+            <span>📡 Switch to Field Hotspot</span>
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</div>

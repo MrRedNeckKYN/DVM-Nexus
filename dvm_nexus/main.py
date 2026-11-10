@@ -30,6 +30,7 @@ from dvm_nexus.routers import (
     api,
     meshtastic_router,
     updater_router,
+    network_router,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -112,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(modem.router)
     app.include_router(meshtastic_router.router)
     app.include_router(updater_router.router)
+    app.include_router(network_router.router)
     app.include_router(api.router)
 
     return app

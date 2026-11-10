@@ -1,0 +1,4 @@
+# DVM Nexus - Sudoers configuration for NetworkManager nmcli execution
+# Allows the web interface service to manage Wi-Fi without full root permissions
+
+ALL ALL=(ALL) NOPASSWD: /usr/bin/nmcli, /usr/sbin/rfkill, /usr/bin/ip
