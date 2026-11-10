@@ -10,31 +10,31 @@
            style="width: {{ sys.cpu_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span>{{ sys.cpu_model|default('Host CPU') }}</span>
+      <span>{{ sys.cpu_model|default('BCM2712 (Cortex-A76 4C)') }}</span>
     </div>
   </div>
 
-  <!-- CPU Temperature Tile -->
+  <!-- CPU Temperature Tile (°F) -->
   <div class="telemetry-card">
     <div class="telemetry-header">
       <span class="telemetry-label">SoC Temperature</span>
-      <span class="telemetry-value {% if sys.cpu_temp_c and sys.cpu_temp_c > 70 %}temp-hot{% elif sys.cpu_temp_c and sys.cpu_temp_c > 55 %}temp-warm{% else %}temp-cool{% endif %}">
-        {% if sys.cpu_temp_c %}
-          <span class="temp-indicator-dot {% if sys.cpu_temp_c > 70 %}dot-danger{% elif sys.cpu_temp_c > 55 %}dot-warning{% else %}dot-success{% endif %}"></span>
+      <span class="telemetry-value {% if sys.cpu_temp_f and sys.cpu_temp_f > 158 %}temp-hot{% elif sys.cpu_temp_f and sys.cpu_temp_f > 131 %}temp-warm{% else %}temp-cool{% endif %}">
+        {% if sys.cpu_temp_f %}
+          <span class="temp-indicator-dot {% if sys.cpu_temp_f > 158 %}dot-danger{% elif sys.cpu_temp_f > 131 %}dot-warning{% else %}dot-success{% endif %}"></span>
         {% endif %}
         {{ sys.cpu_temp_display }}
       </span>
     </div>
     <div class="telemetry-bar-bg">
-      <div class="telemetry-bar-fill {% if sys.cpu_temp_c and sys.cpu_temp_c > 70 %}bar-danger{% elif sys.cpu_temp_c and sys.cpu_temp_c > 55 %}bar-warning{% else %}bar-success{% endif %}"
-           style="width: {% if sys.cpu_temp_c %}{{ (sys.cpu_temp_c / 85.0 * 100.0)|round(0) }}{% else %}0{% endif %}%;"></div>
+      <div class="telemetry-bar-fill {% if sys.cpu_temp_f and sys.cpu_temp_f > 158 %}bar-danger{% elif sys.cpu_temp_f and sys.cpu_temp_f > 131 %}bar-warning{% else %}bar-success{% endif %}"
+           style="width: {{ sys.cpu_temp_percent|default(50) }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span>{{ sys.temp_source|default('Hardware Thermal') }}</span>
+      <span>{{ sys.temp_source|default('BCM2712 SoC Thermal') }}</span>
     </div>
   </div>
 
-  <!-- Memory Usage Tile -->
+  <!-- Memory Usage Tile (Target: 2 GB LPDDR4X) -->
   <div class="telemetry-card">
     <div class="telemetry-header">
       <span class="telemetry-label">Memory (RAM)</span>
@@ -49,7 +49,7 @@
     </div>
   </div>
 
-  <!-- Storage & Uptime Tile -->
+  <!-- Storage & Uptime Tile (Target: 64 GB Storage) -->
   <div class="telemetry-card">
     <div class="telemetry-header">
       <span class="telemetry-label">System Uptime</span>
@@ -59,7 +59,7 @@
       <div class="telemetry-bar-fill bar-purple" style="width: {{ sys.disk_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span>Disk: {{ sys.disk_used_gb }} / {{ sys.disk_total_gb }} GB ({{ sys.disk_percent }}%)</span>
+      <span>Disk: {{ sys.disk_used_gb }} / {{ sys.disk_total_gb|int if sys.disk_total_gb == sys.disk_total_gb|int else sys.disk_total_gb }} GB ({{ sys.disk_percent }}%)</span>
     </div>
   </div>
 </div>
