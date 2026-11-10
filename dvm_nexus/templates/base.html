@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>{{ title }} - DVM Nexus</title>
-  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.4') }}">
+  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.5') }}">
   <script src="/static/js/htmx.min.js"></script>
   <script>
     // Immediate Device Detection (executes before paint to prevent layout flashes)
@@ -47,69 +47,84 @@
         <button type="button" class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Close navigation">&times;</button>
       </div>
 
-      <ul class="nav-menu">
-        <li class="nav-item">
-          <a href="/" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}">
-            <span class="nav-icon">📊</span> <span class="nav-label">Dashboard</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/wizard" class="nav-link {% if active_tab == 'wizard' %}active{% endif %}">
-            <span class="nav-icon">✨</span> <span class="nav-label">Network Builder</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/dmr" class="nav-link {% if active_tab == 'dmr' %}active{% endif %}">
-            <span class="nav-icon">📻</span>
-            <span class="nav-label">DMR Management</span>
-            {% if active_protocol == 'dmr' %}
-              <span class="nav-pill nav-pill-active" title="DMR Duplex is Active">ACTIVE</span>
-            {% else %}
-              <span class="nav-pill nav-pill-standby" title="DMR in Standby">STANDBY</span>
-            {% endif %}
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/p25" class="nav-link {% if active_tab == 'p25' %}active{% endif %}">
-            <span class="nav-icon">⚡</span>
-            <span class="nav-label">P25 Management</span>
-            {% if active_protocol == 'p25' %}
-              <span class="nav-pill nav-pill-active" title="P25 Phase 1 is Active">ACTIVE</span>
-            {% else %}
-              <span class="nav-pill nav-pill-standby" title="P25 in Standby">STANDBY</span>
-            {% endif %}
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/profiles" class="nav-link {% if active_tab == 'profiles' %}active{% endif %}">
-            <span class="nav-icon">🔄</span> <span class="nav-label">Radio Profiles</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/modem" class="nav-link {% if active_tab == 'modem' %}active{% endif %}">
-            <span class="nav-icon">📡</span> <span class="nav-label">Modem & RF</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/meshtastic" class="nav-link {% if active_tab == 'meshtastic' %}active{% endif %}">
-            <span class="nav-icon">🌐</span> <span class="nav-label">Meshtastic</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/config" class="nav-link {% if active_tab == 'config' %}active{% endif %}">
-            <span class="nav-icon">⚙️</span> <span class="nav-label">Config & History</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/updates" class="nav-link {% if active_tab == 'updates' %}active{% endif %}">
-            <span class="nav-icon">🔄</span> <span class="nav-label">System Updates</span>
-          </a>
-        </li>
-      </ul>
+      <div class="nav-menu">
+        <div class="nav-section-label">OVERVIEW</div>
+        <ul class="nav-list">
+          <li class="nav-item">
+            <a href="/" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}">
+              <span class="nav-icon">📊</span> <span class="nav-label">Dashboard</span>
+            </a>
+          </li>
+        </ul>
+
+        <div class="nav-section-label">RADIO PROTOCOLS</div>
+        <ul class="nav-list">
+          <li class="nav-item">
+            <a href="/dmr" class="nav-link {% if active_tab == 'dmr' %}active{% endif %}">
+              <span class="nav-icon">📻</span>
+              <span class="nav-label">DMR Management</span>
+              {% if active_protocol == 'dmr' %}
+                <span class="nav-pill nav-pill-active" title="DMR Duplex is Active">ACTIVE</span>
+              {% else %}
+                <span class="nav-pill nav-pill-standby" title="DMR in Standby">STANDBY</span>
+              {% endif %}
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="/p25" class="nav-link {% if active_tab == 'p25' %}active{% endif %}">
+              <span class="nav-icon">⚡</span>
+              <span class="nav-label">P25 Management</span>
+              {% if active_protocol == 'p25' %}
+                <span class="nav-pill nav-pill-active" title="P25 Phase 1 is Active">ACTIVE</span>
+              {% else %}
+                <span class="nav-pill nav-pill-standby" title="P25 in Standby">STANDBY</span>
+              {% endif %}
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="/profiles" class="nav-link {% if active_tab == 'profiles' %}active{% endif %}">
+              <span class="nav-icon">🔄</span> <span class="nav-label">Radio Profiles</span>
+            </a>
+          </li>
+        </ul>
+
+        <div class="nav-section-label">HARDWARE &amp; NETWORK</div>
+        <ul class="nav-list">
+          <li class="nav-item">
+            <a href="/modem" class="nav-link {% if active_tab == 'modem' %}active{% endif %}">
+              <span class="nav-icon">📡</span> <span class="nav-label">Modem &amp; RF Tuning</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="/wizard" class="nav-link {% if active_tab == 'wizard' %}active{% endif %}">
+              <span class="nav-icon">✨</span> <span class="nav-label">Network Builder</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="/meshtastic" class="nav-link {% if active_tab == 'meshtastic' %}active{% endif %}">
+              <span class="nav-icon">🌐</span> <span class="nav-label">Meshtastic Bridge</span>
+            </a>
+          </li>
+        </ul>
+
+        <div class="nav-section-label">SYSTEM &amp; MAINTENANCE</div>
+        <ul class="nav-list">
+          <li class="nav-item">
+            <a href="/config" class="nav-link {% if active_tab == 'config' %}active{% endif %}">
+              <span class="nav-icon">⚙️</span> <span class="nav-label">Config &amp; History</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="/updates" class="nav-link {% if active_tab == 'updates' %}active{% endif %}">
+              <span class="nav-icon">🔄</span> <span class="nav-label">System Updates</span>
+            </a>
+          </li>
+        </ul>
+      </div>
       <div class="sidebar-footer">
         <div>Hardware: Raspberry Pi 5</div>
         <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.4') }}</div>
+        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.5') }}</div>
       </div>
     </aside>
 

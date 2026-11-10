@@ -44,7 +44,7 @@ def get_global_template_context() -> Dict[str, Any]:
         from dvm_nexus.core.config import settings
         ver = settings.app_version
     except Exception:
-        ver = "1.0.4"
+        ver = "1.0.5"
 
     return {
         "active_protocol": proto,

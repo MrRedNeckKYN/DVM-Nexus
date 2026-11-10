@@ -1,38 +1,65 @@
-<div class="grid-4">
-  <div class="card" style="margin-bottom:0;">
-    <div style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">CPU Utilization</div>
-    <div style="font-size:1.6rem; font-weight:700; margin-top:0.25rem;">{{ sys.cpu_percent }}%</div>
-    <div class="progress-bar-bg">
-      <div class="progress-bar-fill" style="width: {{ sys.cpu_percent }}%;"></div>
+<div class="telemetry-grid">
+  <!-- CPU Utilization Tile -->
+  <div class="telemetry-card">
+    <div class="telemetry-header">
+      <span class="telemetry-label">CPU Utilization</span>
+      <span class="telemetry-value">{{ sys.cpu_percent }}%</span>
+    </div>
+    <div class="telemetry-bar-bg">
+      <div class="telemetry-bar-fill {% if sys.cpu_percent > 85 %}bar-danger{% elif sys.cpu_percent > 60 %}bar-warning{% else %}bar-cyan{% endif %}"
+           style="width: {{ sys.cpu_percent }}%;"></div>
+    </div>
+    <div class="telemetry-footer">
+      <span>Raspberry Pi 5 Quad Cortex-A76</span>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:0;">
-    <div style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">CPU Temperature</div>
-    <div style="font-size:1.6rem; font-weight:700; margin-top:0.25rem; color:{% if sys.cpu_temp_c and sys.cpu_temp_c > 65 %}var(--danger){% elif sys.cpu_temp_c and sys.cpu_temp_c > 50 %}var(--warning){% else %}var(--success){% endif %};">
-      {{ sys.cpu_temp_display }}
+  <!-- CPU Temperature Tile -->
+  <div class="telemetry-card">
+    <div class="telemetry-header">
+      <span class="telemetry-label">SoC Temperature</span>
+      <span class="telemetry-value {% if sys.cpu_temp_c and sys.cpu_temp_c > 70 %}temp-hot{% elif sys.cpu_temp_c and sys.cpu_temp_c > 55 %}temp-warm{% else %}temp-cool{% endif %}">
+        {% if sys.cpu_temp_c %}
+          <span class="temp-indicator-dot {% if sys.cpu_temp_c > 70 %}dot-danger{% elif sys.cpu_temp_c > 55 %}dot-warning{% else %}dot-success{% endif %}"></span>
+        {% endif %}
+        {{ sys.cpu_temp_display }}
+      </span>
     </div>
-    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:0.4rem;">
-      Raspberry Pi 5 SoC Thermal
+    <div class="telemetry-bar-bg">
+      <div class="telemetry-bar-fill {% if sys.cpu_temp_c and sys.cpu_temp_c > 70 %}bar-danger{% elif sys.cpu_temp_c and sys.cpu_temp_c > 55 %}bar-warning{% else %}bar-success{% endif %}"
+           style="width: {% if sys.cpu_temp_c %}{{ (sys.cpu_temp_c / 85.0 * 100.0)|round(0) }}{% else %}0{% endif %}%;"></div>
+    </div>
+    <div class="telemetry-footer">
+      <span>BCM2712 Hardware Thermal</span>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:0;">
-    <div style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">Memory Usage</div>
-    <div style="font-size:1.6rem; font-weight:700; margin-top:0.25rem;">{{ sys.memory_percent }}%</div>
-    <div class="progress-bar-bg">
-      <div class="progress-bar-fill" style="width: {{ sys.memory_percent }}%; background-color:var(--accent-blue);"></div>
+  <!-- Memory Usage Tile -->
+  <div class="telemetry-card">
+    <div class="telemetry-header">
+      <span class="telemetry-label">Memory (RAM)</span>
+      <span class="telemetry-value">{{ sys.memory_percent }}%</span>
     </div>
-    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:0.4rem;">
-      {{ sys.memory_used_mb }} / {{ sys.memory_total_mb }} MB
+    <div class="telemetry-bar-bg">
+      <div class="telemetry-bar-fill {% if sys.memory_percent > 85 %}bar-danger{% elif sys.memory_percent > 70 %}bar-warning{% else %}bar-blue{% endif %}"
+           style="width: {{ sys.memory_percent }}%;"></div>
+    </div>
+    <div class="telemetry-footer">
+      <span>{{ sys.memory_display }}</span>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:0;">
-    <div style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">Disk & Uptime</div>
-    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">{{ sys.uptime }}</div>
-    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:0.4rem;">
-      Disk: {{ sys.disk_percent }}% used ({{ sys.disk_used_gb }} / {{ sys.disk_total_gb }} GB)
+  <!-- Storage & Uptime Tile -->
+  <div class="telemetry-card">
+    <div class="telemetry-header">
+      <span class="telemetry-label">System Uptime</span>
+      <span class="telemetry-value uptime-value">{{ sys.uptime }}</span>
+    </div>
+    <div class="telemetry-bar-bg">
+      <div class="telemetry-bar-fill bar-purple" style="width: {{ sys.disk_percent }}%;"></div>
+    </div>
+    <div class="telemetry-footer">
+      <span>Disk: {{ sys.disk_used_gb }} / {{ sys.disk_total_gb }} GB ({{ sys.disk_percent }}%)</span>
     </div>
   </div>
 </div>

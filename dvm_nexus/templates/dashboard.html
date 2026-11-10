@@ -1,129 +1,156 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- Top Highlights Grid -->
-<div class="grid-4">
-  <div class="card" style="border-left: 4px solid var(--accent-cyan);">
-    <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Active Protocol</div>
-    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">
-      {% if dvm.protocol == 'dmr' %}
-        <span class="badge badge-cyan" style="font-size:0.95rem;">DMR Tier II</span>
-      {% elif dvm.protocol == 'p25' %}
-        <span class="badge badge-indigo" style="font-size:0.95rem;">P25 Phase 1</span>
-      {% else %}
-        <span class="badge badge-warning" style="font-size:0.95rem;">{{ dvm.protocol|upper }}</span>
-      {% endif %}
+<!-- Station Hero Overview Hub -->
+<div class="card station-hero-card">
+  <div class="station-hero-main">
+    <div class="station-callsign-group">
+      <div class="station-callsign-badge">
+        <span class="station-callsign-text">{{ dvm.callsign|default('N0CALL') }}</span>
+        <span class="station-status-pill {% if service.is_running %}pill-online{% else %}pill-offline{% endif %}">
+          <span class="pulse-dot"></span>
+          {{ 'ONLINE' if service.is_running else 'OFFLINE' }}
+        </span>
+      </div>
+
+      <div class="station-meta-chips">
+        {% if dvm.protocol == 'dmr' %}
+          <span class="meta-chip chip-dmr"><span class="chip-icon">📻</span> DMR Tier II Duplex</span>
+        {% elif dvm.protocol == 'p25' %}
+          <span class="meta-chip chip-p25"><span class="chip-icon">⚡</span> P25 Phase 1 Conventional</span>
+        {% else %}
+          <span class="meta-chip chip-neutral">{{ dvm.protocol|upper }}</span>
+        {% endif %}
+
+        <span class="meta-chip chip-profile">
+          Profile: <strong>{{ profile.name if profile else 'Custom' }}</strong>
+        </span>
+
+        <span class="meta-chip chip-hardware">
+          {% if dvm.duplex %}
+            MMDVM Duplex (Dual ADF7021)
+          {% else %}
+            MMDVM Simplex
+          {% endif %}
+        </span>
+      </div>
     </div>
-    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
-      Profile: <strong>{{ profile.name if profile else 'Custom' }}</strong>
+
+    <div class="station-actions-group">
+      <a href="{% if dvm.protocol == 'dmr' %}/dmr{% else %}/p25{% endif %}" class="btn btn-primary btn-sm">
+        Configure {{ dvm.protocol|upper }} →
+      </a>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="openModeSwitchModal('{% if dvm.protocol == 'dmr' %}p25{% else %}dmr{% endif %}', '{% if dvm.protocol == 'dmr' %}P25 Phase 1{% else %}DMR Duplex{% endif %}')">
+        ⇄ Switch Mode
+      </button>
     </div>
   </div>
 
-  <div class="card" style="border-left: 4px solid var(--accent-blue);">
-    <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Identity & Site</div>
-    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">
-      {{ dvm.callsign }}
+  <!-- Station Quick Telemetry Strip -->
+  <div class="station-telemetry-strip">
+    <div class="telemetry-strip-item">
+      <span class="strip-label">FNE / Master Network</span>
+      <span class="strip-value">
+        {% if dvm.network_enabled %}
+          <span class="dot-online"></span> Peer #{{ dvm.network_peer_id }}
+        {% else %}
+          <span class="dot-muted"></span> Standalone RF
+        {% endif %}
+      </span>
     </div>
-    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
-      Site ID: <strong>{{ dvm.channel_id }}</strong> | Ch: <strong>#{{ dvm.channel_no }}</strong>
+    <div class="telemetry-strip-item">
+      <span class="strip-label">{% if dvm.protocol == 'dmr' %}Color Code / Slots{% else %}NAC / WACN{% endif %}</span>
+      <span class="strip-value font-mono">
+        {% if dvm.protocol == 'dmr' %}
+          CC {{ dvm.color_code }} &bull; Slot 1 &amp; 2
+        {% else %}
+          0x{{ dvm.nac }} &bull; {{ dvm.net_id }}
+        {% endif %}
+      </span>
     </div>
-  </div>
-
-  <div class="card" style="border-left: 4px solid {% if dvm.duplex %}var(--success){% else %}var(--warning){% endif %};">
-    <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">RF Mode</div>
-    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">
-      {% if dvm.duplex %}
-        <span style="color:var(--success);">Full Duplex</span>
-      {% else %}
-        <span style="color:var(--warning);">Simplex</span>
-      {% endif %}
+    <div class="telemetry-strip-item">
+      <span class="strip-label">Modem Interface</span>
+      <span class="strip-value font-mono">{{ dvm.modem_port }} @ {{ dvm.modem_speed }}</span>
     </div>
-    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
-      ADF7021 Dual Transceivers
-    </div>
-  </div>
-
-  <div class="card" style="border-left: 4px solid {% if dvm.network_enabled %}var(--success){% else %}var(--text-dim){% endif %};">
-    <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Network / FNE</div>
-    <div style="font-size:1.4rem; font-weight:700; margin-top:0.25rem;">
-      {% if dvm.network_enabled %}
-        <span style="color:var(--success);">Peer #{{ dvm.network_peer_id }}</span>
-      {% else %}
-        <span style="color:var(--text-dim);">Standalone RF</span>
-      {% endif %}
-    </div>
-    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
-      {% if dvm.network_enabled %}{{ dvm.network_address }}:{{ dvm.network_port }}{% else %}No Network Link{% endif %}
+    <div class="telemetry-strip-item">
+      <span class="strip-label">REST API Telemetry</span>
+      <span class="strip-value">
+        {% if dvm.rest_enabled %}
+          <span class="badge badge-success">Port {{ dvm.rest_port }}</span>
+        {% else %}
+          <span class="badge badge-muted">Inactive</span>
+        {% endif %}
+      </span>
     </div>
   </div>
 </div>
 
-<!-- Live Hardware Metrics (Auto-polled via HTMX) -->
+<!-- Live Hardware Metrics Hub (HTMX Polled every 3s) -->
 <div id="sys-stats-container" hx-get="/components/system-stats" hx-trigger="every 3s">
   {% include "components/sys_stats.html" %}
 </div>
 
-<!-- Main Row: Radio Config Details & Service Controls -->
-<div class="grid-2">
-  <!-- Radio Operational Details -->
+<!-- Main Row: Service Diagnostics & Operational Details -->
+<div class="grid-2" style="margin-top: 1.5rem;">
+  <!-- Service Controls Container -->
+  <div id="service-controls-container">
+    {% include "components/service_controls.html" %}
+  </div>
+
+  <!-- Operational Telemetry Card -->
   <div class="card">
     <div class="card-header">
-      <div class="card-title">📡 Active Radio Configuration</div>
-      <a href="{% if dvm.protocol == 'dmr' %}/dmr{% else %}/p25{% endif %}" class="btn btn-secondary btn-sm">Configure →</a>
+      <div class="card-title">📡 Station Parameter Highlights</div>
+      <a href="{% if dvm.protocol == 'dmr' %}/dmr{% else %}/p25{% endif %}" class="btn btn-secondary btn-sm">Full Editor →</a>
     </div>
 
     <div class="table-container">
-      <table>
+      <table class="table-clean">
         <tbody>
           <tr>
-            <td style="color:var(--text-dim); width:40%;">Active Mode</td>
+            <td class="text-dim">Active Protocol</td>
             <td><strong>{{ dvm.protocol|upper }}</strong> ({% if dvm.duplex %}Duplex Repeater{% else %}Simplex Hotspot{% endif %})</td>
           </tr>
           {% if dvm.protocol == 'dmr' %}
           <tr>
-            <td style="color:var(--text-dim);">DMR Color Code</td>
-            <td><span class="badge badge-cyan">{{ dvm.color_code }}</span></td>
+            <td class="text-dim">DMR Color Code</td>
+            <td><span class="badge badge-cyan">CC {{ dvm.color_code }}</span></td>
           </tr>
           <tr>
-            <td style="color:var(--text-dim);">DMR Network ID</td>
-            <td>{{ dvm.network_peer_id }}</td>
+            <td class="text-dim">DMR Network ID</td>
+            <td><code>{{ dvm.network_peer_id }}</code></td>
           </tr>
           <tr>
-            <td style="color:var(--text-dim);">Time Slots</td>
-            <td>Slot 1 (Active), Slot 2 (Active)</td>
+            <td class="text-dim">Active Timeslots</td>
+            <td>TS1 (Wide / Repeater) &bull; TS2 (Local / Cluster)</td>
           </tr>
           {% elif dvm.protocol == 'p25' %}
           <tr>
-            <td style="color:var(--text-dim);">P25 NAC (Hex)</td>
+            <td class="text-dim">Network Access Code (NAC)</td>
             <td><span class="badge badge-indigo">0x{{ dvm.nac }}</span></td>
           </tr>
           <tr>
-            <td style="color:var(--text-dim);">P25 WACN / SysID</td>
-            <td>WACN: <strong>{{ dvm.net_id }}</strong> | SysID: <strong>001</strong></td>
+            <td class="text-dim">P25 WACN / System ID</td>
+            <td>WACN: <code>{{ dvm.net_id }}</code> &bull; SysID: <code>001</code></td>
           </tr>
           {% endif %}
           <tr>
-            <td style="color:var(--text-dim);">Modem Port & Speed</td>
+            <td class="text-dim">Modem Serial Port</td>
             <td><code>{{ dvm.modem_port }}</code> @ {{ dvm.modem_speed }} baud</td>
           </tr>
           <tr>
-            <td style="color:var(--text-dim);">DVMHost REST API</td>
+            <td class="text-dim">REST Management Link</td>
             <td>
               {% if dvm.rest_enabled %}
-                <span class="badge badge-success">Port {{ dvm.rest_port }}</span>
+                <span class="badge badge-success">Port {{ dvm.rest_port }} (Listening)</span>
               {% else %}
-                <span class="badge badge-danger">Disabled</span>
+                <span class="badge badge-muted">Disabled in config</span>
               {% endif %}
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-  </div>
-
-  <!-- Service Controls Container -->
-  <div id="service-controls-container">
-    {% include "components/service_controls.html" %}
   </div>
 </div>
 

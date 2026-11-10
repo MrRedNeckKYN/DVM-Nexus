@@ -144,12 +144,31 @@ body.drawer-open {
 
 .nav-menu {
   list-style: none;
-  padding: 1rem 0.75rem;
+  padding: 0.75rem 0.5rem;
   flex-grow: 1;
 }
 
+.nav-section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 0.85rem 0.75rem 0.35rem 0.75rem;
+}
+
+.nav-section-label:first-child {
+  padding-top: 0.25rem;
+}
+
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .nav-item {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.2rem;
 }
 
 .nav-link {
@@ -1534,4 +1553,264 @@ html.device-desktop .restart-text {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Station Hero Hub & Modern Telemetry Grid
+   ========================================================================== */
+
+.station-hero-card {
+  background: linear-gradient(135deg, rgba(25, 34, 55, 0.95) 0%, rgba(19, 26, 43, 0.98) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important;
+  padding: 0 !important;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.station-hero-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 1.75rem;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.station-callsign-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.station-callsign-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.station-callsign-text {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.1;
+}
+
+.station-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  line-height: 1;
+}
+
+.pill-online {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.pill-offline {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.station-meta-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  line-height: 1.2;
+}
+
+.chip-dmr {
+  background: rgba(6, 182, 212, 0.12);
+  color: #38bdf8;
+  border-color: rgba(6, 182, 212, 0.3);
+  font-weight: 600;
+}
+
+.chip-p25 {
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.3);
+  font-weight: 600;
+}
+
+.chip-profile strong {
+  color: var(--text-main);
+}
+
+.station-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.station-telemetry-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1.1rem 1.75rem;
+  background: rgba(11, 15, 25, 0.55);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.telemetry-strip-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.strip-label {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.strip-value {
+  font-size: 0.925rem;
+  font-weight: 600;
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Telemetry Grid Styles */
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.telemetry-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  padding: 1.15rem 1.25rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.telemetry-card:hover {
+  border-color: rgba(6, 182, 212, 0.3);
+}
+
+.telemetry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.telemetry-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.telemetry-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.uptime-value {
+  font-size: 1.15rem;
+}
+
+.telemetry-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 0.65rem;
+}
+
+.telemetry-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bar-cyan { background: var(--accent-cyan); }
+.bar-blue { background: var(--accent-blue); }
+.bar-success { background: var(--success); }
+.bar-warning { background: var(--warning); }
+.bar-danger { background: var(--danger); }
+.bar-purple { background: var(--accent-purple); }
+
+.telemetry-footer {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.temp-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-success { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.dot-warning { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+.dot-danger { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+.dot-online { width: 7px; height: 7px; border-radius: 50%; background: var(--success); display: inline-block; box-shadow: 0 0 6px var(--success); }
+.dot-muted { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); display: inline-block; }
+
+.temp-cool { color: var(--success); }
+.temp-warm { color: var(--warning); }
+.temp-hot { color: var(--danger); }
+
+.table-clean {
+  width: 100%;
+}
+
+.table-clean td {
+  padding: 0.75rem 1rem;
+}
+
+.text-dim {
+  color: var(--text-dim);
+  width: 38%;
+}
+
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
