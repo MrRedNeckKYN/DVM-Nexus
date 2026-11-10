@@ -32,6 +32,7 @@ def test_diagnostics_health_checks():
     assert "yaml_indentation" in check_ids
     assert "stupid_check" in check_ids
     assert "daemon_mode" in check_ids
+    assert "logging_config" in check_ids
 
 
 def test_diagnostics_detects_bad_config_and_autofixes():

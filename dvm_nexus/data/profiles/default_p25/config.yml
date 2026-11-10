@@ -4,9 +4,9 @@ log:
   disableNonAuthoritiveLogging: false
   displayLevel: 1
   fileLevel: 1
-  useSyslog: false
-  filePath: .
-  activityFilePath: .
+  useSyslog: true
+  filePath: /opt/dvm
+  activityFilePath: /opt/dvm
   fileRoot: DVM
 network:
   enable: true

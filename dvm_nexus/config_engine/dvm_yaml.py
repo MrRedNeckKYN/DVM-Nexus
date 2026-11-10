@@ -74,12 +74,14 @@ class DVMConfigManager:
             if src.exists():
                 backup_manager.atomic_write(self.rid_acl_path, src.read_text(encoding="utf-8"))
 
-        # Fix file permissions on Linux so dvmhost can read them
+        # Fix directory and file permissions on Linux so dvmhost can read and write logs
         if os.name != "nt":
             try:
+                if self.dvm_dir.exists():
+                    self.dvm_dir.chmod(0o777)
                 for p in [self.config_path, self.iden_path, self.tg_rules_path, self.rid_acl_path]:
                     if p.exists():
-                        p.chmod(0o644)
+                        p.chmod(0o666)
             except Exception:
                 pass
 
@@ -100,8 +102,26 @@ class DVMConfigManager:
         # Enforce DVMHost systemd and execution requirements
         data["iAgreeNotToBeStupid"] = True
         data["daemon"] = False
+
+        # Configure logging for systemd journald and prevent file open panics
+        if "log" in data and isinstance(data["log"], dict):
+            data["log"]["useSyslog"] = True
+            if data["log"].get("filePath") in (".", None, ""):
+                data["log"]["filePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
+            if data["log"].get("activityFilePath") in (".", None, ""):
+                data["log"]["activityFilePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
+
         content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
         backup_manager.atomic_write(self.config_path, content)
+
+        if os.name != "nt":
+            try:
+                if self.dvm_dir.exists():
+                    self.dvm_dir.chmod(0o777)
+                if self.config_path.exists():
+                    self.config_path.chmod(0o666)
+            except Exception:
+                pass
 
     def get_active_protocol(self) -> str:
         """Detect whether DMR or P25 is active."""

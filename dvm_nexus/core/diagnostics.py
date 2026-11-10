@@ -282,6 +282,32 @@ class DiagnosticsEngine:
                     "fix_id": "set_daemon_false",
                 })
 
+            # Check logging configuration & target directory
+            log_conf = cfg_dict.get("log", {})
+            use_syslog = log_conf.get("useSyslog", False)
+            file_path = str(log_conf.get("filePath", "."))
+
+            if not use_syslog and file_path in (".", ""):
+                checks.append({
+                    "id": "logging_config",
+                    "name": "Logging Target & Permissions",
+                    "status": "fail",
+                    "badge": "UNSAFE PATH",
+                    "summary": "log.useSyslog is false and filePath is relative ('.'). DVMHost may crash with 'FATAL PANIC; unable to open the log file'.",
+                    "remedy": "Click Auto-Repair to enable syslog integration and set log directory to /opt/dvm.",
+                    "auto_fixable": True,
+                    "fix_id": "fix_logging_config",
+                })
+            else:
+                checks.append({
+                    "id": "logging_config",
+                    "name": "Logging Target & Permissions",
+                    "status": "pass",
+                    "badge": "JOURNAL READY",
+                    "summary": "Logging is directed to systemd journal and configured safely.",
+                    "auto_fixable": False,
+                })
+
         # ----------------------------------------------------------------------
         # Check 3: Modem Serial Port & Linux Hardware UART
         # ----------------------------------------------------------------------
@@ -404,6 +430,21 @@ class DiagnosticsEngine:
                 fixes_applied.append("Set 'daemon: false' in config.yml (systemd foreground supervision)")
                 modified = True
 
+            # Enforce logging settings for systemd journald
+            if "log" in cfg and isinstance(cfg["log"], dict):
+                if not cfg["log"].get("useSyslog"):
+                    cfg["log"]["useSyslog"] = True
+                    fixes_applied.append("Enabled 'log.useSyslog: true' (systemd journal output)")
+                    modified = True
+                if cfg["log"].get("filePath") in (".", None, ""):
+                    cfg["log"]["filePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
+                    fixes_applied.append("Set 'log.filePath: /opt/dvm' absolute path")
+                    modified = True
+                if cfg["log"].get("activityFilePath") in (".", None, ""):
+                    cfg["log"]["activityFilePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
+                    fixes_applied.append("Set 'log.activityFilePath: /opt/dvm' absolute path")
+                    modified = True
+
             # Check if raw config has yaml-cpp incompatible sequence indentation
             raw_cfg = cfg_file.read_text(encoding="utf-8") if cfg_file.exists() else ""
             bad_indent = False
@@ -430,13 +471,15 @@ class DiagnosticsEngine:
                         backup_manager.atomic_write(target, src_example.read_text(encoding="utf-8"))
                         fixes_applied.append(f"Restored missing data table '{tbl}' from template")
 
-            # 4. Fix permissions on Linux so dvmhost can read files
+            # 4. Fix permissions on Linux so dvmhost can read and write files/logs
             if os.name != "nt":
                 try:
+                    if self.dvm_dir.exists():
+                        self.dvm_dir.chmod(0o777)
                     for p in [cfg_file, self.dvm_dir / "iden_table.dat", self.dvm_dir / "rid_acl.dat", self.dvm_dir / "talkgroup_rules.yml"]:
                         if p.exists():
-                            p.chmod(0o644)
-                    fixes_applied.append("Set file permissions (0644) for dvmhost")
+                            p.chmod(0o666)
+                    fixes_applied.append("Set read/write permissions (0777/0666) on /opt/dvm for dvmhost")
                 except Exception:
                     pass
 
