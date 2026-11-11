@@ -373,6 +373,59 @@ class DiagnosticsEngine:
                 "summary": f"Modem interface is configured for real hardware '{modem_proto_type}'.",
                 "auto_fixable": False,
             })
+
+        # Safety Check: Voice Channel RPC Port Collision & Authoritative Master Mode
+        sys_cfg = cfg_dict.get("system", {}).get("config", {})
+        main_rpc_port = cfg_dict.get("network", {}).get("rpcPort", 9890)
+        has_rpc_collision = False
+        if isinstance(sys_cfg, dict) and "voiceChNo" in sys_cfg and isinstance(sys_cfg["voiceChNo"], list):
+            for vc in sys_cfg["voiceChNo"]:
+                if isinstance(vc, dict) and vc.get("rpcPort") == main_rpc_port and main_rpc_port != 0:
+                    has_rpc_collision = True
+                    break
+
+        if has_rpc_collision:
+            checks.append({
+                "id": "vc_rpc_collision",
+                "name": "Voice Channel RPC Conflict",
+                "status": "fail",
+                "badge": "PORT CONFLICT",
+                "summary": f"Voice Channel RPC port ({main_rpc_port}) collides with DVMHost main RPC port. Causes 'Detected possible misconfiguration!' warning.",
+                "remedy": "Click Auto-Repair to set Voice Channel RPC port to 0 (internal standalone mode).",
+                "auto_fixable": True,
+                "fix_id": "fix_vc_rpc",
+            })
+        else:
+            checks.append({
+                "id": "vc_rpc_collision",
+                "name": "Voice Channel RPC Configuration",
+                "status": "pass",
+                "badge": "RPC CLEAN",
+                "summary": "Voice channel RPC bindings do not collide with main DVMHost RPC daemon.",
+                "auto_fixable": False,
+            })
+
+        # Safety Check: Non-Authoritative Master Warning
+        if isinstance(sys_cfg, dict) and sys_cfg.get("authoritative") is False:
+            checks.append({
+                "id": "authoritative_mode",
+                "name": "Site Controller Master Authority",
+                "status": "warn",
+                "badge": "SUBORDINATE",
+                "summary": "Host is non-authoritative! Requires an external secondary site controller. For single hotspot/repeater operation, authoritative must be true.",
+                "remedy": "Click Auto-Repair to enable authoritative master mode.",
+                "auto_fixable": True,
+                "fix_id": "fix_authoritative",
+            })
+        else:
+            checks.append({
+                "id": "authoritative_mode",
+                "name": "Site Controller Master Authority",
+                "status": "pass",
+                "badge": "AUTHORITATIVE",
+                "summary": "DVMHost is running in Authoritative Master mode.",
+                "auto_fixable": False,
+            })
         if os.name != "nt":
             if os.path.exists(uart_port):
                 checks.append({
@@ -584,6 +637,22 @@ class DiagnosticsEngine:
                             target_port = "/dev/ttyAMA0" if (os.name != "nt" and os.path.exists("/dev/ttyAMA0")) else "/dev/ttyAMA0"
                             uart_sub["port"] = target_port
                             fixes_applied.append(f"Auto-routed modem serial port to hardware GPIO '{target_port}'")
+                            modified = True
+
+            # Enforce Authoritative Master Mode & fix Voice Channel RPC collision
+            sys_config_blk = cfg.get("system", {}).get("config", {})
+            if isinstance(sys_config_blk, dict):
+                if sys_config_blk.get("authoritative") is not True:
+                    sys_config_blk["authoritative"] = True
+                    fixes_applied.append("Set 'system.config.authoritative: true' (Authoritative Site Master)")
+                    modified = True
+
+                root_rpc = cfg.get("network", {}).get("rpcPort", 9890)
+                if "voiceChNo" in sys_config_blk and isinstance(sys_config_blk["voiceChNo"], list):
+                    for vc in sys_config_blk["voiceChNo"]:
+                        if isinstance(vc, dict) and vc.get("rpcPort") == root_rpc and root_rpc != 0:
+                            vc["rpcPort"] = 0
+                            fixes_applied.append("Set 'voiceChNo.rpcPort: 0' to eliminate RPC port conflict with main host daemon")
                             modified = True
 
             # Enforce logging settings for systemd journald

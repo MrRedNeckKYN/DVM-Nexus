@@ -182,6 +182,28 @@ class DVMConfigManager:
         if not modem_blk["protocol"]["uart"].get("speed"):
             modem_blk["protocol"]["uart"]["speed"] = 115200
 
+        # Safety Net: Authoritative Standalone Mode and Voice Channel RPC conflict prevention
+        # Prevents: "W: (HOST) Detected possible misconfiguration! Voice Channel RPC Address/Port and the configured RPC Address/Port are the same!"
+        # Prevents: "W: (HOST) Host is non-authoritative! This requires a second instance configured in site controller mode."
+        sys_config = data.get("system", {}).get("config", {})
+        if isinstance(sys_config, dict):
+            # Enforce authoritative master mode unless explicitly configured otherwise
+            if "authoritative" not in sys_config:
+                sys_config["authoritative"] = True
+
+            # If voiceChNo exists in standalone mode, its rpcPort must not collide with system.rpcPort
+            root_rpc_port = data.get("network", {}).get("rpcPort", 9890)
+            if "voiceChNo" in sys_config and isinstance(sys_config["voiceChNo"], list):
+                for vc in sys_config["voiceChNo"]:
+                    if isinstance(vc, dict):
+                        # If VC RPC port is set to the same port as DVMHost's main RPC port (e.g. 9890),
+                        # DVMHost flags an invalid loopback RPC configuration. For standalone single-station,
+                        # the VC RPC port should be 0 (disabled/internal) or distinct.
+                        vc_rpc_port = vc.get("rpcPort")
+                        if vc_rpc_port == root_rpc_port:
+                            vc["rpcPort"] = 0
+                            log_audit("SAFETY", "VC_RPC_COLLISION_FIX", f"Set voiceChNo rpcPort to 0 to prevent RPC port collision with main daemon (port {root_rpc_port})")
+
         # Safety block: Enforce single-protocol mutual exclusion for hotspot / UART modems.
         # ADF7021 MMDVM_HS firmware aborts with NAK 32 (HS_NO_DUAL_MODE) if multiple protocols are enabled.
         protocols = data.get("protocols", {})
