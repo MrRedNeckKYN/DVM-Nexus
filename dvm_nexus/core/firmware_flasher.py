@@ -161,8 +161,17 @@ class FirmwareFlasher:
                     self.state = "failed"
                     return {"success": False, "message": "Failed to clone firmware repository."}
 
-                # 4. Prepare Config.h and build binary
+                # 4. Prepare Defines.h / Config.h and build binary
                 if "dual" in target_key.lower():
+                    defines_h = build_dir / "Defines.h"
+                    if defines_h.exists():
+                        d_txt = defines_h.read_text(encoding="utf-8", errors="ignore")
+                        d_txt = d_txt.replace("// #define DUPLEX", "#define DUPLEX").replace("//#define DUPLEX", "#define DUPLEX")
+                        if "#define DUPLEX" not in d_txt:
+                            d_txt = "#define DUPLEX\n" + d_txt
+                        defines_h.write_text(d_txt, encoding="utf-8")
+                        self._append_log("Enforced #define DUPLEX in Defines.h for dual ADF7021 hardware.")
+
                     cfg_src = build_dir / "configs" / "MMDVM_HS_Dual_Hat.h"
                     if not cfg_src.exists() and (build_dir / "configs").exists():
                         for cand in (build_dir / "configs").glob("*Dual*.h"):
@@ -172,17 +181,24 @@ class FirmwareFlasher:
                         shutil.copyfile(cfg_src, build_dir / "Config.h")
                         self._append_log(f"Applied configuration template: {cfg_src.name}")
 
-                # Ensure #define DUPLEX is active for dual hat targets
-                config_h = build_dir / "Config.h"
-                if config_h.exists():
-                    c_txt = config_h.read_text(encoding="utf-8", errors="ignore")
-                    if "dual" in target_key.lower():
+                    config_h = build_dir / "Config.h"
+                    if config_h.exists():
+                        c_txt = config_h.read_text(encoding="utf-8", errors="ignore")
+                        c_txt = c_txt.replace("//#define DUPLEX", "#define DUPLEX").replace("// #define DUPLEX", "#define DUPLEX")
                         if "#define DUPLEX" not in c_txt:
-                            c_txt = c_txt.replace("//#define DUPLEX", "#define DUPLEX").replace("// #define DUPLEX", "#define DUPLEX")
-                            if "#define DUPLEX" not in c_txt:
-                                c_txt = "#define DUPLEX\n" + c_txt
-                            config_h.write_text(c_txt, encoding="utf-8")
-                            self._append_log("Enforced #define DUPLEX in Config.h for dual ADF7021 hardware.")
+                            c_txt = "#define DUPLEX\n" + c_txt
+                        config_h.write_text(c_txt, encoding="utf-8")
+                        self._append_log("Enforced #define DUPLEX in Config.h for dual ADF7021 hardware.")
+
+                # Clean prior build artifacts
+                cmd_clean = ["make", "-f", "Makefile.STM32FX", "clean"]
+                p_clean = await asyncio.create_subprocess_exec(
+                    *cmd_clean,
+                    cwd=str(build_dir),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await p_clean.communicate()
 
                 self._append_log(f"Compiling target '{target['make_target']}'...")
                 cmd_make = ["make", "-f", "Makefile.STM32FX", target["make_target"]]
@@ -265,7 +281,9 @@ class FirmwareFlasher:
                     subprocess.run(["pinctrl", "set", "21", "op", "dh"], check=False)
                     await asyncio.sleep(0.5)
 
-                # 8. Start dvmhost
+                # 8. Start dvmhost with safety pre-flight check
+                self._append_log("Pre-flight safety audit: Verifying single-protocol mutual exclusion in /opt/dvm/config.yml...")
+                service_controller.preflight_safety_check()
                 self._append_log("Starting dvmhost service...")
                 service_controller.start()
                 await asyncio.sleep(2.0)

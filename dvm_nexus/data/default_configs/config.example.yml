@@ -214,7 +214,7 @@ protocols:
     #
     p25:
         # Flag indicating whether or not the protocol is enabled.
-        enable: true
+        enable: false
         # Sets the number of TDU preambles to transmit at the start of a transmission.
         tduPreambleCount: 6
 

@@ -10,8 +10,9 @@ import subprocess
 import yaml
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
-from dvm_nexus.core.config import settings, DEFAULT_CONFIGS_DIR
+from dvm_nexus.core.config import settings, DEFAULT_CONFIGS_DIR, PROFILES_DIR
 from dvm_nexus.config_engine.backup_manager import backup_manager
+from dvm_nexus.core.database import log_audit
 
 
 class IndentedSafeDumper(yaml.SafeDumper):
@@ -75,6 +76,27 @@ class DVMConfigManager:
             if src.exists():
                 backup_manager.atomic_write(self.rid_acl_path, src.read_text(encoding="utf-8"))
 
+        # Safety block: Self-heal active configuration if legacy multi-protocol collision is present
+        try:
+            if self.config_path.exists():
+                raw = self.config_path.read_text(encoding="utf-8")
+                data = yaml.safe_load(raw)
+                if isinstance(data, dict):
+                    protocols = data.get("protocols", {})
+                    if isinstance(protocols, dict):
+                        dmr_on = bool(protocols.get("dmr", {}).get("enable", False)) if isinstance(protocols.get("dmr"), dict) else False
+                        p25_on = bool(protocols.get("p25", {}).get("enable", False)) if isinstance(protocols.get("p25"), dict) else False
+                        nxdn_on = bool(protocols.get("nxdn", {}).get("enable", False)) if isinstance(protocols.get("nxdn"), dict) else False
+                        if sum([dmr_on, p25_on, nxdn_on]) > 1:
+                            protocols.setdefault("p25", {})["enable"] = False
+                            if "nxdn" in protocols and isinstance(protocols["nxdn"], dict):
+                                protocols["nxdn"]["enable"] = False
+                            content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
+                            backup_manager.atomic_write(self.config_path, content)
+                            log_audit("SAFETY", "AUTO_HEAL_ACTIVE_CONFIG", "Self-healed multi-protocol collision in active config.yml")
+        except Exception:
+            pass
+
         # Fix directory and file permissions on Linux so dvmhost can read and write logs
         if os.name != "nt":
             try:
@@ -113,6 +135,29 @@ class DVMConfigManager:
         data["log"]["filePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
         data["log"]["activityFilePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
         data["log"]["fileRoot"] = data["log"].get("fileRoot") or "DVM"
+
+        # Safety block: Enforce single-protocol mutual exclusion for hotspot / UART modems.
+        # ADF7021 MMDVM_HS firmware aborts with NAK 32 (HS_NO_DUAL_MODE) if multiple protocols are enabled.
+        protocols = data.get("protocols", {})
+        if isinstance(protocols, dict):
+            dmr_on = bool(protocols.get("dmr", {}).get("enable", False)) if isinstance(protocols.get("dmr"), dict) else False
+            p25_on = bool(protocols.get("p25", {}).get("enable", False)) if isinstance(protocols.get("p25"), dict) else False
+            nxdn_on = bool(protocols.get("nxdn", {}).get("enable", False)) if isinstance(protocols.get("nxdn"), dict) else False
+
+            if sum([dmr_on, p25_on, nxdn_on]) > 1:
+                if "p25" in summary.lower() or (p25_on and not dmr_on):
+                    protocols.setdefault("dmr", {})["enable"] = False
+                    if "nxdn" in protocols and isinstance(protocols["nxdn"], dict):
+                        protocols["nxdn"]["enable"] = False
+                else:
+                    protocols.setdefault("p25", {})["enable"] = False
+                    if "nxdn" in protocols and isinstance(protocols["nxdn"], dict):
+                        protocols["nxdn"]["enable"] = False
+                log_audit(
+                    "SAFETY",
+                    "PROTOCOL_MUTUAL_EXCLUSION",
+                    "Enforced single-protocol mode in config.yml to prevent modem NAK 32 (HS_NO_DUAL_MODE)"
+                )
 
         content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
         backup_manager.atomic_write(self.config_path, content)

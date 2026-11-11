@@ -119,10 +119,22 @@ class ServiceController:
             self._status_timestamp = now
             return err_dict
 
+    def preflight_safety_check(self) -> None:
+        """
+        Safety Block: Pre-flight audit & self-healing before starting dvmhost.service.
+        Enforces single-protocol mutual exclusion to prevent modem NAK reason 32 (HS_NO_DUAL_MODE).
+        """
+        try:
+            from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+            dvm_config_manager.ensure_active_config_exists()
+        except Exception:
+            pass
+
     def start(self) -> Dict[str, Any]:
         """Start the dvmhost service."""
         self._cached_status = None
         self._status_timestamp = 0.0
+        self.preflight_safety_check()
         log_audit("SERVICE", "START", f"Requesting start of {self.service_name}")
         if not self.has_systemctl:
             self._dev_simulated_running = True
@@ -165,6 +177,7 @@ class ServiceController:
         """Restart the dvmhost service."""
         self._cached_status = None
         self._status_timestamp = 0.0
+        self.preflight_safety_check()
         log_audit("SERVICE", "RESTART", f"Requesting restart of {self.service_name}")
         if not self.has_systemctl:
             self._dev_simulated_running = True

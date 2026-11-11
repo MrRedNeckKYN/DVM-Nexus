@@ -120,3 +120,29 @@ def validate_radio_id(rid: int) -> bool:
 def validate_talkgroup(tgid: int) -> bool:
     """Validate Talkgroup ID (1 to 16,777,215)."""
     return 1 <= int(tgid) <= 16777215
+
+
+def validate_protocol_concurrency(config_data: Dict[str, Any]) -> List[str]:
+    """
+    Safety Block: Validates protocol mutual exclusion for ADF7021 / MMDVM hotspot modems.
+    Hotspot firmwares reject multi-protocol concurrent operation with NAK 32 (HS_NO_DUAL_MODE).
+    """
+    errors: List[str] = []
+    protocols = config_data.get("protocols", {})
+    if not isinstance(protocols, dict):
+        return errors
+
+    active_protocols = []
+    for proto in ("dmr", "p25", "nxdn"):
+        p_dict = protocols.get(proto)
+        if isinstance(p_dict, dict) and p_dict.get("enable") is True:
+            active_protocols.append(proto.upper())
+
+    if len(active_protocols) > 1:
+        errors.append(
+            f"Hotspot modem conflict: Multiple protocols enabled ({', '.join(active_protocols)}). "
+            f"ADF7021 MMDVM hotspot hardware requires single-protocol mode; enabling more than one "
+            f"triggers modem failure with NAK reason 32 (HS_NO_DUAL_MODE). Please enable only one protocol."
+        )
+
+    return errors

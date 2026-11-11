@@ -8,6 +8,7 @@ from dvm_nexus.config_engine.network_validator import (
     validate_p25_settings,
     validate_radio_id,
     validate_talkgroup,
+    validate_protocol_concurrency,
 )
 from dvm_nexus.config_engine.diff_engine import (
     generate_unified_diff,
@@ -84,3 +85,42 @@ def test_atomic_backup_manager(tmp_path):
     snapshot = mgr.create_backup(summary="Test snapshot", changed_files=["test.yml"])
     assert snapshot.exists()
     assert (snapshot / "test.yml").exists()
+
+
+def test_protocol_concurrency_safety_block():
+    # Single protocol enabled is valid
+    valid_cfg = {
+        "protocols": {
+            "dmr": {"enable": True},
+            "p25": {"enable": False},
+        }
+    }
+    assert validate_protocol_concurrency(valid_cfg) == []
+
+    # Multi-protocol collision triggers safety error
+    conflict_cfg = {
+        "protocols": {
+            "dmr": {"enable": True},
+            "p25": {"enable": True},
+        }
+    }
+    errs = validate_protocol_concurrency(conflict_cfg)
+    assert len(errs) == 1
+    assert "HS_NO_DUAL_MODE" in errs[0]
+    assert "DMR, P25" in errs[0]
+
+
+def test_dvm_config_manager_mutual_exclusion_enforcement(tmp_path):
+    mgr = DVMConfigManager(dvm_dir=tmp_path)
+    # Save a config attempting to enable both DMR and P25
+    data = {
+        "protocols": {
+            "dmr": {"enable": True},
+            "p25": {"enable": True},
+        }
+    }
+    mgr.save_config_dict(data, summary="Test Save")
+    loaded = mgr.load_config_dict()
+    # DMR must remain True, P25 must be forced to False
+    assert loaded["protocols"]["dmr"]["enable"] is True
+    assert loaded["protocols"]["p25"]["enable"] is False
