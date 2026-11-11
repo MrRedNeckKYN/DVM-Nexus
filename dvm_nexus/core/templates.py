@@ -46,10 +46,17 @@ def get_global_template_context() -> Dict[str, Any]:
     except Exception:
         ver = "1.0.8"
 
+    try:
+        from dvm_nexus.core.service_controller import service_controller
+        service_info = service_controller.get_status()
+    except Exception:
+        service_info = None
+
     return {
         "active_protocol": proto,
         "active_profile": prof,
         "app_version": ver,
+        "service": service_info,
     }
 
 
