@@ -282,7 +282,7 @@ class DVMConfigManager:
 
     # Talkgroups management
     def load_talkgroup_rules(self) -> List[Dict[str, Any]]:
-        """Load and parse talkgroup_rules.yml."""
+        """Load and parse talkgroup_rules.yml (supporting official groupVoice and legacy rules formats)."""
         self.ensure_active_config_exists()
         if not self.tg_rules_path.exists():
             return []
@@ -290,21 +290,86 @@ class DVMConfigManager:
             data = yaml.safe_load(self.tg_rules_path.read_text(encoding="utf-8"))
             rules = []
             if isinstance(data, dict):
-                # Format can be {rules: [...]} or list
+                if "groupVoice" in data and isinstance(data["groupVoice"], list):
+                    for item in data["groupVoice"]:
+                        if not isinstance(item, dict):
+                            continue
+                        src = item.get("source", {})
+                        tgid = src.get("tgid") or item.get("id") or item.get("tgid")
+                        if tgid is None:
+                            continue
+                        name = item.get("name") or f"Talkgroup {tgid}"
+                        slot = src.get("slot") or item.get("slot") or 1
+                        cfg = item.get("config", {})
+                        parrot = bool(cfg.get("parrot", False))
+                        active = bool(cfg.get("active", True))
+                        rules.append({
+                            "id": int(tgid),
+                            "tgid": int(tgid),
+                            "name": str(name),
+                            "slot": int(slot),
+                            "parrot": parrot,
+                            "active": active,
+                        })
+                    return rules
                 items = data.get("rules", []) or data.get("talkgroups", [])
                 if isinstance(items, list):
-                    rules = items
+                    for r in items:
+                        if isinstance(r, dict):
+                            tgid = r.get("id") or r.get("tgid", 1)
+                            rules.append({
+                                "id": int(tgid),
+                                "tgid": int(tgid),
+                                "name": str(r.get("name", f"Talkgroup {tgid}")),
+                                "slot": int(r.get("slot", 1)),
+                                "parrot": bool(r.get("parrot", False)),
+                                "active": bool(r.get("active", True)),
+                            })
+                    return rules
             elif isinstance(data, list):
-                rules = data
+                for r in data:
+                    if isinstance(r, dict):
+                        tgid = r.get("id") or r.get("tgid", 1)
+                        rules.append({
+                            "id": int(tgid),
+                            "tgid": int(tgid),
+                            "name": str(r.get("name", f"Talkgroup {tgid}")),
+                            "slot": int(r.get("slot", 1)),
+                            "parrot": bool(r.get("parrot", False)),
+                            "active": bool(r.get("active", True)),
+                        })
             return rules
         except Exception:
             return []
 
     def save_talkgroup_rules(self, rules: List[Dict[str, Any]], summary: str = "Update talkgroups"):
-        """Save talkgroup rules to talkgroup_rules.yml."""
+        """Save talkgroup rules to talkgroup_rules.yml in official DVMHost groupVoice format."""
         self.ensure_active_config_exists()
         backup_manager.create_backup(summary=summary, changed_files=["talkgroup_rules.yml"])
-        content = yaml.dump({"rules": rules}, default_flow_style=False, sort_keys=False)
+        
+        gv_list = []
+        for r in rules:
+            tgid = int(r.get("id") or r.get("tgid", 1))
+            gv_list.append({
+                "name": str(r.get("name", f"Talkgroup {tgid}")),
+                "config": {
+                    "active": bool(r.get("active", True)),
+                    "affiliated": False,
+                    "parrot": bool(r.get("parrot", False)),
+                    "inclusion": [],
+                    "exclusion": [],
+                    "rewrite": [],
+                    "always": [],
+                    "preferred": [],
+                    "rid_permitted": [],
+                },
+                "source": {
+                    "tgid": tgid,
+                    "slot": int(r.get("slot", 1)),
+                }
+            })
+        
+        content = yaml.dump({"groupVoice": gv_list}, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
         backup_manager.atomic_write(self.tg_rules_path, content)
 
     # Radio ID ACL management

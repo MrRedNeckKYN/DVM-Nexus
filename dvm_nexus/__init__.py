@@ -2,4 +2,4 @@
 DVM Nexus - Modern Web Management Interface for DVMHost
 """
 
-__version__ = "1.0.35"
+__version__ = "1.0.36"

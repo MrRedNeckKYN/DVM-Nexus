@@ -1,0 +1,53 @@
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>TGID</th>
+        <th>Talkgroup Name / Alias</th>
+        <th>Type</th>
+        <th style="width: 80px; text-align: center;">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tg in talkgroups %}
+      <tr>
+        <td><strong>{{ tg.id or tg.tgid }}</strong></td>
+        <td>{{ tg.name or 'Talkgroup ' ~ (tg.id or tg.tgid) }}</td>
+        <td>
+          {% if tg.parrot %}
+            <span class="badge badge-warning">🦜 Parrot Echo Audio</span>
+          {% elif (tg.id or tg.tgid) == 65535 %}
+            <span class="badge badge-indigo">📢 All-Call / Broadcast</span>
+          {% else %}
+            <span class="badge badge-cyan">P25 Group</span>
+          {% endif %}
+        </td>
+        <td style="text-align: center;">
+          <button 
+            hx-post="/p25/talkgroups/delete/{{ tg.id or tg.tgid }}" 
+            hx-target="#p25-tg-container" 
+            hx-swap="innerHTML"
+            class="btn btn-danger btn-sm"
+            onclick="return confirm('Delete Talkgroup {{ tg.id or tg.tgid }}?')">
+            Delete
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" style="text-align:center; color:var(--text-dim); padding: 1.5rem;">
+          No P25 talkgroups configured. Add Talkgroup 1 below so your radio can transmit!
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if toast %}
+  <div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+    <div class="toast toast-{{ toast.type }}">
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
+{% endif %}

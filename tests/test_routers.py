@@ -133,3 +133,18 @@ def test_save_updates_active_config(client):
     cfg = dvm_config_manager.load_config_dict()
     assert cfg["system"]["config"]["nac"] == "456"
     assert cfg["protocols"]["p25"]["enable"] is True
+
+
+def test_p25_talkgroups_add_and_delete(client):
+    """Test adding and deleting P25 talkgroups."""
+    add_resp = client.post("/p25/talkgroups/add", data={
+        "tgid": 9991,
+        "name": "Test P25 TG",
+        "parrot": "false",
+    })
+    assert add_resp.status_code == 200
+    assert "9991" in add_resp.text
+
+    del_resp = client.post("/p25/talkgroups/delete/9991")
+    assert del_resp.status_code == 200
+    assert "Deleted Talkgroup 9991" in del_resp.text

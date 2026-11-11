@@ -45,6 +45,7 @@ async def p25_page(request: Request):
     tx_freq_mhz, rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
     if not duplex:
         rx_freq_mhz = tx_freq_mhz
+    talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
 
     return render_template(
@@ -66,6 +67,7 @@ async def p25_page(request: Request):
             "iden_entries": iden_entries,
             "active_tx_mhz": tx_freq_mhz,
             "active_rx_mhz": rx_freq_mhz,
+            "talkgroups": talkgroups,
             "rids": rids,
         }
     )
@@ -248,6 +250,50 @@ async def p25_save(
         request,
         "components/toast.html",
         {"type": "success", "message": msg}
+    )
+
+
+# Talkgroup rules endpoints for P25
+@router.post("/p25/talkgroups/add", response_class=HTMLResponse)
+async def p25_tg_add(
+    request: Request,
+    tgid: int = Form(...),
+    name: str = Form(...),
+    parrot: bool = Form(False),
+):
+    """Add a talkgroup to talkgroup_rules.yml for P25."""
+    rules = dvm_config_manager.load_talkgroup_rules()
+    for r in rules:
+        if r.get("id") == tgid or r.get("tgid") == tgid:
+            return render_template(
+                request,
+                "components/toast.html",
+                {"type": "error", "message": f"Talkgroup {tgid} already exists"}
+            )
+
+    rules.append({"id": tgid, "tgid": tgid, "name": name, "slot": 1, "parrot": parrot, "active": True})
+    dvm_config_manager.save_talkgroup_rules(rules, summary=f"Add P25 talkgroup {tgid} ({name})")
+    log_audit("P25", "ADD_TG", f"Added P25 TG {tgid} ({name}) Parrot={parrot}")
+
+    return render_template(
+        request,
+        "components/p25_tg_table.html",
+        {"talkgroups": rules, "toast": {"type": "success", "message": f"Added Talkgroup {tgid} ({name})"}}
+    )
+
+
+@router.post("/p25/talkgroups/delete/{tgid}", response_class=HTMLResponse)
+async def p25_tg_delete(request: Request, tgid: int):
+    """Delete a talkgroup from talkgroup_rules.yml."""
+    rules = dvm_config_manager.load_talkgroup_rules()
+    filtered = [r for r in rules if r.get("id") != tgid and r.get("tgid") != tgid]
+    dvm_config_manager.save_talkgroup_rules(filtered, summary=f"Delete P25 talkgroup {tgid}")
+    log_audit("P25", "DEL_TG", f"Deleted TG {tgid}")
+
+    return render_template(
+        request,
+        "components/p25_tg_table.html",
+        {"talkgroups": filtered, "toast": {"type": "success", "message": f"Deleted Talkgroup {tgid}"}}
     )
 
 

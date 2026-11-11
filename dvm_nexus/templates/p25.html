@@ -484,6 +484,51 @@
   </div>
 </form>
 
+<!-- P25 Talkgroup Rules Table -->
+<div class="card" style="border-left:4px solid var(--accent-indigo);">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <div class="card-title">👥 P25 Talkgroup Rules &amp; Access Control</div>
+      <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">
+        Defines authorized talkgroups in <code>talkgroup_rules.yml</code>. Set your handheld radio to transmit on one of these TGIDs.
+      </div>
+    </div>
+    <span class="badge badge-indigo">talkgroup_rules.yml</span>
+  </div>
+
+  <!-- Add Talkgroup Form -->
+  <form hx-post="/p25/talkgroups/add" hx-target="#p25-tg-container" hx-swap="innerHTML" style="margin-bottom:1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+    <div style="width:130px;">
+      <label class="form-label">TGID (Number)</label>
+      <input type="number" name="tgid" class="form-control font-mono" placeholder="e.g. 1" required>
+    </div>
+    <div style="flex:2; min-width:160px;">
+      <label class="form-label">Talkgroup Name / Alias</label>
+      <input type="text" name="name" class="form-control" placeholder="e.g. GMRS / Local P25" required>
+    </div>
+    <div style="width:170px;">
+      <label class="form-label">Talkgroup Function</label>
+      <select name="parrot" class="form-control">
+        <option value="false">Standard Group Voice</option>
+        <option value="true">🦜 Parrot (Audio Echo Test)</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm" style="height:38px;">+ Add Talkgroup</button>
+  </form>
+
+  <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+    <span style="font-size:0.75rem; color:var(--text-dim); align-self:center;">Quick Presets:</span>
+    <button type="button" class="btn btn-sm btn-outline-cyan" onclick="quickAddTG(1, 'Talkgroup 1', false)">+ TG 1 (Default)</button>
+    <button type="button" class="btn btn-sm btn-outline-cyan" onclick="quickAddTG(9990, 'Parrot Audio Echo', true)">+ TG 9990 (Parrot Echo)</button>
+    <button type="button" class="btn btn-sm btn-outline-cyan" onclick="quickAddTG(101, 'Tactical 101', false)">+ TG 101</button>
+    <button type="button" class="btn btn-sm btn-outline-cyan" onclick="quickAddTG(65535, 'All-Call Broadcast', false)">+ TG 65535 (All-Call)</button>
+  </div>
+
+  <div id="p25-tg-container">
+    {% include "components/p25_tg_table.html" %}
+  </div>
+</div>
+
 <!-- IDEN Bandplan Table -->
 <div class="card">
   <div class="card-header">
@@ -574,6 +619,15 @@ function syncDuplexMode(isDuplex) {
   if (!isDuplex && rxInput && txInput) {
     rxInput.value = txInput.value;
   }
+}
+
+function quickAddTG(tgid, name, parrot) {
+  const form = document.querySelector('form[hx-post="/p25/talkgroups/add"]');
+  if (!form) return;
+  form.querySelector('input[name="tgid"]').value = tgid;
+  form.querySelector('input[name="name"]').value = name;
+  form.querySelector('select[name="parrot"]').value = parrot ? 'true' : 'false';
+  htmx.trigger(form, 'submit');
 }
 </script>
 {% endblock %}
