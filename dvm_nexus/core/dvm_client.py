@@ -116,9 +116,19 @@ class DVMHostClient:
                 except Exception:
                     payload = {"raw": resp.text}
 
-                # Check for 401 unauthorized
-                if resp.status_code == 401 or (isinstance(payload, dict) and payload.get("status") == 401):
+                # Check for 401 unauthorized or invalid token
+                has_token_err = False
+                if resp.status_code == 401:
+                    has_token_err = True
+                elif isinstance(payload, dict):
+                    status_code = payload.get("status")
+                    msg = str(payload.get("message", "")).lower()
+                    if status_code in (401, 403) or "illegal authentication token" in msg or "invalid token" in msg or "expired" in msg:
+                        has_token_err = True
+
+                if has_token_err:
                     if retry_auth:
+                        logger.debug("Stale or illegal DVMHost token detected; re-authenticating...")
                         self._token = None
                         if self.authenticate():
                             headers["X-DVM-Auth-Token"] = self._token
@@ -134,11 +144,13 @@ class DVMHostClient:
                             except Exception:
                                 retry_payload = {"raw": retry_resp.text}
                             return {
-                                "success": retry_resp.status_code in (200, 201),
+                                "success": retry_resp.status_code in (200, 201) and (
+                                    not isinstance(retry_payload, dict) or retry_payload.get("status") in (None, 200, 201)
+                                ),
                                 "status_code": retry_resp.status_code,
                                 "data": retry_payload
                             }
-                    return {"success": False, "error": "Unauthorized (401)", "status": 401}
+                    return {"success": False, "error": "Unauthorized / Stale Token (401)", "status": 401}
 
                 return {
                     "success": resp.status_code in (200, 201),
