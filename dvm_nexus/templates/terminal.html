@@ -156,7 +156,7 @@
       var text = screen.innerText || screen.textContent;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function() {
-          showNotification('Copied', 'Terminal text copied to clipboard', 'success');
+          showTerminalToast('Terminal text copied to clipboard', 'success');
         }).catch(function() {
           fallbackCopy(text);
         });
@@ -172,7 +172,20 @@
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      showNotification('Copied', 'Terminal text copied to clipboard', 'success');
+      showTerminalToast('Terminal text copied to clipboard', 'success');
+    }
+
+    function showTerminalToast(msg, type) {
+      var container = document.getElementById('toast-container');
+      if (!container) return;
+      var toast = document.createElement('div');
+      toast.className = 'toast toast-' + (type || 'info');
+      toast.innerHTML = '<span>' + escapeHtml(msg) + '</span>';
+      container.appendChild(toast);
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        setTimeout(function() { toast.remove(); }, 300);
+      }, 3500);
     }
 
     function appendOutput(html) {

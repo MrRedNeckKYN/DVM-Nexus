@@ -7,7 +7,7 @@
           <div style="font-size: 0.85rem; margin-top: 0.25rem;">
             Official upstream release <strong>{{ dvmhost_updater.check.release_name }}</strong> is available for <code>{{ dvmhost_updater.installed_info.target_asset_arch }}</code>.
             {% if dvmhost_updater.check.published_at %}
-              <span style="color: var(--text-dim); margin-left: 0.5rem;">(Published: {{ dvmhost_updater.check.published_at[:10] }})</span>
+              <span style="color: var(--text-dim); margin-left: 0.5rem;">(Published: {{ (dvmhost_updater.check.published_at|string)[:10] }})</span>
             {% endif %}
           </div>
         </div>

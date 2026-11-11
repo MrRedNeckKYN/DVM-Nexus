@@ -14,7 +14,7 @@
       {% for rev in revisions %}
       <tr>
         <td><strong>#{{ rev.id }}</strong></td>
-        <td style="color:var(--text-dim); font-size:0.8rem;">{{ rev.timestamp[:19] }}</td>
+        <td style="color:var(--text-dim); font-size:0.8rem;">{{ (rev.timestamp|string)[:19] if rev.timestamp else '—' }}</td>
         <td>{{ rev.profile_name or 'Default' }}</td>
         <td>{{ rev.summary }}</td>
         <td style="font-size:0.8rem; color:var(--accent-cyan);">{{ rev.changed_files }}</td>

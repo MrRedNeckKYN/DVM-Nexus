@@ -309,14 +309,16 @@
       });
     })();
 
-    // Simple auto-dismiss toast handler
+    // Simple auto-dismiss toast handler with timer tracking to prevent memory leaks
     document.body.addEventListener('htmx:afterSwap', function(evt) {
-      const toasts = document.querySelectorAll('.toast');
+      const toasts = document.querySelectorAll('.toast:not([data-dismiss-attached])');
       toasts.forEach(t => {
-        setTimeout(() => {
+        t.setAttribute('data-dismiss-attached', 'true');
+        const dismissTimer = setTimeout(() => {
           t.style.opacity = '0';
           setTimeout(() => t.remove(), 300);
         }, 4000);
+        t._dismissTimer = dismissTimer;
       });
     });
 

@@ -31,7 +31,7 @@
           {% endif %}
         </td>
         <td style="color:var(--text-muted); font-size:0.85rem;">{{ prof.description or '—' }}</td>
-        <td style="color:var(--text-dim); font-size:0.8rem;">{{ prof.updated_at[:16] }}</td>
+        <td style="color:var(--text-dim); font-size:0.8rem;">{{ (prof.updated_at|string)[:16] if prof.updated_at else '—' }}</td>
         <td>
           <div style="display:flex; gap:0.5rem;">
             {% if not prof.is_active %}
