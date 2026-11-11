@@ -161,7 +161,29 @@ class FirmwareFlasher:
                     self.state = "failed"
                     return {"success": False, "message": "Failed to clone firmware repository."}
 
-                # 4. Build binary
+                # 4. Prepare Config.h and build binary
+                if "dual" in target_key.lower():
+                    cfg_src = build_dir / "configs" / "MMDVM_HS_Dual_Hat.h"
+                    if not cfg_src.exists() and (build_dir / "configs").exists():
+                        for cand in (build_dir / "configs").glob("*Dual*.h"):
+                            cfg_src = cand
+                            break
+                    if cfg_src.exists():
+                        shutil.copyfile(cfg_src, build_dir / "Config.h")
+                        self._append_log(f"Applied configuration template: {cfg_src.name}")
+
+                # Ensure #define DUPLEX is active for dual hat targets
+                config_h = build_dir / "Config.h"
+                if config_h.exists():
+                    c_txt = config_h.read_text(encoding="utf-8", errors="ignore")
+                    if "dual" in target_key.lower():
+                        if "#define DUPLEX" not in c_txt:
+                            c_txt = c_txt.replace("//#define DUPLEX", "#define DUPLEX").replace("// #define DUPLEX", "#define DUPLEX")
+                            if "#define DUPLEX" not in c_txt:
+                                c_txt = "#define DUPLEX\n" + c_txt
+                            config_h.write_text(c_txt, encoding="utf-8")
+                            self._append_log("Enforced #define DUPLEX in Config.h for dual ADF7021 hardware.")
+
                 self._append_log(f"Compiling target '{target['make_target']}'...")
                 cmd_make = ["make", "-f", "Makefile.STM32FX", target["make_target"]]
                 p_make = await asyncio.create_subprocess_exec(
@@ -174,14 +196,23 @@ class FirmwareFlasher:
                 if p_make.returncode != 0:
                     self._append_log(f"Compilation warning/log: {err_make.decode(errors='replace')[:200]}")
 
-                # Locate compiled binary
-                bin_candidates = list(build_dir.glob("bin/*.bin")) + list(build_dir.glob("*.bin"))
+                # Locate compiled binary (prioritizing newest dual binary)
+                bin_candidates = sorted(
+                    list(build_dir.glob("bin/*.bin")) + list(build_dir.glob("*.bin")),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True
+                )
                 if not bin_candidates:
                     self._append_log("Error: No compiled .bin firmware binary was found after compilation.")
                     self.state = "failed"
                     return {"success": False, "message": "Compilation produced no binary."}
 
-                bin_file = bin_candidates[0]
+                if "dual" in target_key.lower():
+                    dual_bins = [b for b in bin_candidates if "dual" in b.name.lower()]
+                    bin_file = dual_bins[0] if dual_bins else bin_candidates[0]
+                else:
+                    bin_file = bin_candidates[0]
+
                 self._append_log(f"Firmware binary ready: {bin_file.name} ({bin_file.stat().st_size} bytes)")
 
                 # 5. Strobe STM32 into ROM bootloader mode via Raspberry Pi GPIO 20 and 21
