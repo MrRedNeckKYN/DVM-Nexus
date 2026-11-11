@@ -228,27 +228,21 @@ async def p25_save(
 
     conf = dvm_config_manager.load_config_dict()
     apply_p25_fields(conf)
-    if is_standby:
-        # Keep P25 disabled in active configuration so live DMR is undisturbed
-        conf["protocols"]["p25"]["enable"] = False
-        conf["protocols"].setdefault("dmr", {})["enable"] = True
-    else:
-        conf["protocols"]["p25"]["enable"] = enable
-        if enable:
-            conf["protocols"].setdefault("dmr", {})["enable"] = False
 
-    dvm_config_manager.save_config_dict(conf, summary=f"Update P25 settings (NAC {nac}, TX {tx_freq_mhz} MHz)")
+    # Always enforce P25 as active protocol when saving P25
+    conf.setdefault("protocols", {})
+    conf["protocols"].setdefault("p25", {})["enable"] = True
+    conf["protocols"].setdefault("dmr", {})["enable"] = False
 
-    # Persist directly into P25 profile so settings are preserved when switching
+    dvm_config_manager.save_config_dict(conf, summary=f"Update active P25 settings (NAC {nac}, TX {tx_freq_mhz} MHz)")
+
+    # Also persist directly into P25 profile backup so settings are preserved if switching
     from dvm_nexus.config_engine.profile_manager import profile_manager
     profile_manager.sync_protocol_settings("p25", apply_p25_fields)
 
-    log_audit("P25", "SAVE_CONFIG", f"Updated P25 parameters: NAC={nac}, WACN={wacn}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz (Standby: {is_standby})")
+    log_audit("P25", "SAVE_CONFIG", f"Updated active P25 parameters: NAC={nac}, WACN={wacn}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz")
 
-    if is_standby:
-        msg = f"P25 standby settings saved to profile! (TX: {tx_freq_mhz} MHz, NAC: {nac}). Radio remains on DMR until switched."
-    else:
-        msg = f"P25 settings saved successfully! (TX: {tx_freq_mhz} MHz, RX: {rx_freq_mhz} MHz, NAC: {nac}). Restart service to apply."
+    msg = f"✓ P25 settings auto-saved to active config! (TX: {tx_freq_mhz} MHz, NAC: {nac})"
 
     return render_template(
         request,

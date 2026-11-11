@@ -5,11 +5,11 @@ log:
   displayLevel: 1
   fileLevel: 1
   useSyslog: true
-  filePath: /opt/dvm
-  activityFilePath: /opt/dvm
+  filePath: C:\Users\Administrator\Documents\DVM Nexus\dvm_nexus\data\active
+  activityFilePath: C:\Users\Administrator\Documents\DVM Nexus\dvm_nexus\data\active
   fileRoot: DVM
 network:
-  enable: true
+  enable: false
   id: 100000
   address: 127.0.0.1
   port: 62031
@@ -141,7 +141,7 @@ protocols:
     verbose: true
     debug: false
 system:
-  identity: ABCD123
+  identity: NEXUS
   timeout: 180
   duplex: true
   simplexSameFrequency: false
@@ -162,7 +162,7 @@ system:
     authoritative: true
     supervisor: false
     channelId: 2
-    channelNo: 1
+    channelNo: 2019
     controlCh:
       rpcAddress: 127.0.0.1
       rpcPort: 0
@@ -170,22 +170,22 @@ system:
       notifyEnable: true
       presence: 120
     voiceChNo:
-      - channelId: 2
-        channelNo: 1
-        rpcAddress: 127.0.0.1
-        rpcPort: 9890
-        rpcPassword: ULTRA-VERY-SECURE-DEFAULT
+    - channelId: 2
+      channelNo: 2019
+      rpcAddress: 127.0.0.1
+      rpcPort: 9890
+      rpcPassword: ULTRA-VERY-SECURE-DEFAULT
     secure:
       key: 000102030405060708090A0B0C0D0E0F
     colorCode: 1
-    nac: '293'
+    nac: '456'
     ran: 1
     pSuperGroup: FFFE
     announcementGroup: FFFE
     defaultNetIdleTalkgroup: 0
     dmrNetId: 1
-    netId: BB800
-    sysId: '001'
+    netId: BEE00
+    sysId: '002'
     rfssId: 1
     siteId: 1
   cwId:
@@ -270,3 +270,7 @@ system:
     file: talkgroup_rules.yml
     time: 2
     acl: false
+cwId:
+  enable: true
+  time: 15
+  callsign: NEXUS

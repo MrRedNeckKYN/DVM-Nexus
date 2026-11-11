@@ -106,40 +106,30 @@ def test_protocol_switch_api(client):
     assert "P25 Phase 1 is in Standby Mode" in p25_page.text
 
 
-def test_standby_save_preserves_active_protocol(client):
-    """Test saving P25 while DMR is active saves settings without activating P25."""
+def test_save_updates_active_config(client):
+    """Test saving P25 saves directly to active config."""
     from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
-    from dvm_nexus.config_engine.profile_manager import profile_manager
 
-    # Ensure DMR is active
-    client.post("/api/protocol/switch", data={"target": "dmr"})
+    # Post P25 save
+    save_resp = client.post("/p25/save", data={
+        "enable": "true",
+        "nac": "456",
+        "wacn": "BEE00",
+        "sys_id": "002",
+        "rfss_id": 1,
+        "site_id": 1,
+        "channel_id": 0,
+        "channel_no": 1,
+        "call_hang": 5,
+        "tdu_preambles": 6,
+        "p25_corr_count": 2,
+        "p25_disc_bw": 0,
+        "p25_post_bw": 0,
+    })
+    assert save_resp.status_code == 200
+    assert "saved to active config" in save_resp.text.lower()
 
-    # Backup p25 profile original content if exists
-    p25_prof_path = profile_manager.profiles_dir / "default_p25" / "config.yml"
-    original_p25_raw = p25_prof_path.read_text(encoding="utf-8") if p25_prof_path.exists() else None
-
-    try:
-        # Post P25 save
-        save_resp = client.post("/p25/save", data={
-            "enable": "true",
-            "nac": "456",
-            "wacn": "BEE00",
-            "sys_id": "002",
-            "rfss_id": 1,
-            "site_id": 1,
-            "channel_id": 0,
-            "channel_no": 1,
-            "call_hang": 5,
-            "tdu_preambles": 6,
-            "p25_corr_count": 2,
-            "p25_disc_bw": 0,
-            "p25_post_bw": 0,
-        })
-        assert save_resp.status_code == 200
-        assert "standby settings saved to profile" in save_resp.text.lower()
-
-        # Verify DMR remains the active protocol
-        assert dvm_config_manager.get_active_protocol() == "dmr"
-    finally:
-        if original_p25_raw and p25_prof_path.exists():
-            p25_prof_path.write_text(original_p25_raw, encoding="utf-8")
+    # Verify active config has updated NAC and P25 enabled
+    cfg = dvm_config_manager.load_config_dict()
+    assert cfg["system"]["config"]["nac"] == "456"
+    assert cfg["protocols"]["p25"]["enable"] is True

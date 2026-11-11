@@ -199,27 +199,21 @@ async def dmr_save(
 
     conf = dvm_config_manager.load_config_dict()
     apply_dmr_fields(conf)
-    if is_standby:
-        # Keep DMR disabled in active configuration so live P25 is undisturbed
-        conf["protocols"]["dmr"]["enable"] = False
-        conf["protocols"].setdefault("p25", {})["enable"] = True
-    else:
-        conf["protocols"]["dmr"]["enable"] = enable
-        if enable:
-            conf["protocols"].setdefault("p25", {})["enable"] = False
 
-    dvm_config_manager.save_config_dict(conf, summary=f"Update DMR settings (Color Code {color_code}, TX {tx_freq_mhz} MHz)")
+    # Always enforce DMR as active protocol when saving DMR
+    conf.setdefault("protocols", {})
+    conf["protocols"].setdefault("dmr", {})["enable"] = True
+    conf["protocols"].setdefault("p25", {})["enable"] = False
 
-    # Persist directly into DMR profile so settings are preserved when switching
+    dvm_config_manager.save_config_dict(conf, summary=f"Update active DMR settings (Color Code {color_code}, TX {tx_freq_mhz} MHz)")
+
+    # Persist directly into DMR profile backup so settings are preserved if switching
     from dvm_nexus.config_engine.profile_manager import profile_manager
     profile_manager.sync_protocol_settings("dmr", apply_dmr_fields)
 
-    log_audit("DMR", "SAVE_CONFIG", f"Updated DMR parameters: CC={color_code}, NetID={dmr_net_id}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz (Standby: {is_standby})")
+    log_audit("DMR", "SAVE_CONFIG", f"Updated active DMR parameters: CC={color_code}, NetID={dmr_net_id}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz")
 
-    if is_standby:
-        msg = f"DMR standby settings saved to profile! (TX: {tx_freq_mhz} MHz, CC: {color_code}). Radio remains on P25 until switched."
-    else:
-        msg = f"DMR settings saved successfully! (TX: {tx_freq_mhz} MHz, RX: {rx_freq_mhz} MHz, CC: {color_code}). Restart service to apply."
+    msg = f"✓ DMR settings auto-saved to active config! (TX: {tx_freq_mhz} MHz, CC: {color_code})"
 
     return render_template(
         request,
