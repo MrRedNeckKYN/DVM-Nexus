@@ -298,3 +298,54 @@ def test_bidirectional_text_gateway(client):
     assert comp_resp.status_code == 200
     assert "Delivered" in comp_resp.text
 
+
+def test_voice_bridge_gateway(client):
+    """Test Voice Bridge (STT / TTS) configuration, endpoints, and simulation."""
+    from dvm_nexus.meshtastic.voice_gateway import voice_gateway
+
+    # 1. Save voice bridge settings via Web UI endpoint
+    save_resp = client.post("/meshtastic/voice-bridge/save", data={
+        "enabled": "1",
+        "stt_enabled": "1",
+        "tts_enabled": "1",
+        "protocol": "dmr",
+        "voice_talkgroup": 99,
+        "mesh_channel": 0,
+        "whisper_model": "tiny.en",
+        "udp_rx_port": 34001,
+        "udp_tx_port": 32001,
+        "udp_host": "127.0.0.1",
+        "echo_lockout_sec": 3.0
+    })
+    assert save_resp.status_code == 200
+    assert "Voice Bridge (STT/TTS) settings saved" in save_resp.text
+
+    cfg = voice_gateway.get_config()
+    assert cfg["enabled"] == "1"
+    assert cfg["voice_talkgroup"] == "99"
+    assert cfg["whisper_model"] == "tiny.en"
+
+    status = voice_gateway.get_status()
+    assert status["enabled"] is True
+    assert status["voice_talkgroup"] == 99
+
+    # 2. Simulate radio voice call -> Whisper -> Meshtastic
+    sim_resp = client.post("/meshtastic/voice-bridge/simulate-rx", data={
+        "src_id": 1001,
+        "talkgroup": 99,
+        "phrase": "Unit 1001 en route to dispatch"
+    })
+    assert sim_resp.status_code == 200
+    assert "Simulated voice transmission" in sim_resp.text
+
+    # 3. Verify activity logs
+    logs = voice_gateway.get_recent_logs(limit=5)
+    assert len(logs) >= 1
+    recent_texts = [l["text"] for l in logs]
+    assert "Unit 1001 en route to dispatch" in recent_texts
+
+    # 4. Test live log polling partial
+    log_resp = client.get("/meshtastic/voice-bridge/logs")
+    assert log_resp.status_code == 200
+    assert "Unit 1001 en route to dispatch" in log_resp.text
+

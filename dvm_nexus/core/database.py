@@ -161,6 +161,51 @@ def init_db():
                 for k, v in defaults:
                     cur.execute("INSERT OR REPLACE INTO text_bridge_config (key, value) VALUES (?, ?)", (k, v))
 
+            # Bidirectional Voice Bridge (STT / TTS) Tables
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS voice_bridge_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            """)
+
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS voice_bridge_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    direction TEXT NOT NULL CHECK(direction IN ('radio_to_mesh', 'mesh_to_radio')),
+                    protocol TEXT NOT NULL DEFAULT 'dmr',
+                    radio_src_id INTEGER DEFAULT 0,
+                    radio_dest_id INTEGER DEFAULT 0,
+                    mesh_node_id TEXT DEFAULT '^all',
+                    mesh_channel INTEGER DEFAULT 0,
+                    text TEXT NOT NULL,
+                    duration_sec REAL DEFAULT 0.0,
+                    status TEXT DEFAULT 'completed'
+                )
+            """)
+
+            # Seed voice bridge default config if not present
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM voice_bridge_config")
+            if cur.fetchone()[0] == 0:
+                v_defaults = [
+                    ("enabled", "0"),
+                    ("stt_enabled", "1"),
+                    ("tts_enabled", "1"),
+                    ("protocol", "dmr"),
+                    ("voice_talkgroup", "99"),
+                    ("mesh_channel", "0"),
+                    ("whisper_model", "tiny.en"),
+                    ("tts_voice", "en_US-lessac-medium"),
+                    ("udp_rx_port", "34001"),
+                    ("udp_tx_port", "32001"),
+                    ("udp_host", "127.0.0.1"),
+                    ("echo_lockout_sec", "3.0")
+                ]
+                for k, v in v_defaults:
+                    cur.execute("INSERT OR REPLACE INTO voice_bridge_config (key, value) VALUES (?, ?)", (k, v))
+
             # Seed default Meshtastic routing rules if none exist
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*) FROM meshtastic_routes")

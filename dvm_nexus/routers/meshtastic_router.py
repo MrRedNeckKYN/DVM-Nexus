@@ -11,6 +11,7 @@ from dvm_nexus.core.database import get_db_connection, log_audit
 from dvm_nexus.meshtastic.client import meshtastic_manager
 from dvm_nexus.meshtastic.bridge import meshtastic_bridge
 from dvm_nexus.meshtastic.text_gateway import text_gateway
+from dvm_nexus.meshtastic.voice_gateway import voice_gateway
 from dvm_nexus.meshtastic.transport import MockTransport
 
 router = APIRouter(prefix="/meshtastic", tags=["meshtastic"])
@@ -24,6 +25,9 @@ async def meshtastic_dashboard(request: Request):
     routes = meshtastic_bridge.get_routes()
     text_cfg = text_gateway.get_config()
     bridged_messages = text_gateway.get_recent_messages(limit=30)
+    voice_cfg = voice_gateway.get_config()
+    voice_status = voice_gateway.get_status()
+    voice_logs = voice_gateway.get_recent_logs(limit=30)
 
     conn = get_db_connection()
     try:
@@ -45,7 +49,10 @@ async def meshtastic_dashboard(request: Request):
             "routes": routes,
             "admins": admins,
             "text_cfg": text_cfg,
-            "bridged_messages": bridged_messages
+            "bridged_messages": bridged_messages,
+            "voice_cfg": voice_cfg,
+            "voice_status": voice_status,
+            "voice_logs": voice_logs
         }
     )
 
@@ -353,3 +360,117 @@ async def send_radio_text(
 @router.get("/api/status", response_class=JSONResponse)
 async def api_status():
     return meshtastic_manager.get_status()
+
+
+# --------------------------------------------------------------------------
+# Voice Bridge (STT / TTS) Endpoints
+# --------------------------------------------------------------------------
+@router.post("/voice-bridge/save", response_class=HTMLResponse)
+async def voice_bridge_save(
+    request: Request,
+    enabled: Optional[str] = Form(None),
+    stt_enabled: Optional[str] = Form(None),
+    tts_enabled: Optional[str] = Form(None),
+    protocol: str = Form("dmr"),
+    voice_talkgroup: int = Form(99),
+    mesh_channel: int = Form(0),
+    whisper_model: str = Form("tiny.en"),
+    udp_rx_port: int = Form(34001),
+    udp_tx_port: int = Form(32001),
+    udp_host: str = Form("127.0.0.1"),
+    echo_lockout_sec: float = Form(3.0)
+):
+    """Save Voice Bridge configuration."""
+    en_val = "1" if enabled in ("1", "true", "on") else "0"
+    stt_val = "1" if stt_enabled in ("1", "true", "on") else "0"
+    tts_val = "1" if tts_enabled in ("1", "true", "on") else "0"
+
+    voice_gateway.save_config(
+        enabled=en_val,
+        stt_enabled=stt_val,
+        tts_enabled=tts_val,
+        protocol=protocol.strip().lower(),
+        voice_talkgroup=str(voice_talkgroup),
+        mesh_channel=str(mesh_channel),
+        whisper_model=whisper_model.strip(),
+        udp_rx_port=str(udp_rx_port),
+        udp_tx_port=str(udp_tx_port),
+        udp_host=udp_host.strip(),
+        echo_lockout_sec=str(echo_lockout_sec)
+    )
+
+    voice_cfg = voice_gateway.get_config()
+    voice_status = voice_gateway.get_status()
+    voice_logs = voice_gateway.get_recent_logs(limit=30)
+
+    return render_template(
+        request,
+        "components/meshtastic_voice_bridge.html",
+        {
+            "voice_cfg": voice_cfg,
+            "voice_status": voice_status,
+            "voice_logs": voice_logs,
+            "toast": {"type": "success", "message": "Voice Bridge (STT/TTS) settings saved successfully!"}
+        }
+    )
+
+
+@router.get("/voice-bridge/logs", response_class=HTMLResponse)
+async def voice_bridge_logs(request: Request):
+    """Poll live voice bridge activity logs and status."""
+    voice_cfg = voice_gateway.get_config()
+    voice_status = voice_gateway.get_status()
+    voice_logs = voice_gateway.get_recent_logs(limit=30)
+
+    return render_template(
+        request,
+        "components/meshtastic_voice_bridge.html",
+        {
+            "voice_cfg": voice_cfg,
+            "voice_status": voice_status,
+            "voice_logs": voice_logs
+        }
+    )
+
+
+@router.post("/voice-bridge/simulate-rx", response_class=HTMLResponse)
+async def voice_bridge_simulate_rx(
+    request: Request,
+    src_id: int = Form(1001),
+    talkgroup: int = Form(99),
+    phrase: str = Form("Testing voice to text bridge from radio.")
+):
+    """Simulate radio voice transmission over the air to test STT to Meshtastic."""
+    cfg = voice_gateway.get_config()
+    mesh_channel = int(cfg.get("mesh_channel", "0"))
+    src_label = f"Radio {src_id}"
+    mesh_msg = f"🎙️ [{src_label} -> TG {talkgroup}]: {phrase}"
+
+    if meshtastic_manager:
+        meshtastic_manager.send_message(mesh_msg, recipient="^all", channel=mesh_channel)
+
+    voice_gateway.log_activity(
+        direction="radio_to_mesh",
+        protocol=cfg.get("protocol", "dmr"),
+        text=phrase,
+        radio_src_id=src_id,
+        radio_dest_id=talkgroup,
+        mesh_channel=mesh_channel,
+        duration_sec=2.4,
+        status="completed"
+    )
+
+    voice_cfg = voice_gateway.get_config()
+    voice_status = voice_gateway.get_status()
+    voice_logs = voice_gateway.get_recent_logs(limit=30)
+
+    return render_template(
+        request,
+        "components/meshtastic_voice_bridge.html",
+        {
+            "voice_cfg": voice_cfg,
+            "voice_status": voice_status,
+            "voice_logs": voice_logs,
+            "toast": {"type": "success", "message": f"Simulated voice transmission from RID {src_id} forwarded to Mesh Channel {mesh_channel}!"}
+        }
+    )

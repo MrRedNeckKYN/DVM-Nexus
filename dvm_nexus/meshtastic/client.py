@@ -15,6 +15,7 @@ from dvm_nexus.meshtastic.transport import (
 from dvm_nexus.meshtastic.remote_admin import remote_admin_processor
 from dvm_nexus.meshtastic.bridge import meshtastic_bridge
 from dvm_nexus.meshtastic.text_gateway import text_gateway
+from dvm_nexus.meshtastic.voice_gateway import voice_gateway
 
 logger = logging.getLogger("dvm_nexus.meshtastic.client")
 
@@ -31,6 +32,9 @@ class MeshtasticManager:
         # Connect the bridge and text gateway
         meshtastic_bridge.set_manager(self)
         text_gateway.set_manager(self)
+        voice_gateway.set_manager(self)
+        # Start voice gateway UDP listener
+        voice_gateway.start()
 
         # Initialize default transport
         self._init_transport()
@@ -247,6 +251,17 @@ class MeshtasticManager:
                 )
             except Exception as e:
                 logger.error("Error in text gateway bridge: %s", e)
+
+            # Bidirectional Voice TTS Bridge: Synthesize speech and stream to dvmbridge
+            try:
+                voice_gateway.handle_meshtastic_inbound_text(
+                    sender_id=sender_id,
+                    sender_name=sender_name,
+                    text=text,
+                    channel=channel
+                )
+            except Exception as e:
+                logger.error("Error in voice gateway TTS bridge: %s", e)
 
     def _handle_node_update(self, node_data: Dict[str, Any]):
         pass
