@@ -453,6 +453,26 @@ class DiagnosticsEngine:
                     "fix_id": f"restore_table_{dat_name}",
                 })
 
+        # Check iden_table.dat for 0.0 MHz offset
+        iden_path = self.dvm_dir / "iden_table.dat"
+        if iden_path.exists() and iden_path.stat().st_size > 0:
+            try:
+                from dvm_nexus.config_engine.iden_calculator import read_iden_table_file
+                bad_chans = [str(e.channel_id) for e in read_iden_table_file(iden_path) if abs(e.offset_mhz) < 0.0001]
+                if bad_chans:
+                    checks.append({
+                        "id": "iden_zero_offset",
+                        "name": "P25 IDEN Table (Invalid 0.0 MHz Offset)",
+                        "status": "fail",
+                        "badge": "INVALID OFFSET",
+                        "summary": f"Channel Id {', '.join(bad_chans)} in iden_table.dat has an offset of 0.0 MHz. DVMHost will crash on startup with 'Channel Id has an invalid Tx offset'.",
+                        "remedy": "Click Auto-Repair to automatically correct 0.0 MHz offsets to standard +5.0 MHz.",
+                        "auto_fixable": True,
+                        "fix_id": "fix_iden_zero_offset",
+                    })
+            except Exception:
+                pass
+
         # Overall health calculation
         has_fails = any(c["status"] == "fail" for c in checks)
         has_warns = any(c["status"] == "warn" for c in checks)
@@ -548,6 +568,30 @@ class DiagnosticsEngine:
                     if src_example.exists():
                         backup_manager.atomic_write(target, src_example.read_text(encoding="utf-8"))
                         fixes_applied.append(f"Restored missing data table '{tbl}' from template")
+
+            # 3b. Sanitize iden_table.dat to fix invalid 0.0 MHz offsets
+            target_iden = self.dvm_dir / "iden_table.dat"
+            if target_iden.exists() and target_iden.stat().st_size > 0:
+                try:
+                    from dvm_nexus.config_engine.iden_calculator import read_iden_table_file, format_iden_table, IdenEntry
+                    entries = read_iden_table_file(target_iden)
+                    fixed_iden = False
+                    for i, e in enumerate(entries):
+                        if abs(e.offset_mhz) < 0.0001:
+                            offset = 5.0 if 400000000 <= e.base_freq_hz <= 480000000 else 5.0
+                            entries[i] = IdenEntry(
+                                channel_id=e.channel_id,
+                                base_freq_hz=e.base_freq_hz,
+                                spacing_khz=e.spacing_khz,
+                                offset_mhz=offset,
+                                bandwidth_khz=e.bandwidth_khz
+                            )
+                            fixed_iden = True
+                    if fixed_iden:
+                        backup_manager.atomic_write(target_iden, format_iden_table(entries))
+                        fixes_applied.append("Repaired invalid 0.0 MHz TX offset in iden_table.dat (updated to +5.0 MHz)")
+                except Exception:
+                    pass
 
             # 4. Fix permissions and systemd working directory on Linux so dvmhost can read and write files/logs
             if os.name != "nt":

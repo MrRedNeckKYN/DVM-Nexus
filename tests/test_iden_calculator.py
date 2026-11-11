@@ -58,6 +58,18 @@ def test_find_or_create_iden_entry():
     assert entry.offset_mhz == 5.0
     assert ch_no >= 1
     # Verify calculated TX frequency matches target
+    assert entry.base_freq_hz + (ch_no * 6250) == tx_hz
+
+
+def test_find_or_create_iden_entry_never_zero_offset():
+    """Verify simplex (TX == RX) never generates 0.0 MHz offset which crashes DVMHost."""
+    entries = []
+    # Simplex GMRS/UHF 462.5625 MHz
+    freq_hz = 462562500
+    entry, ch_no = find_or_create_iden_entry(entries, freq_hz, freq_hz, spacing_khz=6.25)
+    assert entry.offset_mhz != 0.0
+    assert entry.offset_mhz == 5.0
+
     calc_tx, calc_rx = calculate_frequency_from_channel(ch_no, entry.base_freq_hz, entry.spacing_khz, entry.offset_mhz)
-    assert calc_tx == tx_hz
-    assert calc_rx == rx_hz
+    assert calc_tx == freq_hz
+    assert calc_rx == freq_hz + 5000000

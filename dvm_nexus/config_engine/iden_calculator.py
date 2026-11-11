@@ -151,6 +151,22 @@ def find_or_create_iden_entry(
     """
     offset_mhz = (rx_freq_hz - tx_freq_hz) / HZ_MHZ
 
+    # DVMHost requires a non-zero TX offset in iden_table.dat.
+    # If in simplex mode or offset is 0, default to standard band repeater splits.
+    if abs(offset_mhz) < 0.0001:
+        if 400000000 <= tx_freq_hz <= 480000000:
+            offset_mhz = 5.0
+        elif 136000000 <= tx_freq_hz <= 174000000:
+            offset_mhz = 0.6
+        elif 800000000 <= tx_freq_hz <= 870000000:
+            offset_mhz = -45.0
+        elif 760000000 <= tx_freq_hz <= 780000000:
+            offset_mhz = 30.0
+        elif 900000000 <= tx_freq_hz <= 950000000:
+            offset_mhz = -39.0
+        else:
+            offset_mhz = 5.0
+
     # Check existing entries
     for entry in entries:
         if abs(entry.offset_mhz - offset_mhz) < 0.001 and abs(entry.spacing_khz - spacing_khz) < 0.001:

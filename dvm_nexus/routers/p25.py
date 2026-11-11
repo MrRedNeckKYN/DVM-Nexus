@@ -263,6 +263,10 @@ async def p25_iden_save(
     bandwidth_khz: float = Form(12.5),
 ):
     """Add or update an IDEN bandplan entry in iden_table.dat."""
+    # DVMHost requires a non-zero TX offset in iden_table.dat. Replaces 0.0 with 5.0 MHz.
+    if abs(offset_mhz) < 0.0001:
+        offset_mhz = 5.000 if (400000000 <= base_freq_hz <= 480000000) else 5.000
+
     entries = read_iden_table_file(dvm_config_manager.iden_path)
     updated = False
     for i, e in enumerate(entries):
@@ -301,6 +305,10 @@ async def p25_iden_save(
 @router.post("/p25/iden/delete/{chid}", response_class=HTMLResponse)
 async def p25_iden_delete(request: Request, chid: int):
     """Delete an IDEN bandplan entry."""
+    # DVMHost requires a non-zero TX offset in iden_table.dat. Replaces 0.0 with 5.0 MHz.
+    if abs(offset_mhz) < 0.0001:
+        offset_mhz = 5.000 if (400000000 <= base_freq_hz <= 480000000) else 5.000
+
     entries = read_iden_table_file(dvm_config_manager.iden_path)
     filtered = [e for e in entries if e.channel_id != chid]
     backup_manager.create_backup(summary=f"Delete IDEN Channel {chid}", changed_files=["iden_table.dat"])
