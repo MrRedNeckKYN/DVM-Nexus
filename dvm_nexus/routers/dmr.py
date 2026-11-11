@@ -137,6 +137,8 @@ async def dmr_save(
         c.setdefault("system", {})
         c["system"]["identity"] = callsign.strip() or "NEXUS"
         c["system"]["duplex"] = duplex
+        c["system"]["simplexSameFrequency"] = not duplex
+        c["system"]["fixedMode"] = True
 
         c.setdefault("cwId", {})
         c["cwId"]["enable"] = cw_id_enable

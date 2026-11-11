@@ -538,6 +538,13 @@ class DiagnosticsEngine:
                 fixes_applied.append("Set 'daemon: false' in config.yml (systemd foreground supervision)")
                 modified = True
 
+            # Ensure simplexSameFrequency is true if simplex is enabled
+            if not cfg.get("system", {}).get("duplex", True):
+                if not cfg.get("system", {}).get("simplexSameFrequency"):
+                    cfg.setdefault("system", {})["simplexSameFrequency"] = True
+                    fixes_applied.append("Set 'simplexSameFrequency: true' for single-frequency Simplex operation")
+                    modified = True
+
             # Enforce logging settings for systemd journald
             if "log" not in cfg or not isinstance(cfg["log"], dict):
                 cfg["log"] = {}

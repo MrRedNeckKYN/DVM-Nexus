@@ -230,6 +230,10 @@ class DVMConfigManager:
             if "voiceChNo" in sys_conf and isinstance(sys_conf["voiceChNo"], list) and len(sys_conf["voiceChNo"]) > 0:
                 sys_conf["voiceChNo"][0]["channelId"] = entry.channel_id
                 sys_conf["voiceChNo"][0]["channelNo"] = channel_no
+                is_duplex = conf_dict.get("system", {}).get("duplex", True)
+                if not is_duplex:
+                    sys_conf["voiceChNo"][0].pop("rxChannelId", None)
+                    sys_conf["voiceChNo"][0].pop("rxChannelNo", None)
         return entry.channel_id, channel_no
 
     def get_quick_status(self) -> Dict[str, Any]:
