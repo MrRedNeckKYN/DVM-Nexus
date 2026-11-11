@@ -28,15 +28,15 @@ network:
   debug: false
   rpcAddress: 127.0.0.1
   rpcPort: 9890
-  rpcPassword: ULTRA-VERY-SECURE-DEFAULT
+  rpcPassword: TEST_RPC_PASSWORD
   rpcDebug: false
-  restEnable: false
+  restEnable: true
   restAddress: 127.0.0.1
   restPort: 9990
   restSsl: false
   restSslCertificate: web.crt
   restSslKey: web.key
-  restPassword: PASSWORD
+  restPassword: TEST_PASSWORD
   restDebug: false
 protocols:
   dmr:
@@ -146,7 +146,7 @@ system:
   duplex: true
   simplexSameFrequency: false
   modeHang: 10
-  fixedMode: false
+  fixedMode: true
   rfTalkgroupHang: 10
   activeTickDelay: 5
   idleTickDelay: 5

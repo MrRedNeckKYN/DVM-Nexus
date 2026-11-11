@@ -136,6 +136,17 @@ class DVMConfigManager:
         data["log"]["activityFilePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
         data["log"]["fileRoot"] = data["log"].get("fileRoot") or "DVM"
 
+        # Ensure DVMHost REST API is enabled for over-the-air commands and live query
+        if "network" not in data or not isinstance(data["network"], dict):
+            data["network"] = {}
+        data["network"]["restEnable"] = True
+        if "restPort" not in data["network"]:
+            data["network"]["restPort"] = 9990
+        if "restAddress" not in data["network"]:
+            data["network"]["restAddress"] = "127.0.0.1"
+        if "restPassword" not in data["network"]:
+            data["network"]["restPassword"] = "PASSWORD"
+
         # Safety block: Enforce single-protocol mutual exclusion for hotspot / UART modems.
         # ADF7021 MMDVM_HS firmware aborts with NAK 32 (HS_NO_DUAL_MODE) if multiple protocols are enabled.
         protocols = data.get("protocols", {})

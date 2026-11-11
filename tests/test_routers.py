@@ -148,3 +148,24 @@ def test_p25_talkgroups_add_and_delete(client):
     del_resp = client.post("/p25/talkgroups/delete/9991")
     assert del_resp.status_code == 200
     assert "Deleted Talkgroup 9991" in del_resp.text
+
+
+def test_api_settings_save(client):
+    """Test saving DVMHost REST and RPC API connection settings."""
+    from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+    resp = client.post("/config/api-settings/save", data={
+        "rest_enable": "true",
+        "rest_port": 9990,
+        "rest_address": "127.0.0.1",
+        "rest_password": "TEST_PASSWORD",
+        "rpc_port": 9890,
+        "rpc_password": "TEST_RPC_PASSWORD",
+    })
+    assert resp.status_code == 200
+    assert "dvmhost rest api updated" in resp.text.lower()
+
+    cfg = dvm_config_manager.load_config_dict()
+    assert cfg["network"]["restEnable"] is True
+    assert cfg["network"]["restPort"] == 9990
+    assert cfg["network"]["restPassword"] == "TEST_PASSWORD"
+    assert cfg["network"]["rpcPassword"] == "TEST_RPC_PASSWORD"

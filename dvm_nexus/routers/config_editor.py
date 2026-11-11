@@ -7,6 +7,7 @@ import yaml
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 from pathlib import Path
+from typing import Optional, List, Dict, Any
 
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.backup_manager import backup_manager
@@ -20,9 +21,20 @@ router = APIRouter()
 
 @router.get("/config", response_class=HTMLResponse)
 async def config_page(request: Request):
-    """Render Configuration Revisions, Diff, and Raw Editor page."""
+    """Render Configuration Revisions, Diff, REST API Settings, and Raw Editor page."""
     revisions = backup_manager.list_revisions(limit=30)
     raw_yaml = dvm_config_manager.load_config_raw()
+    conf = dvm_config_manager.load_config_dict()
+    net = conf.get("network", {}) if isinstance(conf.get("network"), dict) else {}
+
+    rest_settings = {
+        "rest_enable": net.get("restEnable", True),
+        "rest_port": net.get("restPort", 9990),
+        "rest_address": net.get("restAddress", "127.0.0.1"),
+        "rest_password": net.get("restPassword", "PASSWORD"),
+        "rpc_port": net.get("rpcPort", 9890),
+        "rpc_password": net.get("rpcPassword", "ULTRA-VERY-SECURE-DEFAULT"),
+    }
 
     return render_template(
         request,
@@ -32,7 +44,46 @@ async def config_page(request: Request):
             "active_tab": "config",
             "revisions": revisions,
             "raw_yaml": raw_yaml,
+            "rest": rest_settings,
         }
+    )
+
+
+@router.post("/config/api-settings/save", response_class=HTMLResponse)
+async def config_api_settings_save(
+    request: Request,
+    rest_enable: Optional[str] = Form(None),
+    rest_port: int = Form(9990),
+    rest_address: str = Form("127.0.0.1"),
+    rest_password: str = Form("PASSWORD"),
+    rpc_port: int = Form(9890),
+    rpc_password: str = Form("ULTRA-VERY-SECURE-DEFAULT"),
+):
+    """Save DVMHost REST and RPC API connection settings directly to active config."""
+    conf = dvm_config_manager.load_config_dict()
+    if "network" not in conf or not isinstance(conf["network"], dict):
+        conf["network"] = {}
+
+    enable_val = (rest_enable == "true" or rest_enable == "on" or rest_enable == "1")
+    conf["network"]["restEnable"] = enable_val
+    conf["network"]["restPort"] = int(rest_port)
+    conf["network"]["restAddress"] = rest_address.strip()
+    conf["network"]["restPassword"] = rest_password.strip()
+    conf["network"]["rpcPort"] = int(rpc_port)
+    conf["network"]["rpcPassword"] = rpc_password.strip()
+
+    dvm_config_manager.save_config_dict(conf, summary="Update DVMHost REST/RPC API settings")
+    log_audit("CONFIG", "REST_API_UPDATE", f"restEnable={enable_val}, restPort={rest_port}")
+
+    # Restart DVMHost so changes take effect
+    await asyncio.to_thread(service_controller.restart)
+    running = await asyncio.to_thread(service_controller.verify_running, 4.0)
+
+    msg = f"DVMHost REST API updated (Port: {rest_port}, Enabled: {enable_val}). Daemon restarted (Active: {running})."
+    return render_template(
+        request,
+        "components/toast.html",
+        {"type": "success" if running else "warning", "message": msg}
     )
 
 

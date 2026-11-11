@@ -37,6 +37,69 @@
   </div>
 </div>
 
+<!-- DVMHost REST & RPC API Settings -->
+<div class="card" style="border-left:4px solid var(--accent-emerald);">
+  <div class="card-header">
+    <div>
+      <div class="card-title">🔌 DVMHost REST &amp; RPC Remote Control API</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">
+        Configure the internal REST API used by DVM Nexus for Live Over-The-Air commands (Radio Check, Call Alert, Inhibit, SMS) and status telemetry.
+      </div>
+    </div>
+  </div>
+
+  <form hx-post="/config/api-settings/save" hx-target="#toast-container" hx-swap="beforeend">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Enable REST API</label>
+        <select name="rest_enable" class="form-control">
+          <option value="true" {% if rest.rest_enable %}selected{% endif %}>Enabled (Required for Live OTA &amp; Dashboard)</option>
+          <option value="false" {% if not rest.rest_enable %}selected{% endif %}>Disabled</option>
+        </select>
+        <span style="font-size:0.75rem; color:var(--text-dim);">Controls <code>restEnable</code> in config.yml. Must be enabled for web commands.</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">REST API Port</label>
+        <input type="number" name="rest_port" class="form-control" value="{{ rest.rest_port }}" required>
+        <span style="font-size:0.75rem; color:var(--text-dim);">Default: <code>9990</code> (HTTP REST endpoint)</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">REST API Password</label>
+        <input type="text" name="rest_password" class="form-control" value="{{ rest.rest_password }}" required>
+        <span style="font-size:0.75rem; color:var(--text-dim);">Auth secret sent via SHA-256 for live operations.</span>
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-top:0.5rem;">
+      <div class="form-group">
+        <label class="form-label">REST Listen Address</label>
+        <input type="text" name="rest_address" class="form-control" value="{{ rest.rest_address }}" required>
+        <span style="font-size:0.75rem; color:var(--text-dim);">Default: <code>127.0.0.1</code></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">DVMHost Core RPC Port</label>
+        <input type="number" name="rpc_port" class="form-control" value="{{ rest.rpc_port }}" required>
+        <span style="font-size:0.75rem; color:var(--text-dim);">Default: <code>9890</code> (Internal IPC daemon)</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">RPC Internal Password</label>
+        <input type="text" name="rpc_password" class="form-control" value="{{ rest.rpc_password }}" required>
+        <span style="font-size:0.75rem; color:var(--text-dim);">Internal DVMHost process communication secret.</span>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+      <button type="submit" class="btn btn-primary" onclick="return confirm('Save REST API settings? DVMHost will restart to apply the new configuration.')">
+        💾 Save API Settings &amp; Restart DVMHost
+      </button>
+    </div>
+  </form>
+</div>
+
 <!-- Raw YAML Configuration Editor -->
 <div class="card">
   <div class="card-header">

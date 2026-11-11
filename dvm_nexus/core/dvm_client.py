@@ -20,19 +20,53 @@ class DVMHostClient:
     """Thread-safe REST client for DVMHost."""
 
     def __init__(self, host: Optional[str] = None, port: Optional[int] = None, password: Optional[str] = None):
-        self.host = host or settings.dvmhost_api_host
-        self.port = port or settings.dvmhost_api_port
-        self.password = password or settings.dvmhost_api_password
+        self._host_override = host
+        self._port_override = port
+        self._password_override = password
         self._lock = threading.Lock()
         self._token: Optional[str] = None
         self._session = requests.Session()
 
+    def _sync_credentials_from_config(self):
+        """Dynamically sync host, port, and password from active /opt/dvm/config.yml if present."""
+        if self._host_override:
+            self.host = self._host_override
+        else:
+            self.host = settings.dvmhost_api_host
+
+        if self._port_override:
+            self.port = self._port_override
+        else:
+            self.port = settings.dvmhost_api_port
+
+        if self._password_override:
+            self.password = self._password_override
+        else:
+            self.password = settings.dvmhost_api_password
+
+        # Check active config
+        try:
+            from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+            conf = dvm_config_manager.load_config_dict()
+            net = conf.get("network", {})
+            if isinstance(net, dict):
+                if not self._port_override and "restPort" in net:
+                    self.port = int(net["restPort"])
+                if not self._host_override and "restAddress" in net:
+                    self.host = str(net["restAddress"])
+                if not self._password_override and "restPassword" in net:
+                    self.password = str(net["restPassword"])
+        except Exception:
+            pass
+
     @property
     def base_url(self) -> str:
+        self._sync_credentials_from_config()
         return f"http://{self.host}:{self.port}"
 
     def authenticate(self) -> bool:
         """Authenticate with DVMHost and obtain a session token."""
+        self._sync_credentials_from_config()
         hashed = hashlib.sha256(self.password.encode("utf-8")).hexdigest()
         try:
             resp = self._session.put(
