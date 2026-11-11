@@ -27,35 +27,22 @@ router = APIRouter()
 
 @router.get("/p25", response_class=HTMLResponse)
 async def p25_page(request: Request):
-    """Render the P25 management interface with protocol standby awareness."""
+    """Render the comprehensive P25 management interface with protocol standby awareness."""
     conf = dvm_config_manager.load_config_dict()
     p25_conf = conf.get("protocols", {}).get("p25", {})
     sys_conf = conf.get("system", {}).get("config", {})
     modem_conf = conf.get("system", {}).get("modem", {})
     hotspot_conf = modem_conf.get("hotspot", {})
+    net_conf = conf.get("network", {})
+    cw_conf = conf.get("cwId", {})
+    identity = conf.get("system", {}).get("identity", "NEXUS")
+    duplex = conf.get("system", {}).get("duplex", True)
 
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "dmr")
 
     iden_entries = read_iden_table_file(dvm_config_manager.iden_path)
-
-    # Calculate active tuned frequency
-    channel_id = sys_conf.get("channelId", 0)
-    channel_no = sys_conf.get("channelNo", 1)
-    active_tx_mhz = None
-    active_rx_mhz = None
-    for entry in iden_entries:
-        if entry.channel_id == channel_id:
-            tx_hz, rx_hz = calculate_frequency_from_channel(
-                channel_no=channel_no,
-                base_freq_hz=entry.base_freq_hz,
-                spacing_khz=entry.spacing_khz,
-                offset_mhz=entry.offset_mhz
-            )
-            active_tx_mhz = round(tx_hz / 1000000.0, 5)
-            active_rx_mhz = round(rx_hz / 1000000.0, 5)
-            break
-
+    tx_freq_mhz, rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
     rids = dvm_config_manager.load_rid_acl()
 
     return render_template(
@@ -70,9 +57,13 @@ async def p25_page(request: Request):
             "sys": sys_conf,
             "modem": modem_conf,
             "hotspot": hotspot_conf,
+            "net": net_conf,
+            "cw": cw_conf,
+            "identity": identity,
+            "duplex": duplex,
             "iden_entries": iden_entries,
-            "active_tx_mhz": active_tx_mhz,
-            "active_rx_mhz": active_rx_mhz,
+            "active_tx_mhz": tx_freq_mhz,
+            "active_rx_mhz": rx_freq_mhz,
             "rids": rids,
         }
     )
@@ -82,19 +73,32 @@ async def p25_page(request: Request):
 async def p25_save(
     request: Request,
     enable: bool = Form(True),
+    # Core Station & Frequency
+    callsign: str = Form("NEXUS"),
+    duplex: bool = Form(True),
+    tx_freq_mhz: float = Form(462.61875),
+    rx_freq_mhz: float = Form(467.61875),
+    cw_id_enable: bool = Form(True),
+    cw_id_time: int = Form(15),
+    # P25 Protocol
     nac: str = Form("293"),
     tx_nac: str = Form(""),
     wacn: str = Form("BB800"),
     sys_id: str = Form("001"),
     rfss_id: int = Form(1),
     site_id: int = Form(1),
-    channel_id: int = Form(0),
-    channel_no: int = Form(1),
-    authoritative: bool = Form(True),
-    default_net_idle_tg: int = Form(0),
     call_hang: int = Form(5),
     tdu_preambles: int = Form(6),
     immediate_call_term: bool = Form(True),
+    authoritative: bool = Form(True),
+    default_net_idle_tg: int = Form(0),
+    # Master Network Linking
+    net_enable: bool = Form(False),
+    net_id: int = Form(100000),
+    net_address: str = Form("127.0.0.1"),
+    net_port: int = Form(62031),
+    net_password: str = Form("PASSWORD"),
+    # Advanced P25 Parameters
     silence_threshold: int = Form(124),
     frame_loss_threshold: int = Form(6),
     queue_size: int = Form(12),
@@ -109,19 +113,30 @@ async def p25_save(
     disable_deny_response: bool = Form(False),
     repeat_data_packet: bool = Form(True),
     unit_to_unit_avail_check: bool = Form(False),
+    ignore_affiliation_check: bool = Form(False),
+    verify_aff: bool = Form(False),
+    verify_reg: bool = Form(False),
+    legacy_group_grnt: bool = Form(True),
+    legacy_group_reg: bool = Form(False),
+    conv_net_grant_demand: bool = Form(False),
+    demand_unit_reg_for_refused_aff: bool = Form(True),
+    # Modem & ADF7021 Tuning
+    tx_tuning: int = Form(0),
+    rx_tuning: int = Form(0),
     p25_corr_count: int = Form(2),
     p25_disc_bw: int = Form(0),
     p25_post_bw: int = Form(0),
+    adf_gain_mode: int = Form(2),
+    afc_enable: bool = Form(True),
+    tx_level: int = Form(50),
 ):
-    """Save P25 parameters safely, preserving profile settings without breaking standby mode."""
+    """Save comprehensive P25 parameters safely, preserving profile settings without breaking standby mode."""
     errors = validate_p25_settings({
         "nac": nac,
         "netId": wacn,
         "sysId": sys_id,
         "rfssId": rfss_id,
         "siteId": site_id,
-        "channelId": channel_id,
-        "channelNo": channel_no,
     })
     if errors:
         return render_template(
@@ -134,6 +149,22 @@ async def p25_save(
     is_standby = (active_proto == "dmr")
 
     def apply_p25_fields(c: Dict[str, Any]):
+        c.setdefault("system", {})
+        c["system"]["identity"] = callsign.strip() or "NEXUS"
+        c["system"]["duplex"] = duplex
+
+        c.setdefault("cwId", {})
+        c["cwId"]["enable"] = cw_id_enable
+        c["cwId"]["time"] = cw_id_time
+        c["cwId"]["callsign"] = callsign.strip() or "NEXUS"
+
+        c.setdefault("network", {})
+        c["network"]["enable"] = net_enable
+        c["network"]["id"] = net_id
+        c["network"]["address"] = net_address.strip()
+        c["network"]["port"] = net_port
+        c["network"]["password"] = net_password.strip()
+
         c.setdefault("protocols", {}).setdefault("p25", {})
         c["protocols"]["p25"]["callHang"] = call_hang
         c["protocols"]["p25"]["tduPreambleCount"] = tdu_preambles
@@ -145,6 +176,13 @@ async def p25_save(
         c["protocols"]["p25"]["disableDenyResponse"] = disable_deny_response
         c["protocols"]["p25"]["repeatDataPacket"] = repeat_data_packet
         c["protocols"]["p25"]["unitToUnitAvailCheck"] = unit_to_unit_avail_check
+        c["protocols"]["p25"]["ignoreAffiliationCheck"] = ignore_affiliation_check
+        c["protocols"]["p25"]["verifyAff"] = verify_aff
+        c["protocols"]["p25"]["verifyReg"] = verify_reg
+        c["protocols"]["p25"]["legacyGroupGrnt"] = legacy_group_grnt
+        c["protocols"]["p25"]["legacyGroupReg"] = legacy_group_reg
+        c["protocols"]["p25"]["convNetGrantDemand"] = conv_net_grant_demand
+        c["protocols"]["p25"]["demandUnitRegForRefusedAff"] = demand_unit_reg_for_refused_aff
 
         c["protocols"]["p25"].setdefault("control", {})
         c["protocols"]["p25"]["control"]["enable"] = cc_enable
@@ -166,16 +204,22 @@ async def p25_save(
         c["system"]["config"]["sysId"] = sys_id.strip().upper()
         c["system"]["config"]["rfssId"] = rfss_id
         c["system"]["config"]["siteId"] = site_id
-        c["system"]["config"]["channelId"] = channel_id
-        c["system"]["config"]["channelNo"] = channel_no
         c["system"]["config"]["authoritative"] = authoritative
         c["system"]["config"]["defaultNetIdleTalkgroup"] = default_net_idle_tg
 
         c.setdefault("system", {}).setdefault("modem", {})
         c["system"]["modem"]["p25CorrCount"] = p25_corr_count
+        c["system"]["modem"]["txLevel"] = tx_level
         c["system"]["modem"].setdefault("hotspot", {})
+        c["system"]["modem"]["hotspot"]["txTuning"] = tx_tuning
+        c["system"]["modem"]["hotspot"]["rxTuning"] = rx_tuning
         c["system"]["modem"]["hotspot"]["p25DiscBWAdj"] = p25_disc_bw
         c["system"]["modem"]["hotspot"]["p25PostBWAdj"] = p25_post_bw
+        c["system"]["modem"]["hotspot"]["adfGainMode"] = adf_gain_mode
+        c["system"]["modem"]["hotspot"]["afcEnable"] = afc_enable
+
+        # Update frequencies & IDEN table
+        dvm_config_manager.set_tuned_frequencies(tx_freq_mhz, rx_freq_mhz, c)
 
     conf = dvm_config_manager.load_config_dict()
     apply_p25_fields(conf)
@@ -188,18 +232,18 @@ async def p25_save(
         if enable:
             conf["protocols"].setdefault("dmr", {})["enable"] = False
 
-    dvm_config_manager.save_config_dict(conf, summary=f"Update P25 settings (NAC {nac}, WACN {wacn})")
+    dvm_config_manager.save_config_dict(conf, summary=f"Update P25 settings (NAC {nac}, TX {tx_freq_mhz} MHz)")
 
     # Persist directly into P25 profile so settings are preserved when switching
     from dvm_nexus.config_engine.profile_manager import profile_manager
     profile_manager.sync_protocol_settings("p25", apply_p25_fields)
 
-    log_audit("P25", "SAVE_CONFIG", f"Updated P25 parameters: NAC={nac}, WACN={wacn}, SysID={sys_id} (Standby: {is_standby})")
+    log_audit("P25", "SAVE_CONFIG", f"Updated P25 parameters: NAC={nac}, WACN={wacn}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz (Standby: {is_standby})")
 
     if is_standby:
-        msg = "P25 standby settings saved to profile! Radio remains on DMR. Settings will apply when you switch to P25."
+        msg = f"P25 standby settings saved to profile! (TX: {tx_freq_mhz} MHz, NAC: {nac}). Radio remains on DMR until switched."
     else:
-        msg = "P25 settings saved successfully! Restart radio service to apply."
+        msg = f"P25 settings saved successfully! (TX: {tx_freq_mhz} MHz, RX: {rx_freq_mhz} MHz, NAC: {nac}). Restart service to apply."
 
     return render_template(
         request,

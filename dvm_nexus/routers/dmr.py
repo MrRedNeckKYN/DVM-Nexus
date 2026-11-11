@@ -20,17 +20,21 @@ router = APIRouter()
 
 @router.get("/dmr", response_class=HTMLResponse)
 async def dmr_page(request: Request):
-    """Render the DMR management interface with protocol standby awareness."""
+    """Render the comprehensive DMR management interface with protocol standby awareness."""
     conf = dvm_config_manager.load_config_dict()
     dmr_conf = conf.get("protocols", {}).get("dmr", {})
     sys_conf = conf.get("system", {}).get("config", {})
     modem_conf = conf.get("system", {}).get("modem", {})
     hotspot_conf = modem_conf.get("hotspot", {})
     net_conf = conf.get("network", {})
+    cw_conf = conf.get("cwId", {})
+    identity = conf.get("system", {}).get("identity", "NEXUS")
+    duplex = conf.get("system", {}).get("duplex", True)
 
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "p25")
 
+    tx_freq_mhz, rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
     talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
 
@@ -47,6 +51,11 @@ async def dmr_page(request: Request):
             "modem": modem_conf,
             "hotspot": hotspot_conf,
             "net": net_conf,
+            "cw": cw_conf,
+            "identity": identity,
+            "duplex": duplex,
+            "tx_freq_mhz": tx_freq_mhz,
+            "rx_freq_mhz": rx_freq_mhz,
             "talkgroups": talkgroups,
             "rids": rids,
         }
@@ -57,15 +66,30 @@ async def dmr_page(request: Request):
 async def dmr_save(
     request: Request,
     enable: bool = Form(True),
+    # Core Station & Frequency
+    callsign: str = Form("NEXUS"),
+    duplex: bool = Form(True),
+    tx_freq_mhz: float = Form(462.61875),
+    rx_freq_mhz: float = Form(467.61875),
+    cw_id_enable: bool = Form(True),
+    cw_id_time: int = Form(15),
+    # DMR Protocol
     color_code: int = Form(1),
     dmr_net_id: int = Form(1),
     site_id: int = Form(1),
     default_net_idle_tg: int = Form(0),
+    call_hang: int = Form(5),
+    tx_hang: int = Form(8),
+    # Master Network Linking
+    net_enable: bool = Form(False),
+    net_id: int = Form(100000),
+    net_address: str = Form("127.0.0.1"),
+    net_port: int = Form(62031),
+    net_password: str = Form("PASSWORD"),
     slot1: bool = Form(True),
     slot2: bool = Form(True),
     jitter: int = Form(360),
-    call_hang: int = Form(5),
-    tx_hang: int = Form(8),
+    # Advanced DMR Parameters
     silence_threshold: int = Form(21),
     frame_loss_threshold: int = Form(2),
     queue_size: int = Form(31),
@@ -78,11 +102,21 @@ async def dmr_save(
     repeat_data_packet: bool = Form(True),
     dump_ta_data: bool = Form(True),
     embedded_lc_only: bool = Form(False),
-    dmr_rx_delay: int = Form(7),
+    verify_reg: bool = Form(False),
+    ignore_affiliation_check: bool = Form(False),
+    legacy_group_reg: bool = Form(False),
+    conv_net_grant_demand: bool = Form(False),
+    # Modem & ADF7021 Tuning
+    tx_tuning: int = Form(0),
+    rx_tuning: int = Form(0),
     dmr_disc_bw: int = Form(0),
     dmr_post_bw: int = Form(0),
+    adf_gain_mode: int = Form(2),
+    afc_enable: bool = Form(True),
+    dmr_rx_delay: int = Form(7),
+    tx_level: int = Form(50),
 ):
-    """Save DMR parameters safely, preserving profile settings without breaking standby mode."""
+    """Save comprehensive DMR parameters safely, preserving profile settings without breaking standby mode."""
     errors = validate_dmr_settings({"colorCode": color_code, "dmrNetId": dmr_net_id, "siteId": site_id})
     if errors:
         return render_template(
@@ -95,6 +129,25 @@ async def dmr_save(
     is_standby = (active_proto == "p25")
 
     def apply_dmr_fields(c: Dict[str, Any]):
+        c.setdefault("system", {})
+        c["system"]["identity"] = callsign.strip() or "NEXUS"
+        c["system"]["duplex"] = duplex
+
+        c.setdefault("cwId", {})
+        c["cwId"]["enable"] = cw_id_enable
+        c["cwId"]["time"] = cw_id_time
+        c["cwId"]["callsign"] = callsign.strip() or "NEXUS"
+
+        c.setdefault("network", {})
+        c["network"]["enable"] = net_enable
+        c["network"]["id"] = net_id
+        c["network"]["address"] = net_address.strip()
+        c["network"]["port"] = net_port
+        c["network"]["password"] = net_password.strip()
+        c["network"]["slot1"] = slot1
+        c["network"]["slot2"] = slot2
+        c["network"]["jitter"] = jitter
+
         c.setdefault("protocols", {}).setdefault("dmr", {})
         c["protocols"]["dmr"]["callHang"] = call_hang
         c["protocols"]["dmr"]["txHang"] = tx_hang
@@ -104,6 +157,10 @@ async def dmr_save(
         c["protocols"]["dmr"]["repeatDataPacket"] = repeat_data_packet
         c["protocols"]["dmr"]["dumpTAData"] = dump_ta_data
         c["protocols"]["dmr"]["embeddedLCOnly"] = embedded_lc_only
+        c["protocols"]["dmr"]["verifyReg"] = verify_reg
+        c["protocols"]["dmr"]["ignoreAffiliationCheck"] = ignore_affiliation_check
+        c["protocols"]["dmr"]["legacyGroupReg"] = legacy_group_reg
+        c["protocols"]["dmr"]["convNetGrantDemand"] = conv_net_grant_demand
 
         c["protocols"]["dmr"].setdefault("beacons", {})
         c["protocols"]["dmr"]["beacons"]["enable"] = beacon_enable
@@ -121,16 +178,19 @@ async def dmr_save(
         c["system"]["config"]["siteId"] = site_id
         c["system"]["config"]["defaultNetIdleTalkgroup"] = default_net_idle_tg
 
-        c.setdefault("network", {})
-        c["network"]["slot1"] = slot1
-        c["network"]["slot2"] = slot2
-        c["network"]["jitter"] = jitter
-
         c.setdefault("system", {}).setdefault("modem", {})
         c["system"]["modem"]["dmrRxDelay"] = dmr_rx_delay
+        c["system"]["modem"]["txLevel"] = tx_level
         c["system"]["modem"].setdefault("hotspot", {})
+        c["system"]["modem"]["hotspot"]["txTuning"] = tx_tuning
+        c["system"]["modem"]["hotspot"]["rxTuning"] = rx_tuning
         c["system"]["modem"]["hotspot"]["dmrDiscBWAdj"] = dmr_disc_bw
         c["system"]["modem"]["hotspot"]["dmrPostBWAdj"] = dmr_post_bw
+        c["system"]["modem"]["hotspot"]["adfGainMode"] = adf_gain_mode
+        c["system"]["modem"]["hotspot"]["afcEnable"] = afc_enable
+
+        # Update frequencies & IDEN table
+        dvm_config_manager.set_tuned_frequencies(tx_freq_mhz, rx_freq_mhz, c)
 
     conf = dvm_config_manager.load_config_dict()
     apply_dmr_fields(conf)
@@ -143,18 +203,18 @@ async def dmr_save(
         if enable:
             conf["protocols"].setdefault("p25", {})["enable"] = False
 
-    dvm_config_manager.save_config_dict(conf, summary=f"Update DMR settings (Color Code {color_code})")
+    dvm_config_manager.save_config_dict(conf, summary=f"Update DMR settings (Color Code {color_code}, TX {tx_freq_mhz} MHz)")
 
     # Persist directly into DMR profile so settings are preserved when switching
     from dvm_nexus.config_engine.profile_manager import profile_manager
     profile_manager.sync_protocol_settings("dmr", apply_dmr_fields)
 
-    log_audit("DMR", "SAVE_CONFIG", f"Updated DMR parameters: CC={color_code}, NetID={dmr_net_id} (Standby: {is_standby})")
+    log_audit("DMR", "SAVE_CONFIG", f"Updated DMR parameters: CC={color_code}, NetID={dmr_net_id}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz (Standby: {is_standby})")
 
     if is_standby:
-        msg = "DMR standby settings saved to profile! Radio remains on P25. Settings will apply when you switch to DMR."
+        msg = f"DMR standby settings saved to profile! (TX: {tx_freq_mhz} MHz, CC: {color_code}). Radio remains on P25 until switched."
     else:
-        msg = "DMR settings saved successfully! Restart radio service to apply."
+        msg = f"DMR settings saved successfully! (TX: {tx_freq_mhz} MHz, RX: {rx_freq_mhz} MHz, CC: {color_code}). Restart service to apply."
 
     return render_template(
         request,

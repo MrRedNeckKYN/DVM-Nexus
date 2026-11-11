@@ -56,6 +56,12 @@
       <!-- Station Quick Telemetry Strip -->
       <div class="station-telemetry-strip">
         <div class="telemetry-strip-item">
+          <span class="strip-label">Tuned RF Frequencies</span>
+          <span class="strip-value font-mono truncate" style="color:var(--accent-cyan); font-weight:600;">
+            TX: {{ dvm.tx_freq_mhz or '462.61875' }} &bull; RX: {{ dvm.rx_freq_mhz or '467.61875' }} MHz
+          </span>
+        </div>
+        <div class="telemetry-strip-item">
           <span class="strip-label">FNE / Master Network</span>
           <span class="strip-value truncate">
             {% if dvm.network_enabled %}

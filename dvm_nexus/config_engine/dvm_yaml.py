@@ -187,6 +187,51 @@ class DVMConfigManager:
             return "multimode"
         return "none"
 
+    def get_tuned_frequencies(self) -> Tuple[float, float]:
+        """
+        Calculate active tuned TX and RX frequencies in MHz from channelId/channelNo and iden_table.dat.
+        """
+        conf = self.load_config_dict()
+        sys_conf = conf.get("system", {}).get("config", {})
+        channel_id = sys_conf.get("channelId", 2)
+        channel_no = sys_conf.get("channelNo", 1)
+        from dvm_nexus.config_engine.iden_calculator import read_iden_table_file, calculate_frequency_from_channel
+        iden_entries = read_iden_table_file(self.iden_path)
+        for entry in iden_entries:
+            if entry.channel_id == channel_id:
+                tx_hz, rx_hz = calculate_frequency_from_channel(
+                    channel_no=channel_no,
+                    base_freq_hz=entry.base_freq_hz,
+                    spacing_khz=entry.spacing_khz,
+                    offset_mhz=entry.offset_mhz
+                )
+                return round(tx_hz / 1000000.0, 6), round(rx_hz / 1000000.0, 6)
+        return 462.61875, 467.61875
+
+    def set_tuned_frequencies(self, tx_mhz: float, rx_mhz: float, conf_dict: Optional[Dict[str, Any]] = None) -> Tuple[int, int]:
+        """
+        Calculate IDEN entry for target frequencies, update iden_table.dat, 
+        and update channelId / channelNo in config dict.
+        Returns: (channel_id, channel_no)
+        """
+        from dvm_nexus.config_engine.iden_calculator import (
+            read_iden_table_file, format_iden_table, find_or_create_iden_entry
+        )
+        tx_hz = int(round(tx_mhz * 1000000.0))
+        rx_hz = int(round(rx_mhz * 1000000.0))
+        iden_entries = read_iden_table_file(self.iden_path)
+        entry, channel_no = find_or_create_iden_entry(iden_entries, tx_hz, rx_hz)
+        backup_manager.atomic_write(self.iden_path, format_iden_table(iden_entries))
+
+        if conf_dict is not None:
+            sys_conf = conf_dict.setdefault("system", {}).setdefault("config", {})
+            sys_conf["channelId"] = entry.channel_id
+            sys_conf["channelNo"] = channel_no
+            if "voiceChNo" in sys_conf and isinstance(sys_conf["voiceChNo"], list) and len(sys_conf["voiceChNo"]) > 0:
+                sys_conf["voiceChNo"][0]["channelId"] = entry.channel_id
+                sys_conf["voiceChNo"][0]["channelNo"] = channel_no
+        return entry.channel_id, channel_no
+
     def get_quick_status(self) -> Dict[str, Any]:
         """Extract high-level overview info for dashboard."""
         conf = self.load_config_dict()
@@ -202,8 +247,7 @@ class DVMConfigManager:
         modem_speed = modem_proto.get("uart", {}).get("speed", 115200)
 
         # Frequencies
-        rx_freq_mhz = None
-        tx_freq_mhz = None
+        tx_freq_mhz, rx_freq_mhz = self.get_tuned_frequencies()
         channel_id = sys_conf.get("channelId", 0)
         channel_no = sys_conf.get("channelNo", 1)
 
@@ -217,6 +261,8 @@ class DVMConfigManager:
             "protocol": protocol,
             "callsign": callsign,
             "duplex": is_duplex,
+            "tx_freq_mhz": tx_freq_mhz,
+            "rx_freq_mhz": rx_freq_mhz,
             "channel_id": channel_id,
             "channel_no": channel_no,
             "color_code": color_code,

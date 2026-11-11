@@ -9,7 +9,7 @@ log:
   activityFilePath: C:\Users\Administrator\Documents\DVM Nexus\dvm_nexus\data\active
   fileRoot: DVM
 network:
-  enable: true
+  enable: false
   id: 100000
   address: 127.0.0.1
   port: 62031
@@ -141,7 +141,7 @@ protocols:
     verbose: true
     debug: false
 system:
-  identity: ABCD123
+  identity: NEXUS
   timeout: 180
   duplex: true
   simplexSameFrequency: false
@@ -161,8 +161,8 @@ system:
   config:
     authoritative: true
     supervisor: false
-    channelId: 0
-    channelNo: 1
+    channelId: 2
+    channelNo: 2019
     controlCh:
       rpcAddress: 127.0.0.1
       rpcPort: 0
@@ -171,7 +171,7 @@ system:
       presence: 120
     voiceChNo:
       - channelId: 2
-        channelNo: 1
+        channelNo: 2019
         rpcAddress: 127.0.0.1
         rpcPort: 9890
         rpcPassword: ULTRA-VERY-SECURE-DEFAULT
@@ -270,3 +270,7 @@ system:
     file: talkgroup_rules.yml
     time: 2
     acl: false
+cwId:
+  enable: true
+  time: 15
+  callsign: NEXUS

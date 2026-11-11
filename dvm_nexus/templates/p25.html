@@ -54,25 +54,69 @@
   </form>
 </div>
 
-<!-- Active Frequency & Channel Info Pill -->
-{% if active_tx_mhz and active_rx_mhz %}
-<div class="card freq-banner-card" style="background:var(--bg-secondary); border-color:var(--border-light); margin-bottom:1.5rem;">
-  <div>
-    <div style="font-size:0.8rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Calculated Frequency from IDEN Bandplan</div>
-    <div style="font-size:1.2rem; font-weight:700; margin-top:0.25rem;">
-      TX: <span style="color:var(--accent-cyan);">{{ active_tx_mhz }} MHz</span> &nbsp;|&nbsp;
-      RX: <span style="color:var(--success);">{{ active_rx_mhz }} MHz</span>
-    </div>
-  </div>
-  <div class="freq-banner-badge">
-    <span class="badge badge-indigo">IDEN Ch #{{ sys.channelId }} / Slot {{ sys.channelNo }}</span>
-  </div>
-</div>
-{% endif %}
-
 <!-- P25 Parameters Form -->
 <form hx-post="/p25/save" hx-target="#toast-container" hx-swap="beforeend">
-  <!-- Section 1: P25 Network Identity & Site Architecture -->
+
+  <!-- Section 1: Radio Frequencies & Station Identity -->
+  <div class="card" style="border-left:4px solid var(--accent-indigo);">
+    <div class="card-header">
+      <div class="card-title">📻 Radio Frequencies &amp; Station Identity</div>
+      <span style="font-size:0.85rem; color:var(--text-dim);">Operating Frequencies, Station Callsign &amp; Duplex Mode</span>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Repeater / Station Callsign</label>
+        <input type="text" name="callsign" class="form-control font-mono" value="{{ identity or 'NEXUS' }}" required>
+        <small class="form-hint">Station identifier broadcast in CW ID and system logs.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">RF Operating Mode</label>
+        <select name="duplex" class="form-control">
+          <option value="true" {% if duplex %}selected{% endif %}>Full Duplex (Split TX / RX Frequencies)</option>
+          <option value="false" {% if not duplex %}selected{% endif %}>Simplex (Single Frequency Hotspot)</option>
+        </select>
+        <small class="form-hint">Dual ADF7021 hats (AURSINC) use Full Duplex.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Transmit (TX) Frequency (MHz)</label>
+        <input type="number" step="0.000001" name="tx_freq_mhz" class="form-control font-mono" value="{{ active_tx_mhz or 462.61875 }}" required>
+        <small class="form-hint">MMDVM Hat transmits here (Handheld radio listens).</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Receive (RX) Frequency (MHz)</label>
+        <input type="number" step="0.000001" name="rx_freq_mhz" class="form-control font-mono" value="{{ active_rx_mhz or 467.61875 }}" required>
+        <small class="form-hint">MMDVM Hat listens here (Handheld radio transmits).</small>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">CW ID Transmission</label>
+        <select name="cw_id_enable" class="form-control">
+          <option value="true" {% if cw.enable is not defined or cw.enable %}selected{% endif %}>Enabled (Periodic Morse ID)</option>
+          <option value="false" {% if cw.enable is defined and not cw.enable %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">CW ID Interval (Minutes)</label>
+        <input type="number" name="cw_id_time" class="form-control" value="{{ cw.time or 15 }}">
+        <small class="form-hint">FCC standard is 10 to 15 minutes.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Modulation Output Level (%)</label>
+        <input type="number" name="tx_level" class="form-control" min="0" max="100" value="{{ modem.txLevel or 50 }}">
+        <small class="form-hint">Air interface transmit modulation power (default 50%).</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: P25 Network Identity & Site Architecture -->
   <div class="card">
     <div class="card-header">
       <div class="card-title">⚙️ P25 Network Identity &amp; Site Architecture</div>
@@ -93,19 +137,19 @@
 
       <div class="form-group">
         <label class="form-label">P25 NAC (Network Access Code)</label>
-        <input type="text" name="nac" class="form-control" value="{{ sys.nac or '293' }}" required>
+        <input type="text" name="nac" class="form-control font-mono" value="{{ sys.nac or '293' }}" required>
         <small class="form-hint">3-digit Hex (e.g. 293). Standard RX NAC.</small>
       </div>
 
       <div class="form-group">
         <label class="form-label">TX NAC Override (Optional)</label>
-        <input type="text" name="tx_nac" class="form-control" value="{{ sys.txNAC or '' }}" placeholder="Leave blank to match RX">
+        <input type="text" name="tx_nac" class="form-control font-mono" value="{{ sys.txNAC or '' }}" placeholder="Leave blank to match RX">
         <small class="form-hint">Leave blank to use primary NAC for transmit.</small>
       </div>
 
       <div class="form-group">
         <label class="form-label">WACN (Wide Area Net ID)</label>
-        <input type="text" name="wacn" class="form-control" value="{{ sys.netId or 'BB800' }}" required>
+        <input type="text" name="wacn" class="form-control font-mono" value="{{ sys.netId or 'BB800' }}" required>
         <small class="form-hint">5-digit Hex P25 Wide Area Communication Network ID.</small>
       </div>
     </div>
@@ -113,7 +157,7 @@
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">System ID (3-digit Hex)</label>
-        <input type="text" name="sys_id" class="form-control" value="{{ sys.sysId or '001' }}" required>
+        <input type="text" name="sys_id" class="form-control font-mono" value="{{ sys.sysId or '001' }}" required>
       </div>
 
       <div class="form-group">
@@ -132,39 +176,16 @@
           <option value="true" {% if sys.authoritative is not defined or sys.authoritative %}selected{% endif %}>True (Authoritative Master)</option>
           <option value="false" {% if sys.authoritative is defined and not sys.authoritative %}selected{% endif %}>False (Subordinate)</option>
         </select>
-        <small class="form-hint">Determines if this repeater enforces system decisions.</small>
       </div>
     </div>
 
     <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">IDEN Channel ID (0 - 15)</label>
-        <input type="number" name="channel_id" class="form-control" min="0" max="15" value="{{ sys.channelId or 0 }}" required>
-        <small class="form-hint">Matches entry in IDEN Bandplan Table below.</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">IDEN Channel Number</label>
-        <input type="number" name="channel_no" class="form-control" value="{{ sys.channelNo or 1 }}" required>
-        <small class="form-hint">Relative channel offset multiplier within bandplan.</small>
-      </div>
-
       <div class="form-group">
         <label class="form-label">Default Idle Network TGID</label>
-        <input type="number" name="default_net_idle_tg" class="form-control" value="{{ sys.defaultNetIdleTalkgroup or 0 }}" placeholder="0 for promiscuous / FCFS">
+        <input type="number" name="default_net_idle_tg" class="form-control font-mono" value="{{ sys.defaultNetIdleTalkgroup if sys.defaultNetIdleTalkgroup is defined else 0 }}">
         <small class="form-hint">TGID 0 enables promiscuous network routing.</small>
       </div>
-    </div>
-  </div>
 
-  <!-- Section 2: Hang Timers, Buffers & Audio Silence Thresholds -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">⏱️ Hang Timers, Buffers &amp; Silence Thresholds</div>
-      <span style="font-size:0.85rem; color:var(--text-dim);">DVMHost Air Interface &amp; Audio Demodulation Settings</span>
-    </div>
-
-    <div class="form-row">
       <div class="form-group">
         <label class="form-label">Call Hang Time (seconds)</label>
         <input type="number" name="call_hang" class="form-control" value="{{ p25.callHang or 5 }}">
@@ -184,15 +205,123 @@
           <option value="false" {% if p25.immediateCallTerm is defined and not p25.immediateCallTerm %}selected{% endif %}>Disabled (Wait for hang timeout)</option>
         </select>
       </div>
+    </div>
+  </div>
 
+  <!-- Section 3: Master Server / FNE Core Linking -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🌐 Master Server / FNE Core Linking</div>
+      <span style="font-size:0.85rem; color:var(--text-dim);">Upstream Network Connection (P25Reflector, Quantar, or Private FNE)</span>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Network Linking Mode</label>
+        <select name="net_enable" class="form-control">
+          <option value="false" {% if not net.enable %}selected{% endif %}>Standalone Direct (Offline / No Master)</option>
+          <option value="true" {% if net.enable %}selected{% endif %}>Connected to Upstream Master / FNE</option>
+        </select>
+        <small class="form-hint">Set to Standalone if running locally without an upstream network server.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Network Peer ID</label>
+        <input type="number" name="net_id" class="form-control font-mono" value="{{ net.id or 100000 }}">
+        <small class="form-hint">Assigned repeater ID on master network.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Master Server Address / IP</label>
+        <input type="text" name="net_address" class="form-control font-mono" value="{{ net.address or '127.0.0.1' }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Master Server Port</label>
+        <input type="number" name="net_port" class="form-control font-mono" value="{{ net.port or 62031 }}">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Network Authentication Password</label>
+        <input type="password" name="net_password" class="form-control" value="{{ net.password or 'PASSWORD' }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: ADF7021 Modem Transceiver & RF Calibration -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📡 ADF7021 Transceiver &amp; RF Tuning Calibration</div>
+      <span style="font-size:0.85rem; color:var(--text-dim);">Hotspot Hardware Offsets and Baseband Filters</span>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
+        <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
+        <small class="form-hint">Fine frequency calibration for transmit (usually 0 to ±500 Hz).</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
+        <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
+        <small class="form-hint">Fine frequency calibration for receive (usually 0 to ±500 Hz).</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">ADF7021 LNA Gain Mode</label>
+        <select name="adf_gain_mode" class="form-control">
+          <option value="0" {% if hotspot.adfGainMode == 0 %}selected{% endif %}>0 - Auto</option>
+          <option value="1" {% if hotspot.adfGainMode == 1 %}selected{% endif %}>1 - Auto High Linearity</option>
+          <option value="2" {% if hotspot.adfGainMode == 2 or not hotspot.adfGainMode %}selected{% endif %}>2 - Low Gain (Recommended for close handhelds)</option>
+          <option value="3" {% if hotspot.adfGainMode == 3 %}selected{% endif %}>3 - High Gain</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Automatic Frequency Correction (AFC)</label>
+        <select name="afc_enable" class="form-control">
+          <option value="true" {% if hotspot.afcEnable is not defined or hotspot.afcEnable %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if hotspot.afcEnable is defined and not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">P25 Discriminator BW (-128 to 128)</label>
+        <input type="number" name="p25_disc_bw" class="form-control" value="{{ hotspot.p25DiscBWAdj or 0 }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">P25 Post Demod BW (-128 to 128)</label>
+        <input type="number" name="p25_post_bw" class="form-control" value="{{ hotspot.p25PostBWAdj or 0 }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">P25 Correlation Count</label>
+        <input type="number" name="p25_corr_count" class="form-control" value="{{ modem.p25CorrCount or 2 }}">
+        <small class="form-hint">Frame sync correlator window (default 2).</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 5: Advanced P25 Parameters & Access Controls -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🔬 Advanced P25 Parameters, Access Control &amp; Control Channel</div>
+      <span style="font-size:0.85rem; color:var(--text-dim);">Detailed Protocol Options, Registration &amp; TSBK Trunking</span>
+    </div>
+
+    <div class="form-row">
       <div class="form-group">
         <label class="form-label">BER Silence Threshold</label>
         <input type="number" name="silence_threshold" class="form-control" value="{{ p25.silenceThreshold or 124 }}">
         <small class="form-hint">BER threshold for silencing packet audio (default 124).</small>
       </div>
-    </div>
 
-    <div class="form-row">
       <div class="form-group">
         <label class="form-label">Frame Loss Threshold</label>
         <input type="number" name="frame_loss_threshold" class="form-control" value="{{ p25.frameLossThreshold or 6 }}">
@@ -202,7 +331,6 @@
       <div class="form-group">
         <label class="form-label">Internal Data Queue Size (packets)</label>
         <input type="number" name="queue_size" class="form-control" value="{{ p25.queueSize or 12 }}">
-        <small class="form-hint">Buffer size for queued P25 packets (default 12).</small>
       </div>
 
       <div class="form-group">
@@ -212,77 +340,6 @@
           <option value="false" {% if p25.repeatDataPacket is defined and not p25.repeatDataPacket %}selected{% endif %}>Disabled</option>
         </select>
       </div>
-    </div>
-  </div>
-
-  <!-- Section 3: P25 Control Channel (CC) & TSBK Broadcast -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">📡 P25 Control Channel (CC) &amp; TSBK Broadcast</div>
-      <span style="font-size:0.85rem; color:var(--text-dim);">DVMHost Trunking &amp; Trunking Signalling Block (TSBK) Options</span>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">P25 Control Channel</label>
-        <select name="cc_enable" class="form-control">
-          <option value="false" {% if not p25.control or not p25.control.enable %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if p25.control and p25.control.enable %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">TSBK Continuous Broadcast</label>
-        <select name="cc_broadcast" class="form-control">
-          <option value="true" {% if not p25.control or p25.control.broadcast is not defined or p25.control.broadcast %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if p25.control and p25.control.broadcast is defined and not p25.control.broadcast %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">CC Broadcast Interval (ms)</label>
-        <input type="number" name="cc_interval" class="form-control" value="{{ (p25.control and p25.control.interval) or 300 }}">
-        <small class="form-hint">Time between TSBK idle bursts (default 300 ms).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">CC Burst Duration (ms)</label>
-        <input type="number" name="cc_duration" class="form-control" value="{{ (p25.control and p25.control.duration) or 1 }}">
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">TSBK Acknowledge Requests</label>
-        <select name="cc_ack_requests" class="form-control">
-          <option value="true" {% if not p25.control or p25.control.ackRequests is not defined or p25.control.ackRequests %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if p25.control and p25.control.ackRequests is defined and not p25.control.ackRequests %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Notify Active TG on CC</label>
-        <select name="cc_notify_active_tg" class="form-control">
-          <option value="false" {% if not p25.control or not p25.control.notifyActiveTG %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if p25.control and p25.control.notifyActiveTG %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Dedicated Control Channel</label>
-        <select name="cc_dedicated" class="form-control">
-          <option value="false" {% if not p25.control or not p25.control.dedicated %}selected{% endif %}>No (Mixed Voice / CC)</option>
-          <option value="true" {% if p25.control and p25.control.dedicated %}selected{% endif %}>Yes (Dedicated CC Only)</option>
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <!-- Section 4: Security, Access Checks & Modem Adjustments -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">🛡️ Security, Access Checks &amp; Modem Adjustments</div>
-      <span style="font-size:0.85rem; color:var(--text-dim);">Unauthorized Unit Control &amp; RF Baseband Filters</span>
     </div>
 
     <div class="form-row">
@@ -310,28 +367,114 @@
           <option value="true" {% if p25.unitToUnitAvailCheck %}selected{% endif %}>Enabled</option>
         </select>
       </div>
+
+      <div class="form-group">
+        <label class="form-label">Verify Unit Registration</label>
+        <select name="verify_reg" class="form-control">
+          <option value="false" {% if not p25.verifyReg %}selected{% endif %}>Disabled</option>
+          <option value="true" {% if p25.verifyReg %}selected{% endif %}>Enabled</option>
+        </select>
+      </div>
     </div>
 
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">P25 Correlation Count</label>
-        <input type="number" name="p25_corr_count" class="form-control" value="{{ modem.p25CorrCount or 2 }}">
-        <small class="form-hint">Frame sync correlator window (default 2).</small>
+        <label class="form-label">Verify Group Affiliation</label>
+        <select name="verify_aff" class="form-control">
+          <option value="false" {% if not p25.verifyAff %}selected{% endif %}>Disabled</option>
+          <option value="true" {% if p25.verifyAff %}selected{% endif %}>Enabled</option>
+        </select>
       </div>
 
       <div class="form-group">
-        <label class="form-label">ADF7021 Discriminator BW Adj</label>
-        <input type="number" name="p25_disc_bw" class="form-control" value="{{ hotspot.p25DiscBWAdj or 0 }}">
+        <label class="form-label">Ignore Affiliation Check</label>
+        <select name="ignore_affiliation_check" class="form-control">
+          <option value="false" {% if not p25.ignoreAffiliationCheck %}selected{% endif %}>Enforce Affiliations</option>
+          <option value="true" {% if p25.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations</option>
+        </select>
       </div>
 
       <div class="form-group">
-        <label class="form-label">ADF7021 Post-Demod BW Adj</label>
-        <input type="number" name="p25_post_bw" class="form-control" value="{{ hotspot.p25PostBWAdj or 0 }}">
+        <label class="form-label">Legacy Group Grant Fallback</label>
+        <select name="legacy_group_grnt" class="form-control">
+          <option value="true" {% if p25.legacyGroupGrnt is not defined or p25.legacyGroupGrnt %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if p25.legacyGroupGrnt is defined and not p25.legacyGroupGrnt %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Legacy Group Registration Fallback</label>
+        <select name="legacy_group_reg" class="form-control">
+          <option value="false" {% if not p25.legacyGroupReg %}selected{% endif %}>Disabled</option>
+          <option value="true" {% if p25.legacyGroupReg %}selected{% endif %}>Enabled</option>
+        </select>
       </div>
     </div>
 
-    <div style="display:flex; justify-content:flex-end; margin-top: 1rem;">
-      <button type="submit" class="btn btn-primary" style="padding: 0.65rem 1.75rem; font-weight:700;">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Conventional Net Grant Demand</label>
+        <select name="conv_net_grant_demand" class="form-control">
+          <option value="false" {% if not p25.convNetGrantDemand %}selected{% endif %}>Disabled</option>
+          <option value="true" {% if p25.convNetGrantDemand %}selected{% endif %}>Enabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Demand Reg for Refused Affiliation</label>
+        <select name="demand_unit_reg_for_refused_aff" class="form-control">
+          <option value="true" {% if p25.demandUnitRegForRefusedAff is not defined or p25.demandUnitRegForRefusedAff %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if p25.demandUnitRegForRefusedAff is defined and not p25.demandUnitRegForRefusedAff %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">P25 Control Channel (CC)</label>
+        <select name="cc_enable" class="form-control">
+          <option value="false" {% if not p25.control or not p25.control.enable %}selected{% endif %}>Disabled</option>
+          <option value="true" {% if p25.control and p25.control.enable %}selected{% endif %}>Enabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">TSBK Continuous Broadcast</label>
+        <select name="cc_broadcast" class="form-control">
+          <option value="true" {% if not p25.control or p25.control.broadcast is not defined or p25.control.broadcast %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if p25.control and p25.control.broadcast is defined and not p25.control.broadcast %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">CC Broadcast Interval (ms)</label>
+        <input type="number" name="cc_interval" class="form-control" value="{{ (p25.control and p25.control.interval) or 300 }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">CC Burst Duration (ms)</label>
+        <input type="number" name="cc_duration" class="form-control" value="{{ (p25.control and p25.control.duration) or 1 }}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">TSBK Acknowledge Requests</label>
+        <select name="cc_ack_requests" class="form-control">
+          <option value="true" {% if not p25.control or p25.control.ackRequests is not defined or p25.control.ackRequests %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if p25.control and p25.control.ackRequests is defined and not p25.control.ackRequests %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Dedicated Control Channel</label>
+        <select name="cc_dedicated" class="form-control">
+          <option value="false" {% if not p25.control or not p25.control.dedicated %}selected{% endif %}>No (Mixed Voice / CC)</option>
+          <option value="true" {% if p25.control and p25.control.dedicated %}selected{% endif %}>Yes (Dedicated CC Only)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top: 1.5rem;">
+      <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2.25rem; font-weight:700; font-size:1rem;">
         💾 Save All P25 Configuration
       </button>
     </div>

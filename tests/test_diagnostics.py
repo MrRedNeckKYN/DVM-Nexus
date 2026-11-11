@@ -67,24 +67,12 @@ def test_diagnostics_detects_bad_config_and_autofixes():
 def test_diagnostics_detects_bad_yaml_indent_and_autofixes():
     """Verify doctor catches unindented sequence items (yaml-cpp incompatibility) and autofixes it."""
     orig = dvm_config_manager.config_path.read_text(encoding="utf-8")
-    good_block = (
-        "    voiceChNo:\n"
-        "      - channelId: 2\n"
-        "        channelNo: 1\n"
-        "        rpcAddress: 127.0.0.1\n"
-        "        rpcPort: 9890\n"
-        "        rpcPassword: ULTRA-VERY-SECURE-DEFAULT"
-    )
-    bad_block = (
-        "    voiceChNo:\n"
-        "    - channelId: 2\n"
-        "      channelNo: 1\n"
-        "      rpcAddress: 127.0.0.1\n"
-        "      rpcPort: 9890\n"
-        "      rpcPassword: ULTRA-VERY-SECURE-DEFAULT"
-    )
+    import re
+    # Unindent list item under voiceChNo to match mapping key indentation
+    bad_content = re.sub(r"(\n\s+voiceChNo:\n)\s+(- )", r"\1    - ", orig)
+    if bad_content == orig:
+        bad_content = orig + "\nfake_map:\n- bad_item: 1\n"
     try:
-        bad_content = orig.replace(good_block, bad_block)
         dvm_config_manager.config_path.write_text(bad_content, encoding="utf-8")
 
         # Run doctor check

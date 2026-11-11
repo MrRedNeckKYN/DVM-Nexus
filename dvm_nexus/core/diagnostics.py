@@ -186,18 +186,8 @@ class DiagnosticsEngine:
                 "fix_id": "restore_baseline_config",
             })
         else:
+            # Check yaml-cpp parser compatibility (sequences must be indented relative to mapping key)
             try:
-                cfg_dict = dvm_config_manager.load_config_dict()
-                checks.append({
-                    "id": "config_file",
-                    "name": "Configuration File Syntax",
-                    "status": "pass",
-                    "badge": "VALID YAML",
-                    "summary": "config.yml is present and passed YAML structural parsing.",
-                    "auto_fixable": False,
-                })
-
-                # Check yaml-cpp parser compatibility (sequences must be indented relative to mapping key)
                 raw_cfg = cfg_path.read_text(encoding="utf-8")
                 bad_indent = False
                 for m in re.finditer(r'^([ \t]*)([a-zA-Z0-9_-]+):\s*\n([ \t]*)-\s', raw_cfg, re.MULTILINE):
@@ -224,6 +214,19 @@ class DiagnosticsEngine:
                         "summary": "List indentation is fully compliant with DVMHost C++ yaml-cpp parser.",
                         "auto_fixable": False,
                     })
+            except Exception:
+                pass
+
+            try:
+                cfg_dict = dvm_config_manager.load_config_dict()
+                checks.append({
+                    "id": "config_file",
+                    "name": "Configuration File Syntax",
+                    "status": "pass",
+                    "badge": "VALID YAML",
+                    "summary": "config.yml is present and passed YAML structural parsing.",
+                    "auto_fixable": False,
+                })
             except Exception as e:
                 checks.append({
                     "id": "config_file",
@@ -448,6 +451,19 @@ class DiagnosticsEngine:
                     backup_manager.atomic_write(cfg_file, dmr_src.read_text(encoding="utf-8"))
                     fixes_applied.append(f"Deployed default DMR configuration to '{cfg_file}'")
 
+            # Check if raw config has yaml-cpp incompatible sequence indentation
+            raw_cfg = cfg_file.read_text(encoding="utf-8") if cfg_file.exists() else ""
+            bad_indent = False
+            for m in re.finditer(r'^([ \t]*)([a-zA-Z0-9_-]+):\s*\n([ \t]*)-\s', raw_cfg, re.MULTILINE):
+                if len(m.group(3)) <= len(m.group(1)):
+                    bad_indent = True
+                    break
+
+            if bad_indent:
+                fixes_applied.append("Reformatted YAML list indentation for DVMHost yaml-cpp compatibility")
+                fixed_raw = re.sub(r'(^([ \t]*)[a-zA-Z0-9_-]+:\s*\n)\2(-\s)', r'\g<1>\g<2>  \g<3>', raw_cfg, flags=re.MULTILINE)
+                backup_manager.atomic_write(cfg_file, fixed_raw)
+
             # 2. Enforce config.yml parameters (iAgreeNotToBeStupid=True, daemon=False)
             cfg = dvm_config_manager.load_config_dict()
             modified = False
@@ -479,19 +495,7 @@ class DiagnosticsEngine:
                 fixes_applied.append(f"Set 'log.activityFilePath: {target_log_path}' absolute path")
                 modified = True
 
-            # Check if raw config has yaml-cpp incompatible sequence indentation
-            raw_cfg = cfg_file.read_text(encoding="utf-8") if cfg_file.exists() else ""
-            bad_indent = False
-            for m in re.finditer(r'^([ \t]*)([a-zA-Z0-9_-]+):\s*\n([ \t]*)-\s', raw_cfg, re.MULTILINE):
-                if len(m.group(3)) <= len(m.group(1)):
-                    bad_indent = True
-                    break
-
-            if bad_indent:
-                fixes_applied.append("Reformatted YAML list indentation for DVMHost yaml-cpp compatibility")
-                modified = True
-
-            if modified or not cfg_file.exists():
+            if modified or bad_indent or not cfg_file.exists():
                 dvm_config_manager.save_config_dict(cfg, summary="Auto-Fix: Corrected DVMHost policy, daemon, and YAML indentation")
 
             # 3. Restore any missing baseline data tables

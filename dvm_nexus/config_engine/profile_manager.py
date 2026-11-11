@@ -354,6 +354,11 @@ class ProfileManager:
                     conf["protocols"].setdefault("p25", {})["enable"] = True
                     conf["protocols"].setdefault("dmr", {})["enable"] = False
                 backup_manager.atomic_write(prof_config, yaml.dump(conf, default_flow_style=False, sort_keys=False))
+                if prof_dir.exists() and dvm_config_manager.iden_path.exists():
+                    try:
+                        shutil.copy2(dvm_config_manager.iden_path, prof_dir / "iden_table.dat")
+                    except Exception:
+                        pass
                 return True
             except Exception:
                 return False
