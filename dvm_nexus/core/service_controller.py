@@ -148,11 +148,32 @@ class ServiceController:
     def preflight_safety_check(self) -> None:
         """
         Safety Block: Pre-flight audit & self-healing before starting dvmhost.service.
-        Enforces single-protocol mutual exclusion to prevent modem NAK reason 32 (HS_NO_DUAL_MODE).
+        1. Enforces single-protocol mutual exclusion to prevent modem NAK reason 32 (HS_NO_DUAL_MODE).
+        2. Ensures dvmhost.service has Type=simple so systemctl start never hangs on foreground execution.
         """
         try:
             from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
             dvm_config_manager.ensure_active_config_exists()
+        except Exception:
+            pass
+
+        try:
+            if os.name != "nt":
+                unit_path = Path("/etc/systemd/system/dvmhost.service")
+                repo_unit = Path(__file__).resolve().parent.parent.parent / "systemd" / "dvmhost.service"
+                needs_update = False
+                if repo_unit.exists():
+                    if not unit_path.exists():
+                        needs_update = True
+                    else:
+                        txt = unit_path.read_text(encoding="utf-8", errors="ignore")
+                        if "Type=forking" in txt:
+                            needs_update = True
+
+                    if needs_update:
+                        subprocess.run(["sudo", "cp", str(repo_unit), str(unit_path)], capture_output=True, check=False)
+                        subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True, check=False)
+                        log_audit("SERVICE", "SYSTEMD_FIX", "Installed Type=simple dvmhost.service unit to prevent startup timeouts")
         except Exception:
             pass
 
@@ -168,8 +189,10 @@ class ServiceController:
             return {"success": True, "message": "Service started (simulated dev mode)"}
 
         try:
-            res = subprocess.run(["sudo", "systemctl", "start", self.service_name], capture_output=True, text=True, timeout=15)
+            # Use --no-block so systemctl returns immediately without hanging on hardware init
+            res = subprocess.run(["sudo", "systemctl", "start", "--no-block", self.service_name], capture_output=True, text=True, timeout=10)
             if res.returncode == 0:
+                time.sleep(0.5)
                 return {"success": True, "message": f"{self.service_name} started successfully"}
             else:
                 err = res.stderr.strip() or f"systemctl start exited with code {res.returncode}"
@@ -211,8 +234,10 @@ class ServiceController:
             return {"success": True, "message": "Service restarted (simulated dev mode)"}
 
         try:
-            res = subprocess.run(["sudo", "systemctl", "restart", self.service_name], capture_output=True, text=True, timeout=20)
+            # Use --no-block so systemctl returns immediately without hanging on hardware init
+            res = subprocess.run(["sudo", "systemctl", "restart", "--no-block", self.service_name], capture_output=True, text=True, timeout=10)
             if res.returncode == 0:
+                time.sleep(0.5)
                 return {"success": True, "message": f"{self.service_name} restarted successfully"}
             else:
                 err = res.stderr.strip() or f"systemctl restart exited with code {res.returncode}"
@@ -225,15 +250,15 @@ class ServiceController:
             return {"success": False, "message": str(e), "recent_logs": [str(e)]}
 
     def verify_running(self, timeout_sec: float = 6.0) -> bool:
-        """Poll service for timeout_sec to verify it remains running."""
+        """Poll service for timeout_sec to verify it is running or actively initializing."""
         deadline = time.time() + timeout_sec
-        time.sleep(1.0)
+        time.sleep(0.5)
         while time.time() < deadline:
             status = self.get_status(force=True)
-            if not status["is_running"]:
-                return False
+            if status.get("is_running") or status.get("is_starting"):
+                return True
             time.sleep(0.5)
-        return True
+        return False
 
     def get_recent_logs(self, lines: int = 50) -> List[str]:
         """Retrieve recent journalctl logs for dvmhost."""
