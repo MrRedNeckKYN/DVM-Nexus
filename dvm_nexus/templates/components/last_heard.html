@@ -50,7 +50,7 @@
                   <span class="badge badge-danger" style="font-size: 0.75rem;">📻 TX KEY</span>
                 {% endif %}
               </td>
-              <td style="font-weight: 600;">
+              <td style="font-weight: 600; max-width: 200px;" class="truncate" title="{{ call.src_alias }} ({{ call.src_id }})">
                 {{ call.src_alias }} <span style="font-family: monospace; font-size: 0.8rem; color: var(--text-dim); font-weight: normal;">({{ call.src_id }})</span>
               </td>
               <td style="font-family: monospace; font-weight: 700; color: var(--accent-cyan);">

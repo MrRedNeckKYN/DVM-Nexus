@@ -55,7 +55,7 @@
       <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">TARGET TALKGROUP</div>
       <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--text-bright);">
         {% if hud.dest_id %}
-          TG {{ hud.dest_id }} <span style="font-size: 0.75rem; color: var(--text-dim);">({{ hud.call_type }})</span>
+          TG {{ hud.dest_id }} <span style="font-size: 0.75rem; color: var(--text-dim);">({{ hud.call_type|default('Group') }})</span>
         {% else %}
           <span style="color: var(--text-dim); font-weight: normal;">--</span>
         {% endif %}
@@ -85,8 +85,8 @@
           <span style="color: var(--text-dim);">-- dBm</span>
         {% endif %}
         &bull;
-        <span style="color: {% if hud.ber_percent < 1.0 %}var(--accent-emerald){% elif hud.ber_percent < 3.0 %}var(--warning){% else %}var(--accent-danger){% endif %};">
-          BER: {{ hud.ber_percent }}%
+        <span style="color: {% if hud.ber_percent is not none and hud.ber_percent < 1.0 %}var(--accent-emerald){% elif hud.ber_percent is not none and hud.ber_percent < 3.0 %}var(--warning){% else %}var(--accent-danger){% endif %};">
+          BER: {{ hud.ber_percent|default(0.0) }}%
         </span>
       </div>
     </div>
@@ -96,10 +96,10 @@
       <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">MODEM HARDWARE</div>
       <div style="font-size: 0.8rem; color: var(--text-dim);">
         Overf: 
-        <span style="color: {% if hud.adc_overflow > 0 or hud.dac_overflow > 0 %}var(--accent-danger){% else %}var(--accent-emerald){% endif %};">
-          A:{{ hud.adc_overflow }} D:{{ hud.dac_overflow }}
+        <span style="color: {% if (hud.adc_overflow|default(0)) > 0 or (hud.dac_overflow|default(0)) > 0 %}var(--accent-danger){% else %}var(--accent-emerald){% endif %};">
+          A:{{ hud.adc_overflow|default(0) }} D:{{ hud.dac_overflow|default(0) }}
         </span>
-        &bull; Buf: <span class="font-mono">{{ hud.dmr_free_space }}B</span>
+        &bull; Buf: <span class="font-mono">{{ hud.dmr_free_space|default(0) }}B</span>
       </div>
     </div>
 

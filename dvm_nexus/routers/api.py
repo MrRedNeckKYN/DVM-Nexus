@@ -14,6 +14,9 @@ from dvm_nexus.core.service_controller import service_controller
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 from dvm_nexus.config_engine.profile_manager import profile_manager
 
+import logging
+
+logger = logging.getLogger("dvm_nexus.api")
 router = APIRouter(prefix="/api")
 
 
@@ -43,8 +46,10 @@ async def event_generator() -> AsyncIterator[str]:
                 "service": service_controller.get_status(),
             }
             yield f"data: {json.dumps(payload)}\n\n"
-        except Exception:
-            pass
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning(f"Error in SSE stream generator: {exc}")
         await asyncio.sleep(2.0)
 
 

@@ -270,6 +270,22 @@ function toggleAutoRefresh(enabled) {
   }
 }
 
+// Ensure timer is cleaned up when navigating away
+window.addEventListener('beforeunload', () => {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+});
+document.body.addEventListener('htmx:beforeSwap', (e) => {
+  if (e.detail.target && e.detail.target.id === 'diagnostics-log-stream' && !document.getElementById('terminal-auto-refresh')?.checked) {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+  }
+});
+
 function copyTerminalLogs(btn) {
   const content = document.getElementById('terminal-log-content');
   if (!content) return;
