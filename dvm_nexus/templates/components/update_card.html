@@ -21,8 +21,8 @@
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
           <strong>System Status:</strong>
-          {% if updater.check.last_checked %}
-            Up to date as of {{ updater.check.last_checked[11:19] }} UTC.
+          {% if updater.check and updater.check.last_checked %}
+            Up to date as of {{ (updater.check.last_checked|string)[11:19] }} UTC.
           {% else %}
             Ready to check for upstream updates.
           {% endif %}

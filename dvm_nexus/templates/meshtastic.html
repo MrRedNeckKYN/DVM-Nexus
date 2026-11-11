@@ -357,7 +357,9 @@ function setRecipient(nodeId, name) {
 }
 
 function updateTransportFields() {
-  const sel = document.getElementById('transport-select').value;
+  const selEl = document.getElementById('transport-select');
+  if (!selEl) return;
+  const sel = selEl.value;
   const serialGrp = document.getElementById('serial-field-group');
   const tcpHostGrp = document.getElementById('tcp-host-group');
   const tcpPortGrp = document.getElementById('tcp-port-group');
