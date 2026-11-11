@@ -6,6 +6,16 @@
   {% include "components/service_error_banner.html" %}
 </div>
 
+<!-- Top Area: Real-Time RF Transceiver State HUD (Live 1.5s Auto-Sync) -->
+<div id="rf-hud-container" hx-get="/components/rf-hud" hx-trigger="every 1.5s" hx-swap="outerHTML">
+  {% include "components/rf_hud.html" %}
+</div>
+
+<!-- Live Last Heard Activity Stream -->
+<div style="margin-bottom: 1.25rem;">
+  {% include "components/last_heard.html" %}
+</div>
+
 <div class="dashboard-grid">
   <!-- Area 1: Hero Radio Status (Desktop Left 2/3 / Mobile Top) -->
   <div class="dash-hero">

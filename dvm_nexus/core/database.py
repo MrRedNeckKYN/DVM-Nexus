@@ -218,6 +218,73 @@ def init_db():
                     ('P25 TG 101 Activity Alert', 'p25_talkgroup', '101', 0, '^all', '[P25 TG 101] {event_text}', 1, ?),
                     ('DVM Host Status & Profile Alert', 'system_status', 'all', 0, '^all', '[DVM Nexus] System Event: {event_text}', 1, ?)
                 """, (now_str, now_str, now_str))
+
+            # Live Radio Activity & Last Heard Feed
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS radio_last_heard (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    protocol TEXT NOT NULL CHECK(protocol IN ('dmr', 'p25', 'nxdn')),
+                    direction TEXT NOT NULL CHECK(direction IN ('rf_rx', 'net_rx', 'tx')),
+                    call_type TEXT NOT NULL DEFAULT 'group',
+                    src_id INTEGER NOT NULL,
+                    src_alias TEXT DEFAULT '',
+                    dest_id INTEGER NOT NULL,
+                    slot INTEGER DEFAULT NULL,
+                    duration_sec REAL DEFAULT 0.0,
+                    ber_percent REAL DEFAULT 0.0,
+                    rssi_dbm INTEGER DEFAULT NULL
+                )
+            """)
+    finally:
+        conn.close()
+
+
+def record_last_heard(
+    protocol: str,
+    direction: str,
+    src_id: int,
+    dest_id: int,
+    src_alias: str = "",
+    call_type: str = "group",
+    slot: Optional[int] = None,
+    duration_sec: float = 0.0,
+    ber_percent: float = 0.0,
+    rssi_dbm: Optional[int] = None
+) -> int:
+    """Record a radio call event in the persistent Last Heard table."""
+    conn = get_db_connection()
+    try:
+        now_str = datetime.now(timezone.utc).isoformat()
+        with conn:
+            cur = conn.execute("""
+                INSERT INTO radio_last_heard (
+                    timestamp, protocol, direction, call_type, src_id, src_alias, dest_id, slot, duration_sec, ber_percent, rssi_dbm
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                now_str, protocol.lower(), direction.lower(), call_type.lower(),
+                int(src_id), str(src_alias or ""), int(dest_id), slot,
+                float(duration_sec), float(ber_percent), rssi_dbm
+            ))
+            return cur.lastrowid
+    except Exception as e:
+        print(f"Failed to record Last Heard call: {e}")
+        return 0
+    finally:
+        conn.close()
+
+
+def get_recent_last_heard(limit: int = 30) -> List[Dict[str, Any]]:
+    """Retrieve recent Last Heard radio activity ordered newest first."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, timestamp, protocol, direction, call_type, src_id, src_alias, dest_id, slot, duration_sec, ber_percent, rssi_dbm
+            FROM radio_last_heard
+            ORDER BY id DESC LIMIT ?
+        """, (limit,))
+        return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
 

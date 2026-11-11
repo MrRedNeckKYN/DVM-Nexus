@@ -85,57 +85,67 @@
       </div>
     </div>
 
-    <div style="margin-bottom:1.5rem;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">ADF7021 Hotspot Transceiver Adjustments</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">ADF7021 LNA Gain Mode</label>
-          <select name="adf_gain_mode" class="form-control">
-            <option value="0" {% if hotspot.adfGainMode == 0 %}selected{% endif %}>0 - Auto</option>
-            <option value="1" {% if hotspot.adfGainMode == 1 %}selected{% endif %}>1 - Auto High Linearity</option>
-            <option value="2" {% if hotspot.adfGainMode == 2 or not hotspot.adfGainMode %}selected{% endif %}>2 - Low Gain</option>
-            <option value="3" {% if hotspot.adfGainMode == 3 %}selected{% endif %}>3 - High Gain</option>
-          </select>
+    <!-- Expert / Advanced Transceiver Calibration Drawer -->
+    <details class="advanced-drawer" style="margin-bottom: 1.5rem; background: var(--bg-surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden;">
+      <summary style="padding: 1rem 1.25rem; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; background: rgba(255,255,255,0.02); border-left: 4px solid var(--accent-cyan);">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span>🔬</span>
+          <span style="font-size: 0.95rem; color: var(--text-bright);">ADF7021 Transceiver Tuning Drawer (Offsets &amp; Bandwidths)</span>
+        </div>
+        <span class="badge badge-secondary" style="font-size: 0.75rem;">LNA Gain &bull; Discriminator Filters &bull; AFC</span>
+      </summary>
+
+      <div style="padding: 1.25rem; border-top: 1px solid var(--border);">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">ADF7021 LNA Gain Mode</label>
+            <select name="adf_gain_mode" class="form-control">
+              <option value="0" {% if hotspot.adfGainMode == 0 %}selected{% endif %}>0 - Auto</option>
+              <option value="1" {% if hotspot.adfGainMode == 1 %}selected{% endif %}>1 - Auto High Linearity</option>
+              <option value="2" {% if hotspot.adfGainMode == 2 or not hotspot.adfGainMode %}selected{% endif %}>2 - Low Gain</option>
+              <option value="3" {% if hotspot.adfGainMode == 3 %}selected{% endif %}>3 - High Gain</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Automatic Frequency Correction (AFC)</label>
+            <select name="afc_enable" class="form-control">
+              <option value="true" {% if hotspot.afcEnable %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
+            <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
+            <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
+          </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Automatic Frequency Correction (AFC)</label>
-          <select name="afc_enable" class="form-control">
-            <option value="true" {% if hotspot.afcEnable %}selected{% endif %}>Enabled</option>
-            <option value="false" {% if not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
-          <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
-          <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">DMR Discriminator BW (-128 to 128)</label>
+            <input type="number" name="dmr_disc_bw" class="form-control" value="{{ hotspot.dmrDiscBWAdj or 0 }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">DMR Post Demod BW (-128 to 128)</label>
+            <input type="number" name="dmr_post_bw" class="form-control" value="{{ hotspot.dmrPostBWAdj or 0 }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">P25 Discriminator BW (-128 to 128)</label>
+            <input type="number" name="p25_disc_bw" class="form-control" value="{{ hotspot.p25DiscBWAdj or 0 }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">P25 Post Demod BW (-128 to 128)</label>
+            <input type="number" name="p25_post_bw" class="form-control" value="{{ hotspot.p25PostBWAdj or 0 }}">
+          </div>
         </div>
       </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">DMR Discriminator BW (-128 to 128)</label>
-          <input type="number" name="dmr_disc_bw" class="form-control" value="{{ hotspot.dmrDiscBWAdj or 0 }}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">DMR Post Demod BW (-128 to 128)</label>
-          <input type="number" name="dmr_post_bw" class="form-control" value="{{ hotspot.dmrPostBWAdj or 0 }}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">P25 Discriminator BW (-128 to 128)</label>
-          <input type="number" name="p25_disc_bw" class="form-control" value="{{ hotspot.p25DiscBWAdj or 0 }}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">P25 Post Demod BW (-128 to 128)</label>
-          <input type="number" name="p25_post_bw" class="form-control" value="{{ hotspot.p25PostBWAdj or 0 }}">
-        </div>
-      </div>
-    </div>
+    </details>
 
     <div style="display:flex; justify-content:flex-end;">
       <button type="submit" class="btn btn-primary" style="padding:0.6rem 2rem;">

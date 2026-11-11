@@ -1,0 +1,89 @@
+<div id="last-heard-container" class="card" hx-get="/components/last-heard" hx-trigger="every 2.5s" hx-swap="outerHTML">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <div class="card-title">📜 Real-Time Last Heard Radio Activity</div>
+      <span class="badge badge-secondary" style="font-size: 0.75rem;">Live Feed (2.5s)</span>
+    </div>
+    <div>
+      <button type="button" class="btn btn-secondary btn-sm" hx-post="/api/telemetry/simulate-call" hx-target="#last-heard-container" hx-swap="outerHTML" title="Simulate an inbound RF voice transmission to test live feed">
+        ⚡ Simulate Call
+      </button>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table class="table-clean">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Protocol</th>
+          <th>Direction</th>
+          <th>Caller (Alias / RID)</th>
+          <th>Target Talkgroup</th>
+          <th>Slot</th>
+          <th>Duration</th>
+          <th>BER / RSSI</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if last_heard and last_heard|length > 0 %}
+          {% for call in last_heard %}
+            <tr>
+              <td style="font-size: 0.8rem; color: var(--text-dim); white-space: nowrap; font-family: monospace;">
+                {{ (call.timestamp|string)[11:19] }}
+              </td>
+              <td>
+                {% if call.protocol == 'dmr' %}
+                  <span class="badge badge-cyan" style="font-size: 0.7rem; font-weight: 700;">DMR</span>
+                {% elif call.protocol == 'p25' %}
+                  <span class="badge badge-indigo" style="font-size: 0.7rem; font-weight: 700;">P25</span>
+                {% else %}
+                  <span class="badge badge-secondary" style="font-size: 0.7rem;">{{ call.protocol|upper }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if call.direction == 'rf_rx' %}
+                  <span class="badge badge-success" style="font-size: 0.75rem;">🎙️ RF RX</span>
+                {% elif call.direction == 'net_rx' %}
+                  <span class="badge badge-warning" style="font-size: 0.75rem;">🌐 NET RX</span>
+                {% else %}
+                  <span class="badge badge-danger" style="font-size: 0.75rem;">📻 TX KEY</span>
+                {% endif %}
+              </td>
+              <td style="font-weight: 600;">
+                {{ call.src_alias }} <span style="font-family: monospace; font-size: 0.8rem; color: var(--text-dim); font-weight: normal;">({{ call.src_id }})</span>
+              </td>
+              <td style="font-family: monospace; font-weight: 700; color: var(--accent-cyan);">
+                TG {{ call.dest_id }}
+              </td>
+              <td style="font-size: 0.8rem; color: var(--text-muted);">
+                {% if call.slot %}
+                  Slot {{ call.slot }}
+                {% else %}
+                  --
+                {% endif %}
+              </td>
+              <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-dim);">
+                {{ call.duration_sec }}s
+              </td>
+              <td style="font-size: 0.8rem; white-space: nowrap;">
+                <span style="color: {% if call.ber_percent < 1.0 %}var(--accent-emerald){% elif call.ber_percent < 3.0 %}var(--warning){% else %}var(--accent-danger){% endif %}; font-family: monospace; font-weight: 600;">
+                  {{ call.ber_percent }}%
+                </span>
+                {% if call.rssi_dbm %}
+                  <span style="color: var(--text-dim); font-size: 0.75rem;">({{ call.rssi_dbm }} dBm)</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+              No radio transmissions logged yet. Key up on RF or use "Simulate Call" above to test live feed!
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>

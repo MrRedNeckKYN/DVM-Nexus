@@ -2,26 +2,36 @@
 
 {% block content %}
 <div class="card">
-  <div class="card-header">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
     <div>
-      <div class="card-title">✨ Network Builder Wizard</div>
+      <div class="card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+        <span>✨</span> Quick Setup &amp; Network Builder Wizard
+      </div>
       <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">
-        Guided configuration generator for DVMHost. Automatically computes bandplans, IDEN channels, and protocol schemas.
+        Foolproof 3-step configuration generator for DVMHost. Provisions safe hardware UART ports, computes IDEN frequency tables, and configures baseline routing.
       </div>
     </div>
+    <span class="badge badge-success" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
+      3-Step Guided Flow
+    </span>
   </div>
 
   <form id="wizard-form" hx-post="/wizard/preview" hx-target="#wizard-results" hx-swap="innerHTML">
-    <!-- Step 1: Protocol Selection -->
-    <div style="margin-bottom: 2rem;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">1. Select Digital Radio Protocol</h3>
-      <div class="grid-2">
-        <label class="card" style="cursor:pointer; display:flex; gap:1rem; align-items:flex-start; margin-bottom:0;" onclick="selectProtocol('dmr')">
+    
+    <!-- Step 1: Protocol Selection & Callsign -->
+    <div style="margin-bottom: 2rem; background: var(--bg-surface-2); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+        <span class="badge badge-cyan" style="font-size: 0.9rem; padding: 0.3rem 0.6rem;">STEP 1</span>
+        <h3 style="font-size:1.05rem; margin:0; color:var(--text-bright);">Select Digital Mode &amp; Station Identity</h3>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 1.25rem;">
+        <label class="card" style="cursor:pointer; display:flex; gap:1rem; align-items:flex-start; margin-bottom:0; border: 2px solid var(--accent-cyan);" onclick="selectProtocol('dmr')">
           <input type="radio" name="protocol" value="dmr" checked style="margin-top:0.3rem;" id="proto-dmr">
           <div>
-            <div style="font-weight:700; font-size:1.1rem; color:var(--text-main);">DMR (Digital Mobile Radio)</div>
+            <div style="font-weight:700; font-size:1.1rem; color:var(--accent-cyan);">📻 DMR (Digital Mobile Radio)</div>
             <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">
-              Tier II 2-Slot TDMA framing. Ideal for standard commercial repeaters and hotspots with simultaneous dual time slots.
+              Tier II 2-Slot TDMA framing. Perfect for duplex repeaters and hotspots supporting simultaneous dual voice slots.
             </div>
           </div>
         </label>
@@ -29,41 +39,44 @@
         <label class="card" style="cursor:pointer; display:flex; gap:1rem; align-items:flex-start; margin-bottom:0;" onclick="selectProtocol('p25')">
           <input type="radio" name="protocol" value="p25" style="margin-top:0.3rem;" id="proto-p25">
           <div>
-            <div style="font-weight:700; font-size:1.1rem; color:var(--text-main);">P25 (Project 25 Phase 1)</div>
+            <div style="font-weight:700; font-size:1.1rem; color:var(--accent-indigo);">⚡ P25 (Project 25 Phase 1)</div>
             <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">
-              FDMA 12.5 kHz C4FM / IMBE vocoder standard. Supports WACN, System ID, NAC, and IDEN frequency channel mapping.
+              FDMA 12.5 kHz C4FM / IMBE standard. Standard for public safety and amateur P25 repeaters with NAC and IDEN mapping.
             </div>
           </div>
         </label>
       </div>
-    </div>
 
-    <!-- Step 2: Basic Network & Identity -->
-    <div style="margin-bottom: 2rem;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">2. Network Identity & RF Mode</h3>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Network Name (Profile Name)</label>
-          <input type="text" name="network_name" class="form-control" value="My Test Network" required>
+          <label class="form-label">Station Callsign / Identity</label>
+          <input type="text" name="identity" class="form-control font-mono" value="W1AW" placeholder="e.g. N0CALL" required>
+          <small class="form-hint">Broadcast in CW ID and system logs.</small>
         </div>
         <div class="form-group">
-          <label class="form-label">Repeater Callsign / Identity</label>
-          <input type="text" name="identity" class="form-control" value="W1AW" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">RF Operation</label>
-          <select name="duplex" class="form-control">
-            <option value="true" selected>Full Duplex (AURSINC Dual Hat / Repeater)</option>
-            <option value="false">Simplex (Single Frequency Hotspot)</option>
-          </select>
+          <label class="form-label">Configuration Profile Name</label>
+          <input type="text" name="network_name" class="form-control" value="Primary Station" required>
+          <small class="form-hint">Saved as a switchable profile in Nexus.</small>
         </div>
       </div>
     </div>
 
-    <!-- Step 3: Frequencies & Bandplan -->
-    <div style="margin-bottom: 2rem;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">3. Frequency Planning & Band</h3>
+    <!-- Step 2: Frequencies, RF Mode & Modem Hardware -->
+    <div style="margin-bottom: 2rem; background: var(--bg-surface-2); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+        <span class="badge badge-cyan" style="font-size: 0.9rem; padding: 0.3rem 0.6rem;">STEP 2</span>
+        <h3 style="font-size:1.05rem; margin:0; color:var(--text-bright);">Frequencies, RF Mode &amp; Hardware Port</h3>
+      </div>
+
       <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">RF Operation</label>
+          <select name="duplex" class="form-control" id="wizard-duplex" onchange="toggleDuplexFields(this.value === 'true')">
+            <option value="true" selected>Full Duplex (AURSINC Duplex Hat / Repeater with Split TX/RX)</option>
+            <option value="false">Simplex (Single Frequency Hotspot / Direct Talkaround)</option>
+          </select>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Band Plan Preset</label>
           <select name="band_preset" class="form-control" id="band-preset-select" onchange="applyBandPreset(this.value)">
@@ -72,122 +85,140 @@
             {% endfor %}
           </select>
         </div>
+      </div>
+
+      <div class="form-row">
         <div class="form-group">
           <label class="form-label">Transmit (TX) Frequency (MHz)</label>
-          <input type="number" step="0.00001" name="tx_freq_mhz" id="tx-freq" class="form-control" value="446.000" required>
+          <input type="number" step="0.00001" name="tx_freq_mhz" id="tx-freq" class="form-control font-mono" value="446.000" required>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="rx-offset-group">
           <label class="form-label">Receive (RX) Offset (MHz)</label>
-          <input type="number" step="0.001" name="rx_offset_mhz" id="rx-offset" class="form-control" value="5.000" required>
+          <input type="number" step="0.001" name="rx_offset_mhz" id="rx-offset" class="form-control font-mono" value="5.000" required>
+          <small class="form-hint">Standard repeater offset (+5.0 MHz on UHF, +0.6 MHz on VHF).</small>
         </div>
         <div class="form-group">
           <label class="form-label">Channel Spacing (kHz)</label>
-          <input type="number" step="0.01" name="spacing_khz" id="spacing-khz" class="form-control" value="6.25" required>
-        </div>
-      </div>
-      <div style="font-size:0.8rem; color:var(--text-dim); margin-top:0.25rem;">
-        Nexus automatically computes the appropriate IDEN Channel ID and Channel Number for <code>iden_table.dat</code>.
-      </div>
-    </div>
-
-    <!-- Step 4: Protocol Identifiers -->
-    <div id="dmr-identifiers-section" style="margin-bottom: 2rem;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">4. DMR Identifiers</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">DMR Color Code (0 - 15)</label>
-          <input type="number" name="color_code" class="form-control" min="0" max="15" value="1">
-        </div>
-        <div class="form-group">
-          <label class="form-label">DMR Network ID</label>
-          <input type="number" name="dmr_net_id" class="form-control" value="1">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Site ID</label>
-          <input type="number" name="site_id" class="form-control" value="1">
+          <input type="number" step="0.01" name="spacing_khz" id="spacing-khz" class="form-control font-mono" value="6.25" required>
         </div>
       </div>
     </div>
 
-    <div id="p25-identifiers-section" style="margin-bottom: 2rem; display:none;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-indigo);">4. P25 Phase 1 Identifiers</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">P25 NAC (Hex, e.g. 293)</label>
-          <input type="text" name="nac" class="form-control" value="293">
-        </div>
-        <div class="form-group">
-          <label class="form-label">P25 WACN (5-digit Hex)</label>
-          <input type="text" name="wacn" class="form-control" value="BB800">
-        </div>
-        <div class="form-group">
-          <label class="form-label">System ID (3-digit Hex)</label>
-          <input type="text" name="sys_id" class="form-control" value="001">
-        </div>
-        <div class="form-group">
-          <label class="form-label">RFSS ID (1 - 255)</label>
-          <input type="number" name="rfss_id" class="form-control" value="1">
-        </div>
+    <!-- Step 3: Upstream Master / Network Linking -->
+    <div style="margin-bottom: 2rem; background: var(--bg-surface-2); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+        <span class="badge badge-cyan" style="font-size: 0.9rem; padding: 0.3rem 0.6rem;">STEP 3</span>
+        <h3 style="font-size:1.05rem; margin:0; color:var(--text-bright);">Network Linking (Master Server / FNE Core)</h3>
       </div>
-    </div>
 
-    <!-- Step 5: Initial Talkgroups & RIDs -->
-    <div style="margin-bottom: 2rem;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">5. Talkgroups & Subscriber Radio IDs</h3>
-      <div class="grid-2">
-        <div class="form-group">
-          <label class="form-label">Initial Talkgroups (Format: TGID:Name:Slot)</label>
-          <textarea name="talkgroups_raw" class="form-control" rows="4">1:Local Repeater:1
-9:Worldwide Net:2
-310:Regional:1</textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Authorized Subscriber RIDs (Format: RID:Alias)</label>
-          <textarea name="rids_raw" class="form-control" rows="4">1234567:Primary Portable
-1234568:Mobile Unit</textarea>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 6: Upstream Network / Peer -->
-    <div style="margin-bottom: 2rem;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">6. Network Linking (FNE / Core)</h3>
-      <div class="form-group">
+      <div class="form-group" style="margin-bottom: 1rem;">
         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
           <input type="checkbox" name="connect_peer" value="true" id="connect-peer-chk" onchange="togglePeerFields(this.checked)">
-          <span style="font-weight:600;">Connect this repeater to a fixed network / FNE peer</span>
+          <span style="font-weight:600; font-size: 0.95rem;">Connect this station to an upstream network master / FNE cluster</span>
         </label>
+        <small class="form-hint">Leave unchecked if operating as an independent, standalone local repeater.</small>
       </div>
+
       <div id="peer-fields" class="form-row" style="display:none;">
         <div class="form-group">
           <label class="form-label">Assigned Peer ID</label>
-          <input type="number" name="peer_id" class="form-control" value="100000">
+          <input type="number" name="peer_id" class="form-control font-mono" value="100000">
         </div>
         <div class="form-group">
-          <label class="form-label">FNE Server IP / Hostname</label>
-          <input type="text" name="peer_address" class="form-control" value="127.0.0.1">
+          <label class="form-label">Master Server IP / Hostname</label>
+          <input type="text" name="peer_address" class="form-control font-mono" value="127.0.0.1">
         </div>
         <div class="form-group">
-          <label class="form-label">FNE Port</label>
-          <input type="number" name="peer_port" class="form-control" value="62031">
+          <label class="form-label">Master Port</label>
+          <input type="number" name="peer_port" class="form-control font-mono" value="62031">
         </div>
         <div class="form-group">
           <label class="form-label">Peer Password</label>
-          <input type="text" name="peer_password" class="form-control" value="PASSWORD">
+          <input type="password" name="peer_password" class="form-control" value="PASSWORD">
         </div>
       </div>
     </div>
 
+    <!-- Collapsible Advanced Drawer: Identifiers & ACL Seeds -->
+    <details class="advanced-drawer" style="margin-bottom: 2rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden;">
+      <summary style="padding: 1rem 1.25rem; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span>⚙️</span>
+          <span>Advanced Identifiers &amp; Baseline Talkgroups (Optional)</span>
+        </div>
+        <span class="badge badge-secondary" style="font-size: 0.75rem;">Color Code / NAC &bull; Seed Talkgroups</span>
+      </summary>
+
+      <div style="padding: 1.25rem; border-top: 1px solid var(--border-color);">
+        <!-- DMR Specific -->
+        <div id="dmr-identifiers-section" style="margin-bottom: 1.25rem;">
+          <h4 style="font-size:0.95rem; margin-bottom:0.75rem; color:var(--accent-cyan);">DMR Identifiers</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">DMR Color Code (0 - 15)</label>
+              <input type="number" name="color_code" class="form-control" min="0" max="15" value="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">DMR Network ID</label>
+              <input type="number" name="dmr_net_id" class="form-control" value="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Site ID</label>
+              <input type="number" name="site_id" class="form-control" value="1">
+            </div>
+          </div>
+        </div>
+
+        <!-- P25 Specific -->
+        <div id="p25-identifiers-section" style="margin-bottom: 1.25rem; display:none;">
+          <h4 style="font-size:0.95rem; margin-bottom:0.75rem; color:var(--accent-indigo);">P25 Phase 1 Identifiers</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">P25 NAC (Hex, e.g. 293)</label>
+              <input type="text" name="nac" class="form-control font-mono" value="293">
+            </div>
+            <div class="form-group">
+              <label class="form-label">P25 WACN (5-digit Hex)</label>
+              <input type="text" name="wacn" class="form-control font-mono" value="BB800">
+            </div>
+            <div class="form-group">
+              <label class="form-label">System ID (3-digit Hex)</label>
+              <input type="text" name="sys_id" class="form-control font-mono" value="001">
+            </div>
+            <div class="form-group">
+              <label class="form-label">RFSS ID (1 - 255)</label>
+              <input type="number" name="rfss_id" class="form-control" value="1">
+            </div>
+          </div>
+        </div>
+
+        <!-- Talkgroups & Subscriber RIDs -->
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Seed Talkgroups (Format: TGID:Name:Slot)</label>
+            <textarea name="talkgroups_raw" class="form-control font-mono" rows="3">1:Local Repeater:1
+9:Worldwide Net:2
+3100:National USA:1</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Authorized Subscriber RIDs (Format: RID:Alias)</label>
+            <textarea name="rids_raw" class="form-control font-mono" rows="3">1234567:Primary Portable
+1234568:Mobile Unit</textarea>
+          </div>
+        </div>
+      </div>
+    </details>
+
     <div style="display:flex; justify-content:flex-end;">
-      <button type="submit" class="btn btn-primary" style="padding:0.75rem 2rem; font-size:1rem;">
-        🔍 Review & Generate Configuration →
+      <button type="submit" class="btn btn-primary" style="padding:0.85rem 2.5rem; font-size:1.05rem; font-weight:700;">
+        🔍 Review Configuration Preview →
       </button>
     </div>
   </form>
 </div>
 
 <!-- Results / Preview Area -->
-<div id="wizard-results"></div>
+<div id="wizard-results" style="margin-top: 1.5rem;"></div>
 
 <script>
   function selectProtocol(proto) {
@@ -199,6 +230,20 @@
     } else {
       document.getElementById('dmr-identifiers-section').style.display = 'none';
       document.getElementById('p25-identifiers-section').style.display = 'block';
+    }
+  }
+
+  function toggleDuplexFields(isDuplex) {
+    const rxGroup = document.getElementById('rx-offset-group');
+    if (rxGroup) {
+      rxGroup.style.display = isDuplex ? 'block' : 'none';
+    }
+    if (!isDuplex) {
+      document.getElementById('rx-offset').value = '0.000';
+    } else {
+      if (document.getElementById('rx-offset').value === '0.000') {
+        document.getElementById('rx-offset').value = '5.000';
+      }
     }
   }
 

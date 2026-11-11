@@ -1,0 +1,107 @@
+<div class="rf-hud-widget" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--shadow-sm);">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span style="font-size: 1.25rem;">📡</span>
+      <div>
+        <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.75px; color: var(--text-dim); font-weight: 600;">Live RF Transceiver Telemetry</div>
+        <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-bright);">
+          {% if hud.state == 'RX' %}
+            <span style="color: var(--accent-cyan);">🎙️ RF Receiving &bull; {{ hud.protocol }}</span>
+          {% elif hud.state == 'TX' %}
+            <span style="color: var(--accent-danger);">📻 Transmitting (Repeater Keyed) &bull; {{ hud.protocol }}</span>
+          {% else %}
+            <span style="color: var(--accent-emerald);">🟢 Station Idle &bull; {{ hud.protocol }} Ready</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Status Pill with Animation -->
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      {% if hud.state == 'RX' %}
+        <span class="badge badge-warning" style="animation: pulse 1s infinite; font-size: 0.85rem; padding: 0.4rem 0.8rem;">
+          ● ACTIVE CALL IN PROGRESS
+        </span>
+      {% elif hud.state == 'TX' %}
+        <span class="badge badge-danger" style="animation: pulse 1s infinite; font-size: 0.85rem; padding: 0.4rem 0.8rem;">
+          ● RF TX KEYED
+        </span>
+      {% else %}
+        <span class="badge badge-success" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">
+          ● CARRIER SQUELCH OPEN
+        </span>
+      {% endif %}
+      <span class="badge badge-secondary" style="font-size: 0.75rem;">Auto-Sync 1.5s</span>
+    </div>
+  </div>
+
+  <!-- HUD Grid: Active Talker, Target TG, Slot Activity, Signal & Quality -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; background: var(--bg-surface-2); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+    
+    <!-- Active Talker -->
+    <div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">CURRENT TALKER</div>
+      <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--accent-cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        {% if hud.source_id %}
+          {{ hud.source_alias or 'Radio' }} ({{ hud.source_id }})
+        {% else %}
+          <span style="color: var(--text-dim); font-weight: normal;">None (Standby)</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Target Talkgroup -->
+    <div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">TARGET TALKGROUP</div>
+      <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--text-bright);">
+        {% if hud.dest_id %}
+          TG {{ hud.dest_id }} <span style="font-size: 0.75rem; color: var(--text-dim);">({{ hud.call_type }})</span>
+        {% else %}
+          <span style="color: var(--text-dim); font-weight: normal;">--</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Timeslot Occupancy -->
+    <div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">TIMESLOT OCCUPANCY</div>
+      <div style="display: flex; gap: 0.4rem;">
+        <span class="badge {% if hud.slot1_active %}badge-cyan{% else %}badge-secondary{% endif %}" style="font-size: 0.75rem; flex: 1; text-align: center;">
+          TS1: {% if hud.slot1_active %}BUSY{% else %}IDLE{% endif %}
+        </span>
+        <span class="badge {% if hud.slot2_active %}badge-cyan{% else %}badge-secondary{% endif %}" style="font-size: 0.75rem; flex: 1; text-align: center;">
+          TS2: {% if hud.slot2_active %}BUSY{% else %}IDLE{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- Signal & BER Quality -->
+    <div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">RF SIGNAL &amp; QUALITY</div>
+      <div style="font-size: 0.85rem; font-weight: 600;">
+        {% if hud.rssi_dbm %}
+          <span style="color: var(--accent-emerald);">{{ hud.rssi_dbm }} dBm</span>
+        {% else %}
+          <span style="color: var(--text-dim);">-- dBm</span>
+        {% endif %}
+        &bull;
+        <span style="color: {% if hud.ber_percent < 1.0 %}var(--accent-emerald){% elif hud.ber_percent < 3.0 %}var(--warning){% else %}var(--accent-danger){% endif %};">
+          BER: {{ hud.ber_percent }}%
+        </span>
+      </div>
+    </div>
+
+    <!-- Modem Hardware Registers -->
+    <div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">MODEM HARDWARE</div>
+      <div style="font-size: 0.8rem; color: var(--text-dim);">
+        Overf: 
+        <span style="color: {% if hud.adc_overflow > 0 or hud.dac_overflow > 0 %}var(--accent-danger){% else %}var(--accent-emerald){% endif %};">
+          A:{{ hud.adc_overflow }} D:{{ hud.dac_overflow }}
+        </span>
+        &bull; Buf: <span class="font-mono">{{ hud.dmr_free_space }}B</span>
+      </div>
+    </div>
+
+  </div>
+</div>

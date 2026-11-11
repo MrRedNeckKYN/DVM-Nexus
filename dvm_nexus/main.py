@@ -57,10 +57,22 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    # Start Real-Time Radio Telemetry & Last Heard Engine
+    try:
+        from dvm_nexus.core.telemetry_service import telemetry_service
+        telemetry_service.start()
+    except Exception:
+        pass
+
     yield
     # Shutdown
     if watchdog_task:
         watchdog_task.cancel()
+    try:
+        from dvm_nexus.core.telemetry_service import telemetry_service
+        telemetry_service.stop()
+    except Exception:
+        pass
     log_audit("SYSTEM", "SHUTDOWN", "DVM Nexus shutdown")
 
 

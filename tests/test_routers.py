@@ -169,3 +169,68 @@ def test_api_settings_save(client):
     assert cfg["network"]["restPort"] == 9990
     assert cfg["network"]["restPassword"] == "TEST_PASSWORD"
     assert cfg["network"]["rpcPassword"] == "TEST_RPC_PASSWORD"
+
+
+def test_rf_hud_component(client):
+    """Test the real-time RF Transceiver State HUD component endpoint."""
+    resp = client.get("/components/rf-hud")
+    assert resp.status_code == 200
+    assert "Live RF Transceiver Telemetry" in resp.text
+    assert "CURRENT TALKER" in resp.text
+    assert "TARGET TALKGROUP" in resp.text
+
+
+def test_last_heard_component(client):
+    """Test the real-time Last Heard activity feed component endpoint."""
+    resp = client.get("/components/last-heard")
+    assert resp.status_code == 200
+    assert "Real-Time Last Heard Radio Activity" in resp.text
+    assert "Caller (Alias / RID)" in resp.text
+
+
+def test_simulate_call_endpoint(client):
+    """Test injecting a simulated RF call and verifying it appears in the Last Heard feed."""
+    resp = client.post("/api/telemetry/simulate-call")
+    assert resp.status_code == 200
+    assert "Real-Time Last Heard Radio Activity" in resp.text
+    assert "Unit " in resp.text
+
+
+def test_telemetry_service_log_parsing():
+    """Unit test for TelemetryService log line regex decoding."""
+    from dvm_nexus.core.telemetry_service import TelemetryService
+    svc = TelemetryService()
+
+    # 1. DMR RF Call Start
+    svc.process_log_line("Nov 11 11:00:00 pi dvmhost[123]: DMR, received RF voice header from 3120101 to 3100, slot = 1")
+    hud = svc.get_hud_status()
+    assert hud["state"] == "RX"
+    assert hud["protocol"] == "DMR"
+    assert hud["active_slot"] == 1
+    assert hud["source_id"] == 3120101
+    assert hud["dest_id"] == 3100
+    assert hud["slot1_active"] is True
+
+    # 2. DMR Call End
+    svc.process_log_line("Nov 11 11:00:04 pi dvmhost[123]: DMR, call end, duration = 4.2s, BER = 0.5%, loss = 0%")
+    calls = svc.get_last_heard(limit=1)
+    assert len(calls) >= 1
+    recent = calls[0]
+    assert recent["protocol"] == "dmr"
+    assert recent["duration_sec"] == 4.2
+    assert recent["ber_percent"] == 0.5
+
+    # 3. P25 HDU & Call End
+    svc.process_log_line("Nov 11 11:00:10 pi dvmhost[123]: P25, received RF voice HDU from 1001 to 101, NAC = 293")
+    hud_p25 = svc.get_hud_status()
+    assert hud_p25["state"] == "RX"
+    assert hud_p25["protocol"] == "P25"
+    assert hud_p25["source_id"] == 1001
+    assert hud_p25["dest_id"] == 101
+
+    svc.process_log_line("Nov 11 11:00:15 pi dvmhost[123]: P25, call end, duration = 5.0s, errs = 10/1233")
+    p25_calls = svc.get_last_heard(limit=1)
+    assert len(p25_calls) >= 1
+    assert p25_calls[0]["protocol"] == "p25"
+    assert p25_calls[0]["duration_sec"] == 5.0
+

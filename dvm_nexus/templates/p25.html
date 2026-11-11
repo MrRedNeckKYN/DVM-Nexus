@@ -253,235 +253,250 @@
     </div>
   </div>
 
-  <!-- Section 4: ADF7021 Modem Transceiver & RF Calibration -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">📡 ADF7021 Transceiver &amp; RF Tuning Calibration</div>
-      <span style="font-size:0.85rem; color:var(--text-dim);">Hotspot Hardware Offsets and Baseband Filters</span>
+  <!-- Expert / Advanced Engineering Calibration Drawer -->
+  <details class="advanced-drawer" style="margin-bottom: 1.5rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden;">
+    <summary style="padding: 1.1rem 1.25rem; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; background: rgba(255,255,255,0.02); border-left: 4px solid var(--accent-indigo);">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span>🔬</span>
+        <span style="font-size: 1rem; color: var(--text-bright);">Expert &amp; Engineering Calibration Drawer</span>
+      </div>
+      <span class="badge badge-secondary" style="font-size: 0.75rem;">ADF7021 Filters &bull; Correlation Window &bull; TSBK Trunking</span>
+    </summary>
+    <div style="padding: 1.25rem; border-top: 1px solid var(--border-color);">
+
+      <!-- Section 4: ADF7021 Modem Transceiver & RF Calibration -->
+      <div class="card" style="margin-bottom: 1.25rem;">
+        <div class="card-header">
+          <div class="card-title">📡 ADF7021 Transceiver &amp; RF Tuning Calibration</div>
+          <span style="font-size:0.85rem; color:var(--text-dim);">Hotspot Hardware Offsets and Baseband Filters</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
+            <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
+            <small class="form-hint">Fine frequency calibration for transmit (usually 0 to ±500 Hz).</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
+            <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
+            <small class="form-hint">Fine frequency calibration for receive (usually 0 to ±500 Hz).</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">ADF7021 LNA Gain Mode</label>
+            <select name="adf_gain_mode" class="form-control">
+              <option value="0" {% if hotspot.adfGainMode == 0 %}selected{% endif %}>0 - Auto</option>
+              <option value="1" {% if hotspot.adfGainMode == 1 %}selected{% endif %}>1 - Auto High Linearity</option>
+              <option value="2" {% if hotspot.adfGainMode == 2 or not hotspot.adfGainMode %}selected{% endif %}>2 - Low Gain (Recommended for close handhelds)</option>
+              <option value="3" {% if hotspot.adfGainMode == 3 %}selected{% endif %}>3 - High Gain</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Automatic Frequency Correction (AFC)</label>
+            <select name="afc_enable" class="form-control">
+              <option value="true" {% if hotspot.afcEnable is not defined or hotspot.afcEnable %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if hotspot.afcEnable is defined and not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">P25 Discriminator BW (-128 to 128)</label>
+            <input type="number" name="p25_disc_bw" class="form-control" value="{{ hotspot.p25DiscBWAdj or 0 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">P25 Post Demod BW (-128 to 128)</label>
+            <input type="number" name="p25_post_bw" class="form-control" value="{{ hotspot.p25PostBWAdj or 0 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">P25 Correlation Count</label>
+            <input type="number" name="p25_corr_count" class="form-control" value="{{ modem.p25CorrCount or 2 }}">
+            <small class="form-hint">Frame sync correlator window (default 2).</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 5: Advanced P25 Parameters & Access Controls -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">🔬 Advanced P25 Parameters, Access Control &amp; Control Channel</div>
+          <span style="font-size:0.85rem; color:var(--text-dim);">Detailed Protocol Options, Registration &amp; TSBK Trunking</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">BER Silence Threshold</label>
+            <input type="number" name="silence_threshold" class="form-control" value="{{ p25.silenceThreshold or 124 }}">
+            <small class="form-hint">BER threshold for silencing packet audio (default 124).</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Frame Loss Threshold</label>
+            <input type="number" name="frame_loss_threshold" class="form-control" value="{{ p25.frameLossThreshold or 6 }}">
+            <small class="form-hint">Lost frames before call termination (default 6).</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Internal Data Queue Size (packets)</label>
+            <input type="number" name="queue_size" class="form-control" value="{{ p25.queueSize or 12 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Repeat P25 Data Packets (TMS / IP)</label>
+            <select name="repeat_data_packet" class="form-control">
+              <option value="true" {% if p25.repeatDataPacket is not defined or p25.repeatDataPacket %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if p25.repeatDataPacket is defined and not p25.repeatDataPacket %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Auto-Inhibit Unauthorized RIDs</label>
+            <select name="inhibit_unauthorized" class="form-control">
+              <option value="false" {% if not p25.inhibitUnauthorized %}selected{% endif %}>Disabled (Safe)</option>
+              <option value="true" {% if p25.inhibitUnauthorized %}selected{% endif %}>Enabled (Send OTA Inhibit to Rogues)</option>
+            </select>
+            <small class="form-hint" style="color:var(--warning);">Automatically transmits OTA stun command to unauthorized radios.</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Disable Deny Response</label>
+            <select name="disable_deny_response" class="form-control">
+              <option value="false" {% if not p25.disableDenyResponse %}selected{% endif %}>No (Send Denial Response)</option>
+              <option value="true" {% if p25.disableDenyResponse %}selected{% endif %}>Yes (Silently Ignore Unauthorized)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Unit-to-Unit Availability Check</label>
+            <select name="unit_to_unit_avail_check" class="form-control">
+              <option value="false" {% if not p25.unitToUnitAvailCheck %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if p25.unitToUnitAvailCheck %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Verify Unit Registration</label>
+            <select name="verify_reg" class="form-control">
+              <option value="false" {% if not p25.verifyReg %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if p25.verifyReg %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Verify Group Affiliation</label>
+            <select name="verify_aff" class="form-control">
+              <option value="false" {% if not p25.verifyAff %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if p25.verifyAff %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Ignore Affiliation Check</label>
+            <select name="ignore_affiliation_check" class="form-control">
+              <option value="false" {% if not p25.ignoreAffiliationCheck %}selected{% endif %}>Enforce Affiliations</option>
+              <option value="true" {% if p25.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Legacy Group Grant Fallback</label>
+            <select name="legacy_group_grnt" class="form-control">
+              <option value="true" {% if p25.legacyGroupGrnt is not defined or p25.legacyGroupGrnt %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if p25.legacyGroupGrnt is defined and not p25.legacyGroupGrnt %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Legacy Group Registration Fallback</label>
+            <select name="legacy_group_reg" class="form-control">
+              <option value="false" {% if not p25.legacyGroupReg %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if p25.legacyGroupReg %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Conventional Net Grant Demand</label>
+            <select name="conv_net_grant_demand" class="form-control">
+              <option value="false" {% if not p25.convNetGrantDemand %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if p25.convNetGrantDemand %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Demand Reg for Refused Affiliation</label>
+            <select name="demand_unit_reg_for_refused_aff" class="form-control">
+              <option value="true" {% if p25.demandUnitRegForRefusedAff is not defined or p25.demandUnitRegForRefusedAff %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if p25.demandUnitRegForRefusedAff is defined and not p25.demandUnitRegForRefusedAff %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">P25 Control Channel (CC)</label>
+            <select name="cc_enable" class="form-control">
+              <option value="false" {% if not p25.control or not p25.control.enable %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if p25.control and p25.control.enable %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">TSBK Continuous Broadcast</label>
+            <select name="cc_broadcast" class="form-control">
+              <option value="true" {% if not p25.control or p25.control.broadcast is not defined or p25.control.broadcast %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if p25.control and p25.control.broadcast is defined and not p25.control.broadcast %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">CC Broadcast Interval (ms)</label>
+            <input type="number" name="cc_interval" class="form-control" value="{{ (p25.control and p25.control.interval) or 300 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">CC Burst Duration (ms)</label>
+            <input type="number" name="cc_duration" class="form-control" value="{{ (p25.control and p25.control.duration) or 1 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">TSBK Acknowledge Requests</label>
+            <select name="cc_ack_requests" class="form-control">
+              <option value="true" {% if not p25.control or p25.control.ackRequests is not defined or p25.control.ackRequests %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if p25.control and p25.control.ackRequests is defined and not p25.control.ackRequests %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Dedicated Control Channel</label>
+            <select name="cc_dedicated" class="form-control">
+              <option value="false" {% if not p25.control or not p25.control.dedicated %}selected{% endif %}>No (Mixed Voice / CC)</option>
+              <option value="true" {% if p25.control and p25.control.dedicated %}selected{% endif %}>Yes (Dedicated CC Only)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
     </div>
+  </details>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
-        <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
-        <small class="form-hint">Fine frequency calibration for transmit (usually 0 to ±500 Hz).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
-        <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
-        <small class="form-hint">Fine frequency calibration for receive (usually 0 to ±500 Hz).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">ADF7021 LNA Gain Mode</label>
-        <select name="adf_gain_mode" class="form-control">
-          <option value="0" {% if hotspot.adfGainMode == 0 %}selected{% endif %}>0 - Auto</option>
-          <option value="1" {% if hotspot.adfGainMode == 1 %}selected{% endif %}>1 - Auto High Linearity</option>
-          <option value="2" {% if hotspot.adfGainMode == 2 or not hotspot.adfGainMode %}selected{% endif %}>2 - Low Gain (Recommended for close handhelds)</option>
-          <option value="3" {% if hotspot.adfGainMode == 3 %}selected{% endif %}>3 - High Gain</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Automatic Frequency Correction (AFC)</label>
-        <select name="afc_enable" class="form-control">
-          <option value="true" {% if hotspot.afcEnable is not defined or hotspot.afcEnable %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if hotspot.afcEnable is defined and not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">P25 Discriminator BW (-128 to 128)</label>
-        <input type="number" name="p25_disc_bw" class="form-control" value="{{ hotspot.p25DiscBWAdj or 0 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">P25 Post Demod BW (-128 to 128)</label>
-        <input type="number" name="p25_post_bw" class="form-control" value="{{ hotspot.p25PostBWAdj or 0 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">P25 Correlation Count</label>
-        <input type="number" name="p25_corr_count" class="form-control" value="{{ modem.p25CorrCount or 2 }}">
-        <small class="form-hint">Frame sync correlator window (default 2).</small>
-      </div>
-    </div>
+  <div style="display:flex; justify-content:flex-end; margin-bottom: 2rem;">
+    <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2.25rem; font-weight:700; font-size:1rem;">
+      💾 Save All P25 Configuration
+    </button>
   </div>
-
-  <!-- Section 5: Advanced P25 Parameters & Access Controls -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">🔬 Advanced P25 Parameters, Access Control &amp; Control Channel</div>
-      <span style="font-size:0.85rem; color:var(--text-dim);">Detailed Protocol Options, Registration &amp; TSBK Trunking</span>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">BER Silence Threshold</label>
-        <input type="number" name="silence_threshold" class="form-control" value="{{ p25.silenceThreshold or 124 }}">
-        <small class="form-hint">BER threshold for silencing packet audio (default 124).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Frame Loss Threshold</label>
-        <input type="number" name="frame_loss_threshold" class="form-control" value="{{ p25.frameLossThreshold or 6 }}">
-        <small class="form-hint">Lost frames before call termination (default 6).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Internal Data Queue Size (packets)</label>
-        <input type="number" name="queue_size" class="form-control" value="{{ p25.queueSize or 12 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Repeat P25 Data Packets (TMS / IP)</label>
-        <select name="repeat_data_packet" class="form-control">
-          <option value="true" {% if p25.repeatDataPacket is not defined or p25.repeatDataPacket %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if p25.repeatDataPacket is defined and not p25.repeatDataPacket %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Auto-Inhibit Unauthorized RIDs</label>
-        <select name="inhibit_unauthorized" class="form-control">
-          <option value="false" {% if not p25.inhibitUnauthorized %}selected{% endif %}>Disabled (Safe)</option>
-          <option value="true" {% if p25.inhibitUnauthorized %}selected{% endif %}>Enabled (Send OTA Inhibit to Rogues)</option>
-        </select>
-        <small class="form-hint" style="color:var(--warning);">Automatically transmits OTA stun command to unauthorized radios.</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Disable Deny Response</label>
-        <select name="disable_deny_response" class="form-control">
-          <option value="false" {% if not p25.disableDenyResponse %}selected{% endif %}>No (Send Denial Response)</option>
-          <option value="true" {% if p25.disableDenyResponse %}selected{% endif %}>Yes (Silently Ignore Unauthorized)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Unit-to-Unit Availability Check</label>
-        <select name="unit_to_unit_avail_check" class="form-control">
-          <option value="false" {% if not p25.unitToUnitAvailCheck %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if p25.unitToUnitAvailCheck %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Verify Unit Registration</label>
-        <select name="verify_reg" class="form-control">
-          <option value="false" {% if not p25.verifyReg %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if p25.verifyReg %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Verify Group Affiliation</label>
-        <select name="verify_aff" class="form-control">
-          <option value="false" {% if not p25.verifyAff %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if p25.verifyAff %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Ignore Affiliation Check</label>
-        <select name="ignore_affiliation_check" class="form-control">
-          <option value="false" {% if not p25.ignoreAffiliationCheck %}selected{% endif %}>Enforce Affiliations</option>
-          <option value="true" {% if p25.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Legacy Group Grant Fallback</label>
-        <select name="legacy_group_grnt" class="form-control">
-          <option value="true" {% if p25.legacyGroupGrnt is not defined or p25.legacyGroupGrnt %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if p25.legacyGroupGrnt is defined and not p25.legacyGroupGrnt %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Legacy Group Registration Fallback</label>
-        <select name="legacy_group_reg" class="form-control">
-          <option value="false" {% if not p25.legacyGroupReg %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if p25.legacyGroupReg %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Conventional Net Grant Demand</label>
-        <select name="conv_net_grant_demand" class="form-control">
-          <option value="false" {% if not p25.convNetGrantDemand %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if p25.convNetGrantDemand %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Demand Reg for Refused Affiliation</label>
-        <select name="demand_unit_reg_for_refused_aff" class="form-control">
-          <option value="true" {% if p25.demandUnitRegForRefusedAff is not defined or p25.demandUnitRegForRefusedAff %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if p25.demandUnitRegForRefusedAff is defined and not p25.demandUnitRegForRefusedAff %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">P25 Control Channel (CC)</label>
-        <select name="cc_enable" class="form-control">
-          <option value="false" {% if not p25.control or not p25.control.enable %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if p25.control and p25.control.enable %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">TSBK Continuous Broadcast</label>
-        <select name="cc_broadcast" class="form-control">
-          <option value="true" {% if not p25.control or p25.control.broadcast is not defined or p25.control.broadcast %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if p25.control and p25.control.broadcast is defined and not p25.control.broadcast %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">CC Broadcast Interval (ms)</label>
-        <input type="number" name="cc_interval" class="form-control" value="{{ (p25.control and p25.control.interval) or 300 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">CC Burst Duration (ms)</label>
-        <input type="number" name="cc_duration" class="form-control" value="{{ (p25.control and p25.control.duration) or 1 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">TSBK Acknowledge Requests</label>
-        <select name="cc_ack_requests" class="form-control">
-          <option value="true" {% if not p25.control or p25.control.ackRequests is not defined or p25.control.ackRequests %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if p25.control and p25.control.ackRequests is defined and not p25.control.ackRequests %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Dedicated Control Channel</label>
-        <select name="cc_dedicated" class="form-control">
-          <option value="false" {% if not p25.control or not p25.control.dedicated %}selected{% endif %}>No (Mixed Voice / CC)</option>
-          <option value="true" {% if p25.control and p25.control.dedicated %}selected{% endif %}>Yes (Dedicated CC Only)</option>
-        </select>
-      </div>
-    </div>
-
-    <div style="display:flex; justify-content:flex-end; margin-top: 1.5rem;">
-      <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2.25rem; font-weight:700; font-size:1rem;">
-        💾 Save All P25 Configuration
-      </button>
-    </div>
-  </div>
+</form>
 </form>
 
 <!-- P25 Talkgroup Rules Table -->

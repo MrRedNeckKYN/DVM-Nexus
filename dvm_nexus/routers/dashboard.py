@@ -11,6 +11,7 @@ from dvm_nexus.core.templates import render_template
 from dvm_nexus.core.system_monitor import get_system_metrics
 from dvm_nexus.core.service_controller import service_controller
 from dvm_nexus.core.dvm_client import dvm_client
+from dvm_nexus.core.telemetry_service import telemetry_service
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 from dvm_nexus.config_engine.profile_manager import profile_manager
 from dvm_nexus.core.database import get_recent_audit_logs
@@ -28,6 +29,8 @@ async def dashboard_page(request: Request):
     active_profile = profile_manager.get_active_profile()
     recent_logs = get_recent_audit_logs(limit=10)
     health = diagnostics_engine.run_health_checks()
+    hud_status = telemetry_service.get_hud_status()
+    last_heard = telemetry_service.get_last_heard(limit=25)
 
     # Attempt live query from DVMHost REST API
     live_rest = None
@@ -49,7 +52,64 @@ async def dashboard_page(request: Request):
             "logs": recent_logs,
             "live_rest": live_rest,
             "health": health,
+            "hud": hud_status,
+            "last_heard": last_heard,
         }
+    )
+
+
+@router.get("/components/rf-hud", response_class=HTMLResponse)
+async def rf_hud_component(request: Request):
+    """HTMX polling fragment for real-time RF Transceiver State HUD."""
+    hud_status = telemetry_service.get_hud_status()
+    dvm_status = dvm_config_manager.get_quick_status()
+    return render_template(
+        request,
+        "components/rf_hud.html",
+        {"hud": hud_status, "dvm": dvm_status}
+    )
+
+
+@router.get("/components/last-heard", response_class=HTMLResponse)
+async def last_heard_component(request: Request):
+    """HTMX polling fragment for real-time Last Heard radio activity feed."""
+    last_heard = telemetry_service.get_last_heard(limit=25)
+    return render_template(
+        request,
+        "components/last_heard.html",
+        {"last_heard": last_heard}
+    )
+
+
+@router.post("/api/telemetry/simulate-call", response_class=HTMLResponse)
+async def simulate_call_endpoint(request: Request):
+    """Inject a simulated RF voice call to test live HUD and Last Heard feeds."""
+    import random
+    proto = dvm_config_manager.get_active_protocol() or "dmr"
+    src_id = random.choice([3120101, 3108842, 1234567, 1001, 44209])
+    dest_id = 3100 if proto == "dmr" else 101
+    slot = random.choice([1, 2]) if proto == "dmr" else None
+    direction = random.choice(["rf_rx", "net_rx"])
+    duration = round(random.uniform(2.1, 7.8), 1)
+    ber = round(random.uniform(0.1, 1.4), 1)
+    rssi = random.randint(-92, -68)
+
+    telemetry_service.simulate_rf_call(
+        protocol=proto,
+        direction=direction,
+        src_id=src_id,
+        dest_id=dest_id,
+        slot=slot or 1,
+        duration_sec=duration,
+        ber_percent=ber,
+        rssi_dbm=rssi
+    )
+
+    last_heard = telemetry_service.get_last_heard(limit=25)
+    return render_template(
+        request,
+        "components/last_heard.html",
+        {"last_heard": last_heard}
     )
 
 

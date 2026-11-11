@@ -245,198 +245,212 @@
     </div>
   </div>
 
-  <!-- Section 4: ADF7021 Modem Transceiver & RF Calibration -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">📡 ADF7021 Transceiver &amp; RF Tuning Calibration</div>
-      <span style="font-size:0.85rem; color:var(--text-dim);">Hotspot Hardware Offsets and Filter Bandwidths</span>
+  <!-- Expert / Advanced Engineering Calibration Drawer -->
+  <details class="advanced-drawer" style="margin-bottom: 1.5rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden;">
+    <summary style="padding: 1.1rem 1.25rem; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; background: rgba(255,255,255,0.02); border-left: 4px solid var(--accent-cyan);">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span>🔬</span>
+        <span style="font-size: 1rem; color: var(--text-bright);">Expert &amp; Engineering Calibration Drawer</span>
+      </div>
+      <span class="badge badge-secondary" style="font-size: 0.75rem;">ADF7021 Filters &bull; BER Muting Thresholds &bull; TSCC Timers</span>
+    </summary>
+    <div style="padding: 1.25rem; border-top: 1px solid var(--border-color);">
+
+      <!-- Section 4: ADF7021 Modem Transceiver & RF Calibration -->
+      <div class="card" style="margin-bottom: 1.25rem;">
+        <div class="card-header">
+          <div class="card-title">📡 ADF7021 Transceiver &amp; RF Tuning Calibration</div>
+          <span style="font-size:0.85rem; color:var(--text-dim);">Hotspot Hardware Offsets and Filter Bandwidths</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
+            <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
+            <small class="form-hint">Fine frequency calibration for transmit (usually 0 to ±500 Hz).</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
+            <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
+            <small class="form-hint">Fine frequency calibration for receive (usually 0 to ±500 Hz).</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">ADF7021 LNA Gain Mode</label>
+            <select name="adf_gain_mode" class="form-control">
+              <option value="0" {% if hotspot.adfGainMode == 0 %}selected{% endif %}>0 - Auto</option>
+              <option value="1" {% if hotspot.adfGainMode == 1 %}selected{% endif %}>1 - Auto High Linearity</option>
+              <option value="2" {% if hotspot.adfGainMode == 2 or not hotspot.adfGainMode %}selected{% endif %}>2 - Low Gain (Recommended for close handhelds)</option>
+              <option value="3" {% if hotspot.adfGainMode == 3 %}selected{% endif %}>3 - High Gain</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Automatic Frequency Correction (AFC)</label>
+            <select name="afc_enable" class="form-control">
+              <option value="true" {% if hotspot.afcEnable is not defined or hotspot.afcEnable %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if hotspot.afcEnable is defined and not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">DMR Discriminator BW (-128 to 128)</label>
+            <input type="number" name="dmr_disc_bw" class="form-control" value="{{ hotspot.dmrDiscBWAdj or 0 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">DMR Post Demod BW (-128 to 128)</label>
+            <input type="number" name="dmr_post_bw" class="form-control" value="{{ hotspot.dmrPostBWAdj or 0 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">DMR RX Delay (ticks)</label>
+            <input type="number" name="dmr_rx_delay" class="form-control" value="{{ modem.dmrRxDelay or 7 }}">
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 5: Advanced DMR Parameters (Audio Thresholds, Registration, Beacons) -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">🔬 Advanced DMR Parameters, Audio Thresholds &amp; Beacons</div>
+          <span style="font-size:0.85rem; color:var(--text-dim);">Detailed Protocol Behavior &amp; Roaming Configuration</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">BER Silence Threshold</label>
+            <input type="number" name="silence_threshold" class="form-control" value="{{ dmr.silenceThreshold or 21 }}">
+            <small class="form-hint">BER threshold for silencing packet audio (default 21).</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Frame Loss Threshold</label>
+            <input type="number" name="frame_loss_threshold" class="form-control" value="{{ dmr.frameLossThreshold or 2 }}">
+            <small class="form-hint">Lost frames before call termination (default 2).</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Internal Data Queue Size (frames)</label>
+            <input type="number" name="queue_size" class="form-control" value="{{ dmr.queueSize or 31 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Repeat DMR Data Packets (IP / SMS)</label>
+            <select name="repeat_data_packet" class="form-control">
+              <option value="true" {% if dmr.repeatDataPacket is not defined or dmr.repeatDataPacket %}selected{% endif %}>Enabled</option>
+              <option value="false" {% if dmr.repeatDataPacket is defined and not dmr.repeatDataPacket %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Dump Talker Alias (TA) Data</label>
+            <select name="dump_ta_data" class="form-control">
+              <option value="true" {% if dmr.dumpTAData is not defined or dmr.dumpTAData %}selected{% endif %}>Enabled (Log to console)</option>
+              <option value="false" {% if dmr.dumpTAData is defined and not dmr.dumpTAData %}selected{% endif %}>Disabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Embedded LC Only</label>
+            <select name="embedded_lc_only" class="form-control">
+              <option value="false" {% if not dmr.embeddedLCOnly %}selected{% endif %}>Disabled (Standard)</option>
+              <option value="true" {% if dmr.embeddedLCOnly %}selected{% endif %}>Enabled (RF Embedded Only)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Verify Unit Registration</label>
+            <select name="verify_reg" class="form-control">
+              <option value="false" {% if not dmr.verifyReg %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if dmr.verifyReg %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Ignore Affiliation Check</label>
+            <select name="ignore_affiliation_check" class="form-control">
+              <option value="false" {% if not dmr.ignoreAffiliationCheck %}selected{% endif %}>Enforce Affiliations</option>
+              <option value="true" {% if dmr.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Legacy Group Registration Fallback</label>
+            <select name="legacy_group_reg" class="form-control">
+              <option value="false" {% if not dmr.legacyGroupReg %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if dmr.legacyGroupReg %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Conventional Net Grant Demand</label>
+            <select name="conv_net_grant_demand" class="form-control">
+              <option value="false" {% if not dmr.convNetGrantDemand %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if dmr.convNetGrantDemand %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Timeslot Control Channel (TSCC)</label>
+            <select name="tscc_enable" class="form-control">
+              <option value="false" {% if not dmr.control or not dmr.control.enable %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if dmr.control and dmr.control.enable %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Roaming Beacons</label>
+            <select name="beacon_enable" class="form-control">
+              <option value="false" {% if not dmr.beacons or not dmr.beacons.enable %}selected{% endif %}>Disabled</option>
+              <option value="true" {% if dmr.beacons and dmr.beacons.enable %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">TSCC Timeslot</label>
+            <select name="tscc_slot" class="form-control">
+              <option value="1" {% if not dmr.control or dmr.control.slot == 1 %}selected{% endif %}>Slot 1</option>
+              <option value="2" {% if dmr.control and dmr.control.slot == 2 %}selected{% endif %}>Slot 2</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Dedicated TSCC</label>
+            <select name="tscc_dedicated" class="form-control">
+              <option value="false" {% if not dmr.control or not dmr.control.dedicated %}selected{% endif %}>No (Non-dedicated)</option>
+              <option value="true" {% if dmr.control and dmr.control.dedicated %}selected{% endif %}>Yes (Dedicated CC)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Beacon Interval (sec)</label>
+            <input type="number" name="beacon_interval" class="form-control" value="{{ dmr.beacons.interval if dmr.beacons else 60 }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Beacon Burst Duration (sec)</label>
+            <input type="number" name="beacon_duration" class="form-control" value="{{ dmr.beacons.duration if dmr.beacons else 3 }}">
+          </div>
+        </div>
+      </div>
+
     </div>
+  </details>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
-        <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
-        <small class="form-hint">Fine frequency calibration for transmit (usually 0 to ±500 Hz).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
-        <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
-        <small class="form-hint">Fine frequency calibration for receive (usually 0 to ±500 Hz).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">ADF7021 LNA Gain Mode</label>
-        <select name="adf_gain_mode" class="form-control">
-          <option value="0" {% if hotspot.adfGainMode == 0 %}selected{% endif %}>0 - Auto</option>
-          <option value="1" {% if hotspot.adfGainMode == 1 %}selected{% endif %}>1 - Auto High Linearity</option>
-          <option value="2" {% if hotspot.adfGainMode == 2 or not hotspot.adfGainMode %}selected{% endif %}>2 - Low Gain (Recommended for close handhelds)</option>
-          <option value="3" {% if hotspot.adfGainMode == 3 %}selected{% endif %}>3 - High Gain</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Automatic Frequency Correction (AFC)</label>
-        <select name="afc_enable" class="form-control">
-          <option value="true" {% if hotspot.afcEnable is not defined or hotspot.afcEnable %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if hotspot.afcEnable is defined and not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">DMR Discriminator BW (-128 to 128)</label>
-        <input type="number" name="dmr_disc_bw" class="form-control" value="{{ hotspot.dmrDiscBWAdj or 0 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">DMR Post Demod BW (-128 to 128)</label>
-        <input type="number" name="dmr_post_bw" class="form-control" value="{{ hotspot.dmrPostBWAdj or 0 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">DMR RX Delay (ticks)</label>
-        <input type="number" name="dmr_rx_delay" class="form-control" value="{{ modem.dmrRxDelay or 7 }}">
-      </div>
-    </div>
-  </div>
-
-  <!-- Section 5: Advanced DMR Parameters (Audio Thresholds, Registration, Beacons) -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">🔬 Advanced DMR Parameters, Audio Thresholds &amp; Beacons</div>
-      <span style="font-size:0.85rem; color:var(--text-dim);">Detailed Protocol Behavior &amp; Roaming Configuration</span>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">BER Silence Threshold</label>
-        <input type="number" name="silence_threshold" class="form-control" value="{{ dmr.silenceThreshold or 21 }}">
-        <small class="form-hint">BER threshold for silencing packet audio (default 21).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Frame Loss Threshold</label>
-        <input type="number" name="frame_loss_threshold" class="form-control" value="{{ dmr.frameLossThreshold or 2 }}">
-        <small class="form-hint">Lost frames before call termination (default 2).</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Internal Data Queue Size (frames)</label>
-        <input type="number" name="queue_size" class="form-control" value="{{ dmr.queueSize or 31 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Repeat DMR Data Packets (IP / SMS)</label>
-        <select name="repeat_data_packet" class="form-control">
-          <option value="true" {% if dmr.repeatDataPacket is not defined or dmr.repeatDataPacket %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if dmr.repeatDataPacket is defined and not dmr.repeatDataPacket %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Dump Talker Alias (TA) Data</label>
-        <select name="dump_ta_data" class="form-control">
-          <option value="true" {% if dmr.dumpTAData is not defined or dmr.dumpTAData %}selected{% endif %}>Enabled (Log to console)</option>
-          <option value="false" {% if dmr.dumpTAData is defined and not dmr.dumpTAData %}selected{% endif %}>Disabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Embedded LC Only</label>
-        <select name="embedded_lc_only" class="form-control">
-          <option value="false" {% if not dmr.embeddedLCOnly %}selected{% endif %}>Disabled (Standard)</option>
-          <option value="true" {% if dmr.embeddedLCOnly %}selected{% endif %}>Enabled (RF Embedded Only)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Verify Unit Registration</label>
-        <select name="verify_reg" class="form-control">
-          <option value="false" {% if not dmr.verifyReg %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if dmr.verifyReg %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Ignore Affiliation Check</label>
-        <select name="ignore_affiliation_check" class="form-control">
-          <option value="false" {% if not dmr.ignoreAffiliationCheck %}selected{% endif %}>Enforce Affiliations</option>
-          <option value="true" {% if dmr.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Legacy Group Registration Fallback</label>
-        <select name="legacy_group_reg" class="form-control">
-          <option value="false" {% if not dmr.legacyGroupReg %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if dmr.legacyGroupReg %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Conventional Net Grant Demand</label>
-        <select name="conv_net_grant_demand" class="form-control">
-          <option value="false" {% if not dmr.convNetGrantDemand %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if dmr.convNetGrantDemand %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Timeslot Control Channel (TSCC)</label>
-        <select name="tscc_enable" class="form-control">
-          <option value="false" {% if not dmr.control or not dmr.control.enable %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if dmr.control and dmr.control.enable %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Roaming Beacons</label>
-        <select name="beacon_enable" class="form-control">
-          <option value="false" {% if not dmr.beacons or not dmr.beacons.enable %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if dmr.beacons and dmr.beacons.enable %}selected{% endif %}>Enabled</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">TSCC Timeslot</label>
-        <select name="tscc_slot" class="form-control">
-          <option value="1" {% if not dmr.control or dmr.control.slot == 1 %}selected{% endif %}>Slot 1</option>
-          <option value="2" {% if dmr.control and dmr.control.slot == 2 %}selected{% endif %}>Slot 2</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Dedicated TSCC</label>
-        <select name="tscc_dedicated" class="form-control">
-          <option value="false" {% if not dmr.control or not dmr.control.dedicated %}selected{% endif %}>No (Non-dedicated)</option>
-          <option value="true" {% if dmr.control and dmr.control.dedicated %}selected{% endif %}>Yes (Dedicated CC)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Beacon Interval (sec)</label>
-        <input type="number" name="beacon_interval" class="form-control" value="{{ dmr.beacons.interval if dmr.beacons else 60 }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Beacon Burst Duration (sec)</label>
-        <input type="number" name="beacon_duration" class="form-control" value="{{ dmr.beacons.duration if dmr.beacons else 3 }}">
-      </div>
-    </div>
-
-    <div style="display:flex; justify-content:flex-end; margin-top: 1.5rem;">
-      <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2.25rem; font-weight:700; font-size:1rem;">
-        💾 Save All DMR Configuration
-      </button>
-    </div>
+  <div style="display:flex; justify-content:flex-end; margin-bottom: 2rem;">
+    <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2.25rem; font-weight:700; font-size:1rem;">
+      💾 Save All DMR Configuration
+    </button>
   </div>
 </form>
 
