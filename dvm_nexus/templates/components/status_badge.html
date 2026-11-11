@@ -4,6 +4,12 @@
     <span class="status-text-full">DVMHost Running {% if service.main_pid %}(PID {{ service.main_pid }}){% endif %}</span>
     <span class="status-text-mobile">Running</span>
   </span>
+{% elif service and service.is_starting %}
+  <span class="badge badge-warning status-pill" title="DVMHost Initializing / Warmup">
+    <span class="status-dot">⏳</span>
+    <span class="status-text-full">DVMHost Warmup...</span>
+    <span class="status-text-mobile">Warmup</span>
+  </span>
 {% else %}
   <span class="badge badge-danger status-pill" title="DVMHost Inactive">
     <span class="status-dot">■</span>

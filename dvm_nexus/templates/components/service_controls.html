@@ -5,6 +5,10 @@
       <span class="badge badge-success">
         <span class="status-dot">●</span> Running
       </span>
+    {% elif service.is_starting %}
+      <span class="badge badge-warning" title="DVMHost is initializing hardware and warming up">
+        <span class="status-dot">⏳</span> Warming Up...
+      </span>
     {% elif service.is_failed %}
       <span class="badge badge-danger" title="Service failed or exited with error">
         <span class="status-dot">⚠️</span> FAILED

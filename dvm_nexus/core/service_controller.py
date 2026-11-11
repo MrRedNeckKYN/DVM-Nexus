@@ -88,13 +88,39 @@ class ServiceController:
             is_failed = act_state == "failed" or sub_state == "failed" or (result_str not in ("", "success") and not is_active)
             exit_code = int(props.get("ExecMainStatus", 0)) if props.get("ExecMainStatus", "0").isdigit() else None
 
+            # Detect live process if main_pid > 0 or by searching process table
+            process_alive = False
+            if main_pid > 0:
+                try:
+                    p = psutil.Process(main_pid)
+                    process_alive = p.is_running() and p.status() != psutil.STATUS_ZOMBIE
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    process_alive = False
+
+            if not process_alive and not is_active:
+                for p in psutil.process_iter(["pid", "name"]):
+                    try:
+                        if "dvmhost" in p.info["name"].lower():
+                            main_pid = p.info["pid"]
+                            process_alive = True
+                            break
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+
+            is_running = is_active or process_alive
+            is_starting = act_state == "activating" and not is_running
+            state_label = f"{act_state} ({sub_state})"
+            if process_alive and not is_active:
+                state_label = f"active (running - PID {main_pid})"
+
             status_dict = {
                 "service": self.service_name,
-                "is_running": is_active,
-                "is_failed": is_failed,
-                "state": f"{act_state} ({sub_state})",
+                "is_running": is_running,
+                "is_starting": is_starting,
+                "is_failed": is_failed and not is_running,
+                "state": state_label,
                 "main_pid": main_pid if main_pid > 0 else None,
-                "exit_code": exit_code,
+                "exit_code": exit_code if not is_running else None,
                 "exit_result": result_str,
                 "active_since": props.get("ActiveEnterTimestamp", ""),
                 "is_systemd": True,

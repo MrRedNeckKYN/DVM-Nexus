@@ -76,6 +76,17 @@ async def service_badge_component(request: Request):
     )
 
 
+@router.get("/components/service-controls", response_class=HTMLResponse)
+async def service_controls_component(request: Request):
+    """HTMX polling fragment for service controls card."""
+    service_status = service_controller.get_status()
+    return render_template(
+        request,
+        "components/service_controls.html",
+        {"service": service_status}
+    )
+
+
 @router.post("/api/service/start", response_class=HTMLResponse)
 async def service_start(request: Request):
     """Start dvmhost service."""

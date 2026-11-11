@@ -183,6 +183,40 @@
 let currentService = 'dvmhost';
 let currentFilter = 'all';
 let autoRefreshTimer = null;
+let isPinnedToBottom = true;
+let savedScrollTop = 0;
+
+function captureScrollState() {
+  const terminal = document.getElementById('terminal-log-content');
+  if (terminal) {
+    const threshold = 70;
+    const distanceToBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight;
+    isPinnedToBottom = distanceToBottom <= threshold;
+    savedScrollTop = terminal.scrollTop;
+  }
+}
+
+function restoreScrollState() {
+  const terminal = document.getElementById('terminal-log-content');
+  if (terminal) {
+    if (isPinnedToBottom) {
+      terminal.scrollTop = terminal.scrollHeight;
+    } else {
+      terminal.scrollTop = savedScrollTop;
+    }
+  }
+}
+
+function toggleStickBottom(btn) {
+  isPinnedToBottom = !isPinnedToBottom;
+  const terminal = document.getElementById('terminal-log-content');
+  if (terminal && isPinnedToBottom) {
+    terminal.scrollTop = terminal.scrollHeight;
+  }
+  if (btn) {
+    btn.classList.toggle('active-filter', isPinnedToBottom);
+  }
+}
 
 function setLogFilter(filter) {
   currentFilter = filter;
@@ -201,13 +235,27 @@ function setLogService(svc) {
 function fetchLogs() {
   const container = document.getElementById('diagnostics-log-stream');
   if (!container) return;
+  captureScrollState();
   const url = `/components/diagnostics-logs?service=${encodeURIComponent(currentService)}&filter=${encodeURIComponent(currentFilter)}&lines=80`;
-  htmx.ajax('GET', url, { target: '#diagnostics-log-stream', swap: 'innerHTML' });
+  htmx.ajax('GET', url, { target: '#diagnostics-log-stream', swap: 'innerHTML scroll:none' });
 }
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+  if (evt.detail.target && evt.detail.target.id === 'diagnostics-log-stream') {
+    restoreScrollState();
+  }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  const terminal = document.getElementById('terminal-log-content');
+  if (terminal) {
+    terminal.scrollTop = terminal.scrollHeight;
+  }
+});
 
 function refreshCurrentLogs() {
   fetchLogs();
-  htmx.ajax('GET', '/components/diagnostics-checks', { target: '#diagnostics-checks-container', swap: 'innerHTML' });
+  htmx.ajax('GET', '/components/diagnostics-checks', { target: '#diagnostics-checks-container', swap: 'innerHTML scroll:none' });
 }
 
 function toggleAutoRefresh(enabled) {
