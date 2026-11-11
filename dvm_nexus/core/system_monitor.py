@@ -33,6 +33,8 @@ TARGET_PI5_DISK_GB = DEFAULT_PI5_DISK_GB
 
 # In-memory cache for Windows WMI queries to prevent subshell overhead during fast polling
 _win_temp_cache: Optional[Tuple[float, float]] = None  # (timestamp, temp_c)
+_system_metrics_cache: Optional[Tuple[float, Dict[str, Any]]] = None  # (timestamp, metrics)
+_SYSTEM_METRICS_CACHE_TTL = 2.0  # seconds
 
 
 def is_linux() -> bool:
@@ -354,18 +356,24 @@ class RemoteTelemetryAgent:
 
     def register_provider(self, provider: Callable[[], Optional[Dict[str, Any]]]) -> None:
         """Register a custom telemetry provider callback (e.g., from serial or SSH daemon)."""
+        global _system_metrics_cache
         self._custom_provider = provider
+        _system_metrics_cache = None
 
     def set_metrics(self, metrics: Dict[str, Any]) -> None:
         """Manually update cached remote telemetry metrics."""
+        global _system_metrics_cache
         self._cached_metrics = metrics
         self._cache_timestamp = time.time()
+        _system_metrics_cache = None
 
     def clear(self) -> None:
         """Clear cached metrics and registered provider."""
+        global _system_metrics_cache
         self._cached_metrics = None
         self._cache_timestamp = 0.0
         self._custom_provider = None
+        _system_metrics_cache = None
 
     def fetch_metrics(self) -> Optional[Dict[str, Any]]:
         """
@@ -569,14 +577,20 @@ def get_disk_info(path: str = "/") -> Tuple[float, float, float, str]:
     return used_gb, total_gb, percent, display_str
 
 
-def get_system_metrics() -> Dict[str, Any]:
+def get_system_metrics(force: bool = False) -> Dict[str, Any]:
     """
     Collect system metrics for dashboard and SSE polling targeting Raspberry Pi 5.
+    Features short in-memory cache to prevent CPU and disk I/O spikes during rapid HTMX polling.
     1. If native on Linux/Pi, reads real-time kernel memory, mount point storage, thermal sensors, and cpuinfo.
     2. If on remote dev host, pulls telemetry from the remote Raspberry Pi agent (REST/SSH/serial)
        rather than leaking host PC hardware.
     3. If remote agent is not yet reachable, provides target Pi 5 standby baseline metrics.
     """
+    global _system_metrics_cache
+    now = time.time()
+    if not force and _system_metrics_cache is not None and (now - _system_metrics_cache[0] < _SYSTEM_METRICS_CACHE_TTL):
+        return dict(_system_metrics_cache[1])
+
     on_linux = is_linux()
     on_pi = is_raspberry_pi_5()
 
@@ -584,6 +598,7 @@ def get_system_metrics() -> Dict[str, Any]:
     if not on_linux:
         remote_data = remote_telemetry_agent.fetch_metrics()
         if remote_data:
+            _system_metrics_cache = (now, remote_data)
             return remote_data
 
         # Fallback for dev host: Guard against exposing host PC specs (AMD64, 32 GB RAM, 1 TB disk)
@@ -601,7 +616,7 @@ def get_system_metrics() -> Dict[str, Any]:
         minutes, _ = divmod(rem, 60)
         uptime_str = f"{days}d {hours}h {minutes}m" if days > 0 else f"{hours}h {minutes}m"
 
-        return {
+        dev_res = {
             "hostname": platform.node(),
             "os": f"{platform.system()} {platform.release()}",
             "arch": f"{platform.machine()} (Target Pi 5)",
@@ -627,6 +642,8 @@ def get_system_metrics() -> Dict[str, Any]:
             "hardware_label": f"Raspberry Pi 5 ({total_str} / {disk_total_gb:.0f} GB)",
             "is_remote_agent": False,
         }
+        _system_metrics_cache = (now, dev_res)
+        return dev_res
 
     # Running natively on Linux / Raspberry Pi:
     cpu_percent = psutil.cpu_percent(interval=None)
@@ -660,7 +677,7 @@ def get_system_metrics() -> Dict[str, Any]:
     temp_source = "BCM2712 SoC Thermal" if ("bcm2712" in cpu_model.lower() or on_pi) else "Linux SoC Thermal"
     hardware_label = f"Raspberry Pi 5 ({total_str} / {disk_total_gb:.0f} GB)" if on_pi else f"{platform.system()} ({total_str} / {disk_total_gb:.0f} GB)"
 
-    return {
+    res = {
         "hostname": platform.node(),
         "os": f"{platform.system()} {platform.release()}",
         "arch": "aarch64" if on_pi else platform.machine(),
@@ -686,3 +703,5 @@ def get_system_metrics() -> Dict[str, Any]:
         "hardware_label": hardware_label,
         "is_remote_agent": False,
     }
+    _system_metrics_cache = (now, res)
+    return res

@@ -125,6 +125,11 @@
             </a>
           </li>
           <li class="nav-item">
+            <a href="/terminal" class="nav-link {% if active_tab == 'terminal' %}active{% endif %}">
+              <span class="nav-icon">💻</span> <span class="nav-label">Web Terminal</span>
+            </a>
+          </li>
+          <li class="nav-item">
             <a href="/updates" class="nav-link {% if active_tab == 'updates' %}active{% endif %}">
               <span class="nav-icon">🔄</span> <span class="nav-label">System Updates</span>
             </a>
@@ -184,7 +189,7 @@
             {% endif %}
           </div>
 
-          <div id="service-badge-container" hx-get="/components/service-badge" hx-trigger="every 5s">
+          <div id="service-badge-container" hx-get="/components/service-badge" hx-trigger="every 6s">
             {% include "components/status_badge.html" %}
           </div>
           <form hx-post="/api/service/restart" hx-swap="none" style="display:inline;">

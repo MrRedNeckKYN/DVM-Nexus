@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="terminal-container" style="display: flex; flex-direction: column; height: calc(100vh - 120px); min-height: 580px;">
+  
+  <!-- Header & Description -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h2 style="font-size: 1.35rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+        <span style="color: var(--accent-cyan);">💻</span> System Web Terminal &amp; Console
+      </h2>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0.25rem 0 0 0;">
+        Direct Raspberry Pi / Host console access for hardware pin debugging, serial inspection, and system commands.
+      </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span id="term-status-badge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.75rem; padding: 0.35rem 0.65rem; border-radius: 6px; font-weight: 600;">
+        ● READY
+      </span>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="copyTerminalText()" title="Copy all console output">
+        📋 Copy Output
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="clearTerminalScreen()" title="Clear terminal screen (Ctrl+L)">
+        🧹 Clear
+      </button>
+    </div>
+  </div>
+
+  <!-- Diagnostic Quick Actions Toolbar -->
+  <div class="card mb-3" style="padding: 0.65rem 1rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;">
+    <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+      <span>⚡ Quick Diagnostic Actions</span>
+      <span style="font-size: 0.7rem; font-weight: 400; text-transform: none; color: var(--text-secondary);">Click any button to execute instantly</span>
+    </div>
+    <div class="d-flex flex-wrap gap-2" style="font-size: 0.8rem;">
+      <button type="button" class="btn btn-outline-info btn-sm quick-pill" onclick="runPreset('pinctrl get 14-15')">
+        🔍 <strong>GPIO 14/15 UART Check</strong> <code style="font-size: 0.7rem; opacity: 0.8;">pinctrl get 14-15</code>
+      </button>
+      <button type="button" class="btn btn-outline-info btn-sm quick-pill" onclick="runPreset('ls -la /dev/ttyAMA* /dev/ttyUSB* /dev/ttyACM* /dev/serial* 2>/dev/null || ls -l /dev/tty*')">
+        🔌 <strong>List Serial Ports</strong> <code style="font-size: 0.7rem; opacity: 0.8;">/dev/tty*</code>
+      </button>
+      <button type="button" class="btn btn-outline-info btn-sm quick-pill" onclick="runPreset('systemctl status dvmhost.service --no-pager')">
+        ⚙️ <strong>DVMHost Status</strong> <code style="font-size: 0.7rem; opacity: 0.8;">systemctl status</code>
+      </button>
+      <button type="button" class="btn btn-outline-info btn-sm quick-pill" onclick="runPreset('journalctl -u dvmhost.service -n 35 --no-pager')">
+        📜 <strong>DVM Recent Logs</strong> <code style="font-size: 0.7rem; opacity: 0.8;">journalctl -n 35</code>
+      </button>
+      <button type="button" class="btn btn-outline-info btn-sm quick-pill" onclick="runPreset('ls -la /opt/dvm')">
+        📁 <strong>Permissions &amp; Files</strong> <code style="font-size: 0.7rem; opacity: 0.8;">/opt/dvm</code>
+      </button>
+      <button type="button" class="btn btn-outline-info btn-sm quick-pill" onclick="runPreset('vcgencmd measure_temp 2>/dev/null || cat /sys/class/thermal/thermal_zone0/temp')">
+        🌡️ <strong>Thermal Check</strong> <code style="font-size: 0.7rem; opacity: 0.8;">temp</code>
+      </button>
+      <button type="button" class="btn btn-outline-info btn-sm quick-pill" onclick="runPreset('dmesg | tail -n 25')">
+        📡 <strong>Kernel dmesg</strong> <code style="font-size: 0.7rem; opacity: 0.8;">dmesg -n 25</code>
+      </button>
+    </div>
+  </div>
+
+  <!-- Terminal Window -->
+  <div class="terminal-window" style="flex: 1; display: flex; flex-direction: column; background: #0c1017; border: 1px solid #1f293d; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.5);">
+    
+    <!-- Terminal Title Bar -->
+    <div class="terminal-titlebar" style="background: #141b28; padding: 0.5rem 0.85rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1f293d; user-select: none;">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #ef4444;"></span>
+        <span style="display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #f59e0b;"></span>
+        <span style="display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #10b981;"></span>
+        <span style="margin-left: 0.5rem; font-family: monospace; font-size: 0.8rem; color: #94a3b8; font-weight: 600;">
+          {{ terminal_user }}@{{ terminal_host }}:<span id="term-pwd" style="color: #38bdf8;">{{ current_cwd }}</span>
+        </span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span style="font-family: monospace; font-size: 0.75rem; color: #64748b;">Shell: {{ terminal_shell }}</span>
+      </div>
+    </div>
+
+    <!-- Output Area -->
+    <div id="terminal-screen" style="flex: 1; padding: 1rem; overflow-y: auto; font-family: 'Cascadia Code', Consolas, 'Courier New', monospace; font-size: 0.88rem; line-height: 1.45; color: #f1f5f9; white-space: pre-wrap; word-break: break-all; scroll-behavior: smooth;">
+<span style="color: #38bdf8; font-weight: bold;">========================================================================================</span>
+<span style="color: #10b981; font-weight: bold;">  DVM Nexus Interactive Console (v1.0.22) &bull; Raspberry Pi &amp; DVMHost Diagnostic Shell</span>
+<span style="color: #94a3b8;">  Type commands below or use the quick diagnostic buttons above. (History: ↑ / ↓)</span>
+<span style="color: #38bdf8; font-weight: bold;">========================================================================================</span>
+
+</div>
+
+    <!-- Command Input Bar -->
+    <div class="terminal-inputbar" style="background: #111827; border-top: 1px solid #1f293d; padding: 0.65rem 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+      <span id="input-prompt" style="font-family: monospace; font-size: 0.88rem; font-weight: 700; color: #10b981; white-space: nowrap; user-select: none;">
+        {{ terminal_user }}@pi:<span id="input-pwd" style="color: #38bdf8;">{{ current_cwd }}</span>$&nbsp;
+      </span>
+      <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" 
+             style="flex: 1; background: transparent; border: none; color: #f8fafc; font-family: 'Cascadia Code', Consolas, 'Courier New', monospace; font-size: 0.9rem; outline: none;" 
+             placeholder="Enter shell command (e.g. pinctrl get 14-15, dvmhost status, ls /dev)..." />
+      <button type="button" class="btn btn-primary btn-sm" id="btn-run-cmd" onclick="submitCommand()" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; font-weight: 600;">
+        Run ↵
+      </button>
+    </div>
+
+  </div>
+
+</div>
+
+<style>
+  .quick-pill {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    color: #e2e8f0;
+    transition: all 0.15s ease-in-out;
+  }
+  .quick-pill:hover {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: #38bdf8;
+    color: #38bdf8;
+    transform: translateY(-1px);
+  }
+  #terminal-screen::-webkit-scrollbar {
+    width: 8px;
+  }
+  #terminal-screen::-webkit-scrollbar-track {
+    background: #090d14;
+  }
+  #terminal-screen::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 4px;
+  }
+  #terminal-screen::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+</style>
+
+<script>
+  (function() {
+    var screen = document.getElementById('terminal-screen');
+    var input = document.getElementById('terminal-input');
+    var termPwd = document.getElementById('term-pwd');
+    var inputPwd = document.getElementById('input-pwd');
+    var statusBadge = document.getElementById('term-status-badge');
+    var currentCwd = "{{ current_cwd }}";
+    var commandHistory = [];
+    var historyIndex = -1;
+    var isExecuting = false;
+
+    // Focus input on page load and click inside terminal window
+    input.focus();
+    screen.addEventListener('click', function() {
+      input.focus();
+    });
+
+    window.clearTerminalScreen = function() {
+      screen.innerHTML = '<span style="color: #64748b; font-style: italic;">Console cleared.\n</span>';
+      input.focus();
+    };
+
+    window.copyTerminalText = function() {
+      var text = screen.innerText || screen.textContent;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+          showNotification('Copied', 'Terminal text copied to clipboard', 'success');
+        }).catch(function() {
+          fallbackCopy(text);
+        });
+      } else {
+        fallbackCopy(text);
+      }
+    };
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showNotification('Copied', 'Terminal text copied to clipboard', 'success');
+    }
+
+    function appendOutput(html) {
+      screen.innerHTML += html;
+      screen.scrollTop = screen.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+    }
+
+    // Convert ANSI color codes to styled HTML for terminal color rendering
+    function ansiToHtml(text) {
+      var safe = escapeHtml(text);
+      // Basic ANSI colors
+      safe = safe.replace(/\x1b\[1;31m/g, '<span style="color: #ef4444; font-weight: bold;">')
+                 .replace(/\x1b\[0;31m/g, '<span style="color: #ef4444;">')
+                 .replace(/\x1b\[31m/g, '<span style="color: #ef4444;">')
+                 .replace(/\x1b\[1;32m/g, '<span style="color: #10b981; font-weight: bold;">')
+                 .replace(/\x1b\[0;32m/g, '<span style="color: #10b981;">')
+                 .replace(/\x1b\[32m/g, '<span style="color: #10b981;">')
+                 .replace(/\x1b\[1;33m/g, '<span style="color: #f59e0b; font-weight: bold;">')
+                 .replace(/\x1b\[0;33m/g, '<span style="color: #f59e0b;">')
+                 .replace(/\x1b\[33m/g, '<span style="color: #f59e0b;">')
+                 .replace(/\x1b\[1;34m/g, '<span style="color: #3b82f6; font-weight: bold;">')
+                 .replace(/\x1b\[0;34m/g, '<span style="color: #3b82f6;">')
+                 .replace(/\x1b\[34m/g, '<span style="color: #3b82f6;">')
+                 .replace(/\x1b\[1;36m/g, '<span style="color: #06b6d4; font-weight: bold;">')
+                 .replace(/\x1b\[0;36m/g, '<span style="color: #06b6d4;">')
+                 .replace(/\x1b\[36m/g, '<span style="color: #06b6d4;">')
+                 .replace(/\x1b\[1m/g, '<span style="font-weight: bold;">')
+                 .replace(/\x1b\[0m/g, '</span>')
+                 .replace(/\x1b\[[0-9;]*m/g, ''); // strip remaining ANSI sequences
+      return safe;
+    }
+
+    window.runPreset = function(cmd) {
+      input.value = cmd;
+      submitCommand();
+    };
+
+    window.submitCommand = async function() {
+      var cmd = input.value.trim();
+      if (!cmd || isExecuting) return;
+
+      // Add to command history
+      commandHistory.push(cmd);
+      historyIndex = commandHistory.length;
+
+      // Render command in output
+      var promptHtml = '\n<span style="color: #10b981; font-weight: bold;">pi@raspberrypi:' + escapeHtml(currentCwd) + '$</span> <span style="color: #f8fafc; font-weight: bold;">' + escapeHtml(cmd) + '</span>\n';
+      appendOutput(promptHtml);
+
+      // Handle client-side 'clear'
+      if (cmd.toLowerCase() === 'clear') {
+        input.value = '';
+        clearTerminalScreen();
+        return;
+      }
+
+      isExecuting = true;
+      input.value = '';
+      statusBadge.innerText = '● RUNNING...';
+      statusBadge.style.color = '#f59e0b';
+      statusBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+      statusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+
+      try {
+        var res = await fetch('/api/terminal/exec', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: cmd, cwd: currentCwd })
+        });
+
+        if (!res.ok) {
+          throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        }
+
+        var data = await res.json();
+        if (data.cwd && data.cwd !== currentCwd) {
+          currentCwd = data.cwd;
+          termPwd.innerText = currentCwd;
+          inputPwd.innerText = currentCwd;
+        }
+
+        var outputHtml = '';
+        if (data.stdout) {
+          outputHtml += ansiToHtml(data.stdout);
+        }
+        if (data.stderr) {
+          outputHtml += '<span style="color: #ef4444;">' + ansiToHtml(data.stderr) + '</span>';
+        }
+
+        if (data.exit_code !== 0 && !data.stderr && !data.stdout) {
+          outputHtml += '<span style="color: #ef4444;">[Process exited with code ' + data.exit_code + ']</span>\n';
+        }
+
+        outputHtml += '<span style="color: #64748b; font-size: 0.75rem;">[' + data.duration_ms + ' ms &bull; exit code ' + data.exit_code + ']</span>\n';
+        appendOutput(outputHtml);
+
+      } catch (err) {
+        appendOutput('<span style="color: #ef4444;">Error executing command: ' + escapeHtml(err.message) + '</span>\n');
+      } finally {
+        isExecuting = false;
+        statusBadge.innerText = '● READY';
+        statusBadge.style.color = '#10b981';
+        statusBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        statusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        input.focus();
+        screen.scrollTop = screen.scrollHeight;
+      }
+    };
+
+    // Keyboard navigation: Enter, Ctrl+L, ArrowUp, ArrowDown
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitCommand();
+      } else if (e.key === 'l' && e.ctrlKey) {
+        e.preventDefault();
+        clearTerminalScreen();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIndex > 0) {
+          historyIndex--;
+          input.value = commandHistory[historyIndex];
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIndex < commandHistory.length - 1) {
+          historyIndex++;
+          input.value = commandHistory[historyIndex];
+        } else {
+          historyIndex = commandHistory.length;
+          input.value = '';
+        }
+      }
+    });
+
+  })();
+</script>
+{% endblock %}

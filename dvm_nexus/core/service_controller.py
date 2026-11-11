@@ -23,9 +23,17 @@ class ServiceController:
         self._dev_simulated_running = False
         self._dev_simulated_failed = False
         self._dev_simulated_start_time = None
+        # Cache to reduce process-fork overhead during frequent Web UI polling
+        self._cached_status: Optional[Dict[str, Any]] = None
+        self._status_timestamp: float = 0.0
+        self._status_ttl: float = 2.0  # seconds
 
-    def get_status(self) -> Dict[str, Any]:
-        """Query service status and PID."""
+    def get_status(self, force: bool = False) -> Dict[str, Any]:
+        """Query service status and PID with short in-memory cache to optimize UI polling."""
+        now = time.time()
+        if not force and self._cached_status is not None and (now - self._status_timestamp < self._status_ttl):
+            return dict(self._cached_status)
+
         if not self.has_systemctl:
             # Check if dvmhost process is running via psutil
             pids = []
@@ -38,7 +46,7 @@ class ServiceController:
 
             is_running = (len(pids) > 0 or self._dev_simulated_running) and not self._dev_simulated_failed
             state_str = "active (running)" if is_running else ("failed (failed)" if self._dev_simulated_failed else "inactive (dead)")
-            return {
+            res = {
                 "service": self.service_name,
                 "is_running": is_running,
                 "is_failed": self._dev_simulated_failed,
@@ -50,6 +58,9 @@ class ServiceController:
                 "is_systemd": False,
                 "simulated": True,
             }
+            self._cached_status = res
+            self._status_timestamp = now
+            return res
 
         try:
             # Check is-active
@@ -77,7 +88,7 @@ class ServiceController:
             is_failed = act_state == "failed" or sub_state == "failed" or (result_str not in ("", "success") and not is_active)
             exit_code = int(props.get("ExecMainStatus", 0)) if props.get("ExecMainStatus", "0").isdigit() else None
 
-            return {
+            status_dict = {
                 "service": self.service_name,
                 "is_running": is_active,
                 "is_failed": is_failed,
@@ -89,8 +100,11 @@ class ServiceController:
                 "is_systemd": True,
                 "simulated": False,
             }
+            self._cached_status = status_dict
+            self._status_timestamp = now
+            return status_dict
         except Exception as e:
-            return {
+            err_dict = {
                 "service": self.service_name,
                 "is_running": False,
                 "is_failed": True,
@@ -101,9 +115,14 @@ class ServiceController:
                 "is_systemd": True,
                 "simulated": False,
             }
+            self._cached_status = err_dict
+            self._status_timestamp = now
+            return err_dict
 
     def start(self) -> Dict[str, Any]:
         """Start the dvmhost service."""
+        self._cached_status = None
+        self._status_timestamp = 0.0
         log_audit("SERVICE", "START", f"Requesting start of {self.service_name}")
         if not self.has_systemctl:
             self._dev_simulated_running = True
@@ -126,6 +145,8 @@ class ServiceController:
 
     def stop(self) -> Dict[str, Any]:
         """Stop the dvmhost service."""
+        self._cached_status = None
+        self._status_timestamp = 0.0
         log_audit("SERVICE", "STOP", f"Requesting stop of {self.service_name}")
         if not self.has_systemctl:
             self._dev_simulated_running = False
@@ -142,6 +163,8 @@ class ServiceController:
 
     def restart(self) -> Dict[str, Any]:
         """Restart the dvmhost service."""
+        self._cached_status = None
+        self._status_timestamp = 0.0
         log_audit("SERVICE", "RESTART", f"Requesting restart of {self.service_name}")
         if not self.has_systemctl:
             self._dev_simulated_running = True
@@ -167,7 +190,7 @@ class ServiceController:
         deadline = time.time() + timeout_sec
         time.sleep(1.0)
         while time.time() < deadline:
-            status = self.get_status()
+            status = self.get_status(force=True)
             if not status["is_running"]:
                 return False
             time.sleep(0.5)
