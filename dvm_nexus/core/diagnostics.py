@@ -105,7 +105,21 @@ class DiagnosticsEngine:
         for line in raw_lines:
             line_lower = line.lower()
             level = "info"
-            if any(k in line_lower for k in error_keywords):
+
+            # Check for DVMHost standard log level indicators first:
+            # "I:" / "[INFO]" = Informational (e.g. "I:     Ignore Data PDU CRC Error: no")
+            # "E:" / "[ERROR]" / "[FATAL]" = Real Errors
+            # "W:" / "[WARN]" = Warnings
+            # "D:" / "[DEBUG]" = Debug
+            if ": i:" in line_lower or "[info]" in line_lower:
+                level = "info"
+            elif ": e:" in line_lower or "[error]" in line_lower or "[fatal]" in line_lower:
+                level = "error"
+            elif ": w:" in line_lower or "[warn]" in line_lower or "[warning]" in line_lower:
+                level = "warn"
+            elif ": d:" in line_lower or "[debug]" in line_lower:
+                level = "info"
+            elif any(k in line_lower for k in error_keywords):
                 level = "error"
             elif any(k in line_lower for k in warning_keywords):
                 level = "warn"
