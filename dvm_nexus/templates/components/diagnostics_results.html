@@ -11,6 +11,16 @@
         {% endfor %}
       </ul>
     {% endif %}
+    {% if result.reboot_needed %}
+      <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.15); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <strong>⚡ Hardware Reboot Required:</strong> Pi 5 GPIO UART boot settings were configured. A reboot is needed to initialize the modem communication pins.
+        </div>
+        <form action="/api/system/reboot" method="post" onsubmit="return confirm('Reboot Raspberry Pi now?');">
+          <button type="submit" class="btn btn-warning btn-sm" style="font-weight: 600;">🔄 Reboot Raspberry Pi Now</button>
+        </form>
+      </div>
+    {% endif %}
   </div>
 {% endif %}
 

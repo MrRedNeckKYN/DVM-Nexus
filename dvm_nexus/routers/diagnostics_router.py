@@ -6,6 +6,8 @@ Provides live health checks, crash log streaming, and 1-click automated repair f
 from fastapi import APIRouter, Request, Query, Form
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from typing import Optional
+import os
+import subprocess
 
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.core.diagnostics import diagnostics_engine
@@ -132,3 +134,12 @@ async def api_diagnostics_export(service: str = Query("dvmhost"), lines: int = Q
         content,
         headers={"Content-Disposition": f"attachment; filename={service}_journal.log"}
     )
+
+
+@router.post("/api/system/reboot", response_class=HTMLResponse)
+async def api_system_reboot(request: Request):
+    """Reboot the host system."""
+    if os.name != "nt":
+        subprocess.Popen(["sudo", "systemctl", "reboot"])
+        return HTMLResponse("<script>alert('Raspberry Pi is rebooting now. Please wait ~45 seconds and reload this page.');</script>")
+    return HTMLResponse("<script>alert('Reboot simulated in development environment.');</script>")

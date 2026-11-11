@@ -175,3 +175,10 @@ def test_diagnostics_clear_logs(client):
     resp = client.post("/components/diagnostics-clear-logs", data={"service": "dvmhost"})
     assert resp.status_code == 200
     assert "log-terminal-header" in resp.text
+
+
+def test_diagnostics_system_reboot(client):
+    """Test simulated system reboot endpoint."""
+    resp = client.post("/api/system/reboot")
+    assert resp.status_code == 200
+    assert "reboot" in resp.text.lower()

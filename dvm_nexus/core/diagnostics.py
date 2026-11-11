@@ -343,11 +343,42 @@ class DiagnosticsEngine:
                         "status": "fail",
                         "badge": "LOCKED",
                         "summary": "Linux serial login console (serial-getty@ttyAMA0) is active and locking /dev/ttyAMA0.",
-                        "remedy": "Disable serial-getty via 'sudo /opt/dvm-nexus/scripts/setup-pi5-uart.sh'.",
-                        "auto_fixable": False,
+                        "remedy": "Click Auto-Repair to disable serial-getty.",
+                        "auto_fixable": True,
+                        "fix_id": "disable_serial_getty",
                     })
             except Exception:
                 pass
+
+            # Check Raspberry Pi boot UART configuration
+            fw_dir = Path("/boot/firmware") if Path("/boot/firmware").is_dir() else Path("/boot")
+            cfg_txt = fw_dir / "config.txt"
+            if cfg_txt.exists():
+                try:
+                    c_txt = cfg_txt.read_text(encoding="utf-8", errors="ignore")
+                    has_uart = "dtparam=uart0=on" in c_txt or "dtoverlay=uart0" in c_txt or "enable_uart=1" in c_txt
+                    if not has_uart:
+                        checks.append({
+                            "id": "pi_uart_boot",
+                            "name": "Raspberry Pi GPIO UART (config.txt)",
+                            "status": "fail",
+                            "badge": "BOOT DISABLED",
+                            "summary": "GPIO UART is not enabled in /boot/firmware/config.txt. Pins 14/15 cannot talk to MMDVM hat until enabled.",
+                            "remedy": "Click Auto-Repair to enable dtparam=uart0=on automatically.",
+                            "auto_fixable": True,
+                            "fix_id": "fix_boot_uart",
+                        })
+                    else:
+                        checks.append({
+                            "id": "pi_uart_boot",
+                            "name": "Raspberry Pi GPIO UART (config.txt)",
+                            "status": "pass",
+                            "badge": "BOOT ENABLED",
+                            "summary": "GPIO UART parameters (uart0) are configured in /boot/firmware/config.txt.",
+                            "auto_fixable": False,
+                        })
+                except Exception:
+                    pass
         else:
             checks.append({
                 "id": "modem_port",
@@ -405,6 +436,7 @@ class DiagnosticsEngine:
         Automatically repair detected configuration discrepancies and attempt service restart.
         """
         fixes_applied: List[str] = []
+        reboot_needed = False
 
         try:
             # 1. Ensure active config.yml exists in target directory
@@ -506,6 +538,36 @@ class DiagnosticsEngine:
                     subprocess.run(["systemctl", "mask", "serial-getty@ttyAMA0.service"], capture_output=True)
                     subprocess.run(["systemctl", "daemon-reload"], capture_output=True)
                     fixes_applied.append("Set permissions (chmod a+rwX, chown dvmhost), systemd WorkingDirectory=/opt/dvm, and UART access")
+
+                    # Configure Raspberry Pi boot firmware for GPIO 14/15 UART
+                    fw_dir = Path("/boot/firmware") if Path("/boot/firmware").is_dir() else Path("/boot")
+                    cfg_txt = fw_dir / "config.txt"
+                    cmdline_txt = fw_dir / "cmdline.txt"
+
+                    if cfg_txt.exists():
+                        b_content = cfg_txt.read_text(encoding="utf-8", errors="ignore")
+                        orig_b = b_content
+                        if "enable_uart=1" not in b_content:
+                            b_content += "\nenable_uart=1\n"
+                        if "dtparam=uart0=on" not in b_content:
+                            b_content += "dtparam=uart0=on\n"
+                        if "dtoverlay=uart0" not in b_content:
+                            b_content += "dtoverlay=uart0\n"
+                        if "dtoverlay=disable-bt" not in b_content:
+                            b_content += "dtoverlay=disable-bt\n"
+                        if b_content != orig_b:
+                            cfg_txt.write_text(b_content, encoding="utf-8")
+                            fixes_applied.append("Configured Pi 5 GPIO UART (dtparam=uart0=on, disable-bt) in config.txt")
+                            reboot_needed = True
+
+                    if cmdline_txt.exists():
+                        cmd_content = cmdline_txt.read_text(encoding="utf-8", errors="ignore")
+                        cleaned = re.sub(r'console=(serial0|ttyAMA0|tty1),[0-9]+\s*', '', cmd_content)
+                        cleaned = re.sub(r'console=(serial0|ttyAMA0),[0-9]+', '', cleaned)
+                        if cleaned != cmd_content:
+                            cmdline_txt.write_text(cleaned, encoding="utf-8")
+                            fixes_applied.append("Removed serial login console conflict from cmdline.txt")
+                            reboot_needed = True
                 except Exception:
                     pass
 
@@ -519,13 +581,16 @@ class DiagnosticsEngine:
 
             return {
                 "success": is_running,
+                "reboot_needed": reboot_needed,
                 "fixes_applied": fixes_applied,
                 "service_state": new_status.get("state"),
                 "is_running": is_running,
                 "message": (
                     f"Applied {len(fixes_applied)} automatic fixes. DVMHost is now RUNNING!"
                     if is_running else
-                    f"Applied {len(fixes_applied)} fixes, but service did not stay running ({restart_res.get('message')}). Check crash logs below."
+                    (f"Applied {len(fixes_applied)} hardware/config fixes. A system reboot is required for Raspberry Pi 5 GPIO UART to take effect."
+                     if reboot_needed else
+                     f"Applied {len(fixes_applied)} fixes, but service did not stay running ({restart_res.get('message')}). Check crash logs below.")
                 )
             }
 
