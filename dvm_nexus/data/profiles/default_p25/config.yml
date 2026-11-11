@@ -194,7 +194,7 @@ system:
     callsign: ABCD123
   modem:
     protocol:
-      type: 'null'
+      type: uart
       mode: air
       uart:
         port: /dev/ttyUSB0

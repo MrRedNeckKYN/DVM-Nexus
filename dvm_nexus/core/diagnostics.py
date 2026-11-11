@@ -349,7 +349,30 @@ class DiagnosticsEngine:
         # ----------------------------------------------------------------------
         # Check 3: Modem Serial Port & Linux Hardware UART
         # ----------------------------------------------------------------------
+        modem_proto_type = cfg_dict.get("system", {}).get("modem", {}).get("protocol", {}).get("type", "uart")
         uart_port = cfg_dict.get("system", {}).get("modem", {}).get("protocol", {}).get("uart", {}).get("port", "/dev/ttyAMA0")
+
+        # Safety Check: Null Dummy Modem Trap
+        if str(modem_proto_type).lower() in ("null", "'null'", '"null"'):
+            checks.append({
+                "id": "modem_null_trap",
+                "name": "Modem Controller Hardware Type",
+                "status": "fail",
+                "badge": "DUMMY SIMULATOR",
+                "summary": "Modem protocol is set to 'null'! DVMHost is running in dummy software simulation mode and disconnected from the physical radio hat.",
+                "remedy": "Click Auto-Repair to switch to hardware UART mode (/dev/ttyAMA0).",
+                "auto_fixable": True,
+                "fix_id": "fix_modem_null",
+            })
+        else:
+            checks.append({
+                "id": "modem_null_trap",
+                "name": "Modem Controller Hardware Type",
+                "status": "pass",
+                "badge": "HARDWARE UART",
+                "summary": f"Modem interface is configured for real hardware '{modem_proto_type}'.",
+                "auto_fixable": False,
+            })
         if os.name != "nt":
             if os.path.exists(uart_port):
                 checks.append({
@@ -544,6 +567,24 @@ class DiagnosticsEngine:
                     cfg.setdefault("system", {})["simplexSameFrequency"] = True
                     fixes_applied.append("Set 'simplexSameFrequency: true' for single-frequency Simplex operation")
                     modified = True
+
+            # Enforce hardware UART mode (cure dummy null modem trap)
+            modem_block = cfg.get("system", {}).get("modem", {})
+            if isinstance(modem_block, dict):
+                proto_blk = modem_block.get("protocol", {})
+                if isinstance(proto_blk, dict):
+                    if str(proto_blk.get("type", "")).lower() in ("null", "'null'", '"null"', ""):
+                        proto_blk["type"] = "uart"
+                        fixes_applied.append("Switched modem protocol from 'null' dummy simulator to hardware 'uart'")
+                        modified = True
+                    uart_sub = proto_blk.get("uart", {})
+                    if isinstance(uart_sub, dict):
+                        port_str = str(uart_sub.get("port", "")).strip()
+                        if not port_str or (port_str == "/dev/ttyUSB0" and os.name != "nt" and not os.path.exists("/dev/ttyUSB0")):
+                            target_port = "/dev/ttyAMA0" if (os.name != "nt" and os.path.exists("/dev/ttyAMA0")) else "/dev/ttyAMA0"
+                            uart_sub["port"] = target_port
+                            fixes_applied.append(f"Auto-routed modem serial port to hardware GPIO '{target_port}'")
+                            modified = True
 
             # Enforce logging settings for systemd journald
             if "log" not in cfg or not isinstance(cfg["log"], dict):

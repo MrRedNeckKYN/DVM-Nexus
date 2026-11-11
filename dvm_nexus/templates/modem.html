@@ -13,8 +13,17 @@
 
   <form hx-post="/modem/save" hx-target="#toast-container" hx-swap="beforeend">
     <div style="margin-bottom:1.5rem;">
-      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">Serial UART & Duplex Mode</h3>
+      <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">Modem Hardware Controller &amp; Serial UART</h3>
       <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Modem Controller Type</label>
+          <select name="modem_type" class="form-control" style="border-color:var(--accent-emerald);">
+            <option value="uart" selected>Hardware UART (MMDVM Duplex/Simplex Hat - REQUIRED)</option>
+            <option value="null" disabled>Null Modem (Simulator / Bench Testing Only - NOT AIR)</option>
+          </select>
+          <span style="font-size:0.75rem; color:var(--accent-emerald);">🛡️ Safety Net Active: Locked to Hardware UART to prevent null simulator silence.</span>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Serial Device Port</label>
           <input type="text" name="uart_port" class="form-control" value="{{ uart_port }}" list="port_suggestions" required>

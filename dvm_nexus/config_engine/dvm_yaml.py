@@ -147,6 +147,41 @@ class DVMConfigManager:
         if "restPassword" not in data["network"]:
             data["network"]["restPassword"] = "PASSWORD"
 
+        # Hardware Safety Net: Never allow 'null' modem controller when operating hardware
+        if "system" not in data or not isinstance(data["system"], dict):
+            data["system"] = {}
+        if "modem" not in data["system"] or not isinstance(data["system"]["modem"], dict):
+            data["system"]["modem"] = {}
+        modem_blk = data["system"]["modem"]
+        if "protocol" not in modem_blk or not isinstance(modem_blk["protocol"], dict):
+            modem_blk["protocol"] = {}
+
+        # Enforce hardware UART mode (reject dummy null simulator)
+        curr_type = str(modem_blk["protocol"].get("type", "")).strip().lower()
+        if curr_type in ("null", "'null'", '"null"', ""):
+            modem_blk["protocol"]["type"] = "uart"
+            log_audit("SAFETY", "MODEM_FIX", "Enforced protocol.type = 'uart' (prevented dummy null simulator)")
+
+        if not modem_blk["protocol"].get("mode"):
+            modem_blk["protocol"]["mode"] = "air"
+
+        if "uart" not in modem_blk["protocol"] or not isinstance(modem_blk["protocol"]["uart"], dict):
+            modem_blk["protocol"]["uart"] = {}
+
+        # Default port to /dev/ttyAMA0 if null or empty or on Linux with ttyUSB0 missing
+        curr_port = str(modem_blk["protocol"]["uart"].get("port", "")).strip()
+        if not curr_port or curr_port == "null":
+            modem_blk["protocol"]["uart"]["port"] = "/dev/ttyAMA0"
+        elif curr_port == "/dev/ttyUSB0" and os.name != "nt" and not os.path.exists("/dev/ttyUSB0"):
+            # If ttyUSB0 does not physically exist but GPIO ttyAMA0 does, auto-route to GPIO
+            if os.path.exists("/dev/ttyAMA0") or os.path.exists("/dev/serial0"):
+                target_port = "/dev/ttyAMA0" if os.path.exists("/dev/ttyAMA0") else "/dev/serial0"
+                modem_blk["protocol"]["uart"]["port"] = target_port
+                log_audit("SAFETY", "UART_FALLBACK", f"Redirected missing /dev/ttyUSB0 to hardware GPIO {target_port}")
+
+        if not modem_blk["protocol"]["uart"].get("speed"):
+            modem_blk["protocol"]["uart"]["speed"] = 115200
+
         # Safety block: Enforce single-protocol mutual exclusion for hotspot / UART modems.
         # ADF7021 MMDVM_HS firmware aborts with NAK 32 (HS_NO_DUAL_MODE) if multiple protocols are enabled.
         protocols = data.get("protocols", {})
