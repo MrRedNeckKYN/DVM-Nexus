@@ -1,0 +1,45 @@
+<div id="firmware-flash-status" {% if flasher.state == 'flashing' %}hx-get="/components/firmware-status" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %}>
+  
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      {% if flasher.state == 'flashing' %}
+        <span class="pulse-dot" style="background: #f59e0b;"></span>
+        <strong style="color: #f59e0b; font-size: 0.9rem;">Flashing in progress... Please do not power off your Raspberry Pi!</strong>
+      {% elif flasher.state == 'completed' %}
+        <span style="color: #10b981; font-size: 1.1rem;">✔</span>
+        <strong style="color: #10b981; font-size: 0.9rem;">Firmware successfully installed &amp; verified!</strong>
+      {% elif flasher.state == 'failed' %}
+        <span style="color: #ef4444; font-size: 1.1rem;">✖</span>
+        <strong style="color: #ef4444; font-size: 0.9rem;">Flashing failed. Check logs below.</strong>
+      {% else %}
+        <strong style="color: var(--text-secondary); font-size: 0.9rem;">Ready to flash</strong>
+      {% endif %}
+    </div>
+    <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-size: 0.75rem;">
+      Target: {{ flasher.current_target|default('dvm_hs_dual_14mhz') }}
+    </span>
+  </div>
+
+  <!-- Realtime Terminal Console Output -->
+  <div style="background: #090d14; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; line-height: 1.4; color: #f1f5f9; height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;">
+{% if flasher.logs %}
+{% for log in flasher.logs %}
+<div>{{ log }}</div>
+{% endfor %}
+{% else %}
+<div style="color: #64748b; font-style: italic;">Awaiting flash initiation...</div>
+{% endif %}
+  </div>
+
+  {% if flasher.state == 'completed' %}
+    <div style="margin-top: 0.75rem; padding: 0.65rem 0.85rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; font-size: 0.82rem; color: #10b981; display: flex; align-items: center; justify-content: space-between;">
+      <span>Radio Hat updated to DVMProject firmware! DVMHost service restarted.</span>
+      <a href="/terminal" class="btn btn-sm btn-primary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;">Open Terminal</a>
+    </div>
+  {% elif flasher.state == 'failed' %}
+    <div style="margin-top: 0.75rem; padding: 0.65rem 0.85rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; font-size: 0.82rem; color: #ef4444;">
+      Flashing stopped. Ensure your Pi has internet access (to download git submodules) and your modem is seated properly.
+    </div>
+  {% endif %}
+
+</div>

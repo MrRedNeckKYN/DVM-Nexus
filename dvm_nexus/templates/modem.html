@@ -135,4 +135,59 @@
     </div>
   </form>
 </div>
+
+<!-- DVM Firmware Installer Card -->
+<div class="card mt-4" style="border-left: 4px solid #f59e0b; margin-top: 2rem;">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <div class="card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+        <span>⚡</span> DVMProject Modem Firmware Installer &amp; Flasher
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+        1-Click automated compiler &amp; flasher for MMDVM Duplex &amp; Simplex Hats. Upgrades your Hat from standard Pi-Star MMDVM_HS firmware to official DVMProject <code>dvmfirmware-hs</code>.
+      </div>
+    </div>
+    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.78rem;">
+      Detected: STM32 Dual ADF7021 (14.7456 MHz)
+    </span>
+  </div>
+
+  <div style="padding: 1rem 0;">
+    <form hx-post="/api/modem/firmware/flash" hx-target="#firmware-status-box" hx-swap="innerHTML">
+      <div class="form-row">
+        <div class="form-group" style="flex: 2;">
+          <label class="form-label">Firmware Target</label>
+          <select name="target" class="form-control">
+            {% for key, t in flasher.targets.items() %}
+              <option value="{{ key }}" {% if key == 'dvm_hs_dual_14mhz' %}selected{% endif %}>
+                {{ t.name }} - {{ t.description }}
+              </option>
+            {% endfor %}
+          </select>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">
+            Auto-strobes GPIO 20 (BOOT0) &amp; GPIO 21 (RESET) using official DVMProject hardware handshake.
+          </span>
+        </div>
+
+        <div class="form-group" style="flex: 1;">
+          <label class="form-label">Flashing Port</label>
+          <input type="text" name="port" class="form-control" value="{{ uart_port }}" required>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">
+            Raspberry Pi GPIO header uses <code>/dev/ttyAMA0</code>.
+          </span>
+        </div>
+      </div>
+
+      <div style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+        <button type="submit" class="btn btn-warning" style="padding: 0.6rem 1.75rem; font-weight: 700; color: #000;" onclick="return confirm('Flash DVMProject firmware to your MMDVM Hat now? DVMHost will be stopped during programming and restarted automatically.');">
+          ⚡ Flash DVM Firmware Now
+        </button>
+      </div>
+    </form>
+
+    <div id="firmware-status-box" style="margin-top: 1.25rem;">
+      {% include "components/firmware_modal.html" %}
+    </div>
+  </div>
+</div>
 {% endblock %}

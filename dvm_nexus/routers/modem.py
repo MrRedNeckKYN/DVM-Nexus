@@ -5,6 +5,7 @@ Controls ADF7021 transceivers, UART serial port, and duplex/simplex RF parameter
 
 import glob
 import os
+import asyncio
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -12,6 +13,7 @@ from pathlib import Path
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 from dvm_nexus.core.database import log_audit
+from dvm_nexus.core.firmware_flasher import firmware_flasher
 
 router = APIRouter()
 
@@ -44,6 +46,7 @@ async def modem_page(request: Request):
             "uart_port": uart_conf.get("port", "/dev/ttyAMA0"),
             "uart_speed": uart_conf.get("speed", 115200),
             "available_ports": available_ports,
+            "flasher": firmware_flasher.get_status(),
             "rx_invert": modem_conf.get("rxInvert", False),
             "tx_invert": modem_conf.get("txInvert", False),
             "ptt_invert": modem_conf.get("pttInvert", False),
@@ -111,3 +114,31 @@ async def modem_save(
         "components/toast.html",
         {"type": "success", "message": "Modem settings saved successfully! Restart service to apply."}
     )
+
+
+@router.post("/api/modem/firmware/flash", response_class=HTMLResponse)
+async def flash_firmware_endpoint(
+    request: Request,
+    target: str = Form("dvm_hs_dual_14mhz"),
+    port: str = Form("/dev/ttyAMA0"),
+):
+    """Initiate background firmware flashing process."""
+    asyncio.create_task(firmware_flasher.flash(target_key=target, port=port))
+    status = firmware_flasher.get_status()
+    return render_template(
+        request,
+        "components/firmware_modal.html",
+        {"flasher": status, "selected_target": target, "selected_port": port}
+    )
+
+
+@router.get("/components/firmware-status", response_class=HTMLResponse)
+async def firmware_status_component(request: Request):
+    """HTMX polling endpoint for live firmware flashing progress."""
+    status = firmware_flasher.get_status()
+    return render_template(
+        request,
+        "components/firmware_modal.html",
+        {"flasher": status}
+    )
+
