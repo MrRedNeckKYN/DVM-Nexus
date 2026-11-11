@@ -26,6 +26,8 @@ class DiagnosticsEngine:
         self.dvm_dir = settings.dvm_dir
         self.service_controller = service_controller
         self._simulated_cleared = False
+        self._cached_report: Optional[Dict[str, Any]] = None
+        self._cached_report_time: float = 0.0
 
     def clear_logs(self, service_name: str = "dvmhost") -> Dict[str, Any]:
         """
@@ -123,11 +125,30 @@ class DiagnosticsEngine:
             "entries": parsed_entries,
         }
 
-    def run_health_checks(self) -> Dict[str, Any]:
+    def invalidate_cache(self) -> None:
+        """Clear cached health check report."""
+        self._cached_report = None
+        self._cached_report_time = 0.0
+
+    def run_health_checks(self, force: bool = False) -> Dict[str, Any]:
         """
         Execute automated diagnostics across systemd, config.yml, data tables, and hardware UART.
         Returns detailed check results, overall status ('ok', 'warning', 'critical'), and auto-fix recommendations.
+        Cached for up to 5 seconds to prevent event-loop lockups during concurrent HTMX polling bursts.
         """
+        now = time.time()
+        cfg_path = dvm_config_manager.config_path
+        cfg_mtime = 0.0
+        try:
+            if cfg_path.exists():
+                cfg_mtime = cfg_path.stat().st_mtime
+        except Exception:
+            pass
+
+        last_mtime = getattr(self, "_last_config_mtime", 0.0)
+        if not force and self._cached_report is not None and (now - self._cached_report_time < 5.0) and (cfg_mtime == last_mtime):
+            return dict(self._cached_report)
+
         checks: List[Dict[str, Any]] = []
         status = self.service_controller.get_status()
         is_service_running = status.get("is_running", False)
@@ -425,7 +446,7 @@ class DiagnosticsEngine:
 
         auto_fix_count = sum(1 for c in checks if c.get("auto_fixable", False))
 
-        return {
+        report = {
             "overall_status": overall_status,
             "has_fails": has_fails,
             "has_warns": has_warns,
@@ -433,11 +454,16 @@ class DiagnosticsEngine:
             "checks": checks,
             "service_status": status,
         }
+        self._cached_report = report
+        self._cached_report_time = now
+        self._last_config_mtime = cfg_mtime
+        return report
 
     def auto_fix_all(self) -> Dict[str, Any]:
         """
         Automatically repair detected configuration discrepancies and attempt service restart.
         """
+        self.invalidate_cache()
         fixes_applied: List[str] = []
         reboot_needed = False
 

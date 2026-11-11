@@ -26,7 +26,7 @@ class ServiceController:
         # Cache to reduce process-fork overhead during frequent Web UI polling
         self._cached_status: Optional[Dict[str, Any]] = None
         self._status_timestamp: float = 0.0
-        self._status_ttl: float = 2.0  # seconds
+        self._status_ttl: float = 3.5  # seconds
 
     def get_status(self, force: bool = False) -> Dict[str, Any]:
         """Query service status and PID with short in-memory cache to optimize UI polling."""
@@ -63,18 +63,18 @@ class ServiceController:
             return res
 
         try:
-            # Check is-active
+            # Check is-active with strict timeout
             cmd = ["systemctl", "is-active", self.service_name]
-            res = subprocess.run(cmd, capture_output=True, text=True)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=1.5)
             state_str = res.stdout.strip()
             is_active = state_str == "active"
 
-            # Check detailed status
+            # Check detailed status with strict timeout
             cmd_status = [
                 "systemctl", "show", self.service_name,
                 "--property=MainPID,ActiveState,SubState,ActiveEnterTimestamp,Result,ExecMainStatus,ExecMainCode"
             ]
-            res_status = subprocess.run(cmd_status, capture_output=True, text=True)
+            res_status = subprocess.run(cmd_status, capture_output=True, text=True, timeout=1.5)
             props = {}
             for line in res_status.stdout.splitlines():
                 if "=" in line:
@@ -98,14 +98,15 @@ class ServiceController:
                     process_alive = False
 
             if not process_alive and not is_active:
-                for p in psutil.process_iter(["pid", "name"]):
-                    try:
-                        if "dvmhost" in p.info["name"].lower():
-                            main_pid = p.info["pid"]
-                            process_alive = True
-                            break
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
+                # Fast pgrep check instead of scanning entire OS process tree
+                try:
+                    pg_res = subprocess.run(["pgrep", "-f", "dvmhost"], capture_output=True, text=True, timeout=0.8)
+                    if pg_res.returncode == 0 and pg_res.stdout.strip():
+                        first_pid = int(pg_res.stdout.splitlines()[0].strip())
+                        main_pid = first_pid
+                        process_alive = True
+                except Exception:
+                    pass
 
             is_running = is_active or process_alive
             is_starting = act_state == "activating" and not is_running

@@ -3,6 +3,7 @@ DVM Nexus - Template Rendering Helper
 Provides unified, version-safe Jinja2 template rendering with device detection.
 """
 
+import time
 import re
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -19,6 +20,11 @@ MOBILE_UA_REGEX = re.compile(
     re.IGNORECASE
 )
 
+# In-memory global context cache to prevent redundant disk I/O and subprocesses during fast polling
+_global_ctx_cache: Optional[Dict[str, Any]] = None
+_global_ctx_timestamp: float = 0.0
+_GLOBAL_CTX_TTL: float = 3.0  # seconds
+
 
 def is_mobile_request(request: Request) -> bool:
     """Detect if incoming HTTP request originates from a mobile device."""
@@ -26,8 +32,13 @@ def is_mobile_request(request: Request) -> bool:
     return bool(MOBILE_UA_REGEX.search(ua))
 
 
-def get_global_template_context() -> Dict[str, Any]:
-    """Retrieve global template variables including protocol status and version."""
+def get_global_template_context(force: bool = False) -> Dict[str, Any]:
+    """Retrieve global template variables with short in-memory cache to prevent blocking."""
+    global _global_ctx_cache, _global_ctx_timestamp
+    now = time.time()
+    if not force and _global_ctx_cache is not None and (now - _global_ctx_timestamp < _GLOBAL_CTX_TTL):
+        return dict(_global_ctx_cache)
+
     try:
         from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
         proto = dvm_config_manager.get_active_protocol()
@@ -52,12 +63,14 @@ def get_global_template_context() -> Dict[str, Any]:
     except Exception:
         service_info = None
 
-    return {
+    _global_ctx_cache = {
         "active_protocol": proto,
         "active_profile": prof,
         "app_version": ver,
         "service": service_info,
     }
+    _global_ctx_timestamp = now
+    return dict(_global_ctx_cache)
 
 
 def render_template(
