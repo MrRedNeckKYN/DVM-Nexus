@@ -189,19 +189,17 @@ class FirmwareFlasher:
                 if shutil.which("pinctrl"):
                     subprocess.run(["pinctrl", "set", "20", "op", "dh"], check=False)  # BOOT0 = High
                     subprocess.run(["pinctrl", "set", "21", "op", "dl"], check=False)  # RESET = Low
-                    await asyncio.sleep(0.25)
+                    await asyncio.sleep(0.3)
                     subprocess.run(["pinctrl", "set", "21", "op", "dh"], check=False)  # RESET = High (Enter ROM)
-                    await asyncio.sleep(0.35)
+                    await asyncio.sleep(0.4)
 
-                # 6. Flash using stm32flash
+                # 6. Flash using stm32flash (using direct serial communication since pinctrl manages GPIO)
                 self._append_log(f"Flashing {bin_file.name} to {port} at 115200 baud...")
                 cmd_flash = [
                     "sudo", "stm32flash",
                     "-v",
                     "-w", str(bin_file),
                     "-b", "115200",
-                    "-i", "20,-21,21,-20",  # Hardware handshake sequence
-                    "-R",                    # Reset after flash
                     port,
                 ]
                 p_flash = await asyncio.create_subprocess_exec(
