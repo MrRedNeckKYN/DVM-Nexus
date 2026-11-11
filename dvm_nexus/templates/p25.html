@@ -73,23 +73,23 @@
 
       <div class="form-group">
         <label class="form-label">RF Operating Mode</label>
-        <select name="duplex" class="form-control">
+        <select name="duplex" id="p25-duplex-select" class="form-control" onchange="syncDuplexMode(this.value === 'true')">
+          <option value="false" {% if not duplex %}selected{% endif %}>Simplex (Single Frequency - Direct Talkaround)</option>
           <option value="true" {% if duplex %}selected{% endif %}>Full Duplex (Split TX / RX Frequencies)</option>
-          <option value="false" {% if not duplex %}selected{% endif %}>Simplex (Single Frequency Hotspot)</option>
         </select>
-        <small class="form-hint">Dual ADF7021 hats (AURSINC) use Full Duplex.</small>
+        <small class="form-hint">Choose Simplex to use one frequency with no split or repeater offset.</small>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Transmit (TX) Frequency (MHz)</label>
-        <input type="number" step="0.000001" name="tx_freq_mhz" class="form-control font-mono" value="{{ active_tx_mhz or 462.61875 }}" required>
-        <small class="form-hint">MMDVM Hat transmits here (Handheld radio listens).</small>
+        <label class="form-label">Operating Frequency (MHz)</label>
+        <input type="number" step="0.000001" id="p25-tx-freq-input" name="tx_freq_mhz" class="form-control font-mono" value="{{ active_tx_mhz or 462.61875 }}" oninput="if(document.getElementById('p25-duplex-select').value === 'false') document.getElementById('p25-rx-freq-input').value = this.value;" required>
+        <small class="form-hint">Radio and Hotspot frequency (e.g. 462.562500 for GMRS).</small>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" id="p25-rx-freq-group" {% if not duplex %}style="display:none;"{% endif %}>
         <label class="form-label">Receive (RX) Frequency (MHz)</label>
-        <input type="number" step="0.000001" name="rx_freq_mhz" class="form-control font-mono" value="{{ active_rx_mhz or 467.61875 }}" required>
-        <small class="form-hint">MMDVM Hat listens here (Handheld radio transmits).</small>
+        <input type="number" step="0.000001" id="p25-rx-freq-input" name="rx_freq_mhz" class="form-control font-mono" value="{{ active_rx_mhz or 462.61875 }}" required>
+        <small class="form-hint">Repeater input frequency (Handheld radio transmits here in Duplex).</small>
       </div>
     </div>
 
@@ -559,4 +559,18 @@
     </form>
   </div>
 </div>
+
+<script>
+function syncDuplexMode(isDuplex) {
+  const rxGroup = document.getElementById('p25-rx-freq-group');
+  const rxInput = document.getElementById('p25-rx-freq-input');
+  const txInput = document.getElementById('p25-tx-freq-input');
+  if (rxGroup) {
+    rxGroup.style.display = isDuplex ? 'block' : 'none';
+  }
+  if (!isDuplex && rxInput && txInput) {
+    rxInput.value = txInput.value;
+  }
+}
+</script>
 {% endblock %}

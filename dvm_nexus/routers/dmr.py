@@ -35,6 +35,8 @@ async def dmr_page(request: Request):
     is_standby = (active_proto == "p25")
 
     tx_freq_mhz, rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
+    if not duplex:
+        rx_freq_mhz = tx_freq_mhz
     talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
 
@@ -124,6 +126,9 @@ async def dmr_save(
             "components/toast.html",
             {"type": "error", "message": "; ".join(errors)}
         )
+
+    if not duplex:
+        rx_freq_mhz = tx_freq_mhz
 
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "p25")

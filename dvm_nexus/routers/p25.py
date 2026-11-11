@@ -43,6 +43,8 @@ async def p25_page(request: Request):
 
     iden_entries = read_iden_table_file(dvm_config_manager.iden_path)
     tx_freq_mhz, rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
+    if not duplex:
+        rx_freq_mhz = tx_freq_mhz
     rids = dvm_config_manager.load_rid_acl()
 
     return render_template(
@@ -144,6 +146,9 @@ async def p25_save(
             "components/toast.html",
             {"type": "error", "message": "; ".join(errors)}
         )
+
+    if not duplex:
+        rx_freq_mhz = tx_freq_mhz
 
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "dmr")
