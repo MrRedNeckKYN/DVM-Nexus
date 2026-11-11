@@ -318,8 +318,8 @@ class DiagnosticsEngine:
                     "id": "modem_port",
                     "name": f"Modem Serial Port ({uart_port})",
                     "status": "pass",
-                    "badge": "FOUND",
-                    "summary": f"Device node {uart_port} exists on the system.",
+                    "badge": "PORT PRESENT",
+                    "summary": f"Linux serial port '{uart_port}' exists. Note: A present port file does not confirm the MMDVM chip is answering—if DVMHost cannot read firmware, verify Pi 5 GPIO UART (dtparam=uart0=on) or USB connection.",
                     "auto_fixable": False,
                 })
             else:

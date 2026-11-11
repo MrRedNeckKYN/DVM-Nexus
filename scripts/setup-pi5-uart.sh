@@ -72,7 +72,10 @@ else
     echo "enable_uart=1" >> "${CONFIG_TXT}"
 fi
 
-# Ensure dtoverlay=uart0 is configured for GPIO 14/15
+# Ensure dtparam=uart0=on and dtoverlay=uart0 are configured for GPIO 14/15 on Pi 5
+if ! grep -q "^dtparam=uart0=on" "${CONFIG_TXT}"; then
+    echo "dtparam=uart0=on" >> "${CONFIG_TXT}"
+fi
 if ! grep -q "^dtoverlay=uart0" "${CONFIG_TXT}"; then
     echo "dtoverlay=uart0" >> "${CONFIG_TXT}"
 fi
@@ -91,6 +94,10 @@ TARGET_USER="${SUDO_USER:-pi}"
 if id "${TARGET_USER}" &>/dev/null; then
     usermod -a -G dialout,gpio "${TARGET_USER}"
     echo -e "${GREEN}[+] Added user '${TARGET_USER}' to dialout and gpio groups.${NC}"
+fi
+if id "dvmhost" &>/dev/null; then
+    usermod -a -G dialout,gpio "dvmhost"
+    echo -e "${GREEN}[+] Added user 'dvmhost' to dialout and gpio groups.${NC}"
 fi
 
 echo -e "${BLUE}======================================================${NC}"
