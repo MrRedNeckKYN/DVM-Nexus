@@ -17,8 +17,13 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Serial Device Port</label>
-          <input type="text" name="uart_port" class="form-control" value="{{ uart_port }}" required>
-          <span style="font-size:0.75rem; color:var(--text-dim);">Pi 5 GPIO UART is typically <code>/dev/ttyAMA0</code> or <code>/dev/serial0</code>.</span>
+          <input type="text" name="uart_port" class="form-control" value="{{ uart_port }}" list="port_suggestions" required>
+          <datalist id="port_suggestions">
+            {% for p in available_ports %}
+              <option value="{{ p }}">{{ p }}</option>
+            {% endfor %}
+          </datalist>
+          <span style="font-size:0.75rem; color:var(--text-dim);">GPIO Hats use <code>/dev/ttyAMA0</code> or <code>/dev/serial0</code>. USB modems use <code>/dev/ttyUSB0</code>.</span>
         </div>
 
         <div class="form-group">

@@ -481,6 +481,7 @@ class DiagnosticsEngine:
                     try:
                         pwd.getpwnam("dvmhost")
                         subprocess.run(["chown", "-R", "dvmhost:dvmhost", str(self.dvm_dir)], capture_output=True)
+                        subprocess.run(["usermod", "-a", "-G", "dialout,gpio", "dvmhost"], capture_output=True)
                     except KeyError:
                         pass
 
@@ -494,8 +495,17 @@ class DiagnosticsEngine:
                         "ReadWritePaths=/opt/dvm\n",
                         encoding="utf-8"
                     )
+
+                    # Grant dialout permissions on serial devices and stop serial-getty on ttyAMA0
+                    for dev in ["/dev/ttyAMA0", "/dev/serial0", "/dev/ttyUSB0", "/dev/ttyACM0"]:
+                        if os.path.exists(dev):
+                            subprocess.run(["chmod", "666", dev], capture_output=True)
+
+                    subprocess.run(["systemctl", "stop", "serial-getty@ttyAMA0.service"], capture_output=True)
+                    subprocess.run(["systemctl", "disable", "serial-getty@ttyAMA0.service"], capture_output=True)
+                    subprocess.run(["systemctl", "mask", "serial-getty@ttyAMA0.service"], capture_output=True)
                     subprocess.run(["systemctl", "daemon-reload"], capture_output=True)
-                    fixes_applied.append("Set permissions (chmod a+rwX, chown dvmhost) and systemd WorkingDirectory=/opt/dvm")
+                    fixes_applied.append("Set permissions (chmod a+rwX, chown dvmhost), systemd WorkingDirectory=/opt/dvm, and UART access")
                 except Exception:
                     pass
 

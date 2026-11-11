@@ -3,6 +3,8 @@ DVM Nexus - Modem & Hardware Configuration Router
 Controls ADF7021 transceivers, UART serial port, and duplex/simplex RF parameters.
 """
 
+import glob
+import os
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -24,6 +26,14 @@ async def modem_page(request: Request):
     uart_conf = proto_conf.get("uart", {})
     hotspot_conf = modem_conf.get("hotspot", {})
 
+    available_ports = []
+    if os.name != "nt":
+        for pattern in ["/dev/ttyAMA*", "/dev/ttyUSB*", "/dev/ttyACM*", "/dev/serial*"]:
+            available_ports.extend(glob.glob(pattern))
+    if not available_ports:
+        available_ports = ["/dev/ttyAMA0", "/dev/serial0", "/dev/ttyUSB0", "/dev/ttyACM0"]
+    available_ports = sorted(list(dict.fromkeys(available_ports)))
+
     return render_template(
         request,
         "modem.html",
@@ -33,6 +43,7 @@ async def modem_page(request: Request):
             "duplex": sys_conf.get("duplex", True),
             "uart_port": uart_conf.get("port", "/dev/ttyAMA0"),
             "uart_speed": uart_conf.get("speed", 115200),
+            "available_ports": available_ports,
             "rx_invert": modem_conf.get("rxInvert", False),
             "tx_invert": modem_conf.get("txInvert", False),
             "ptt_invert": modem_conf.get("pttInvert", False),
