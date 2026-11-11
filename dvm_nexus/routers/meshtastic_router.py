@@ -17,18 +17,8 @@ from dvm_nexus.meshtastic.transport import MockTransport
 router = APIRouter(prefix="/meshtastic", tags=["meshtastic"])
 
 
-@router.get("", response_class=HTMLResponse)
-async def meshtastic_dashboard(request: Request):
-    status = meshtastic_manager.get_status()
-    nodes = meshtastic_manager.get_nodes()
-    messages = meshtastic_manager.get_messages(limit=40)
-    routes = meshtastic_bridge.get_routes()
-    text_cfg = text_gateway.get_config()
-    bridged_messages = text_gateway.get_recent_messages(limit=30)
-    voice_cfg = voice_gateway.get_config()
-    voice_status = voice_gateway.get_status()
-    voice_logs = voice_gateway.get_recent_logs(limit=30)
-
+def _get_meshtastic_context(toast: Optional[dict] = None) -> dict:
+    """Helper to assemble complete page context for meshtastic.html."""
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -37,23 +27,31 @@ async def meshtastic_dashboard(request: Request):
     finally:
         conn.close()
 
+    ctx = {
+        "title": "Meshtastic Integration",
+        "active_tab": "meshtastic",
+        "status": meshtastic_manager.get_status(),
+        "nodes": meshtastic_manager.get_nodes(),
+        "messages": meshtastic_manager.get_messages(limit=40),
+        "routes": meshtastic_bridge.get_routes(),
+        "admins": admins,
+        "text_cfg": text_gateway.get_config(),
+        "bridged_messages": text_gateway.get_recent_messages(limit=30),
+        "voice_cfg": voice_gateway.get_config(),
+        "voice_status": voice_gateway.get_status(),
+        "voice_logs": voice_gateway.get_recent_logs(limit=30),
+    }
+    if toast:
+        ctx["toast"] = toast
+    return ctx
+
+
+@router.get("", response_class=HTMLResponse)
+async def meshtastic_dashboard(request: Request):
     return render_template(
         request,
         "meshtastic.html",
-        {
-            "title": "Meshtastic Integration",
-            "active_tab": "meshtastic",
-            "status": status,
-            "nodes": nodes,
-            "messages": messages,
-            "routes": routes,
-            "admins": admins,
-            "text_cfg": text_cfg,
-            "bridged_messages": bridged_messages,
-            "voice_cfg": voice_cfg,
-            "voice_status": voice_status,
-            "voice_logs": voice_logs
-        }
+        _get_meshtastic_context()
     )
 
 
@@ -399,37 +397,20 @@ async def voice_bridge_save(
         echo_lockout_sec=str(echo_lockout_sec)
     )
 
-    voice_cfg = voice_gateway.get_config()
-    voice_status = voice_gateway.get_status()
-    voice_logs = voice_gateway.get_recent_logs(limit=30)
-
     return render_template(
         request,
-        "components/meshtastic_voice_bridge.html",
-        {
-            "voice_cfg": voice_cfg,
-            "voice_status": voice_status,
-            "voice_logs": voice_logs,
-            "toast": {"type": "success", "message": "Voice Bridge (STT/TTS) settings saved successfully!"}
-        }
+        "meshtastic.html",
+        _get_meshtastic_context(toast={"type": "success", "message": "Voice Bridge (STT/TTS) settings saved successfully!"})
     )
 
 
 @router.get("/voice-bridge/logs", response_class=HTMLResponse)
 async def voice_bridge_logs(request: Request):
     """Poll live voice bridge activity logs and status."""
-    voice_cfg = voice_gateway.get_config()
-    voice_status = voice_gateway.get_status()
-    voice_logs = voice_gateway.get_recent_logs(limit=30)
-
     return render_template(
         request,
-        "components/meshtastic_voice_bridge.html",
-        {
-            "voice_cfg": voice_cfg,
-            "voice_status": voice_status,
-            "voice_logs": voice_logs
-        }
+        "meshtastic.html",
+        _get_meshtastic_context()
     )
 
 
@@ -460,17 +441,8 @@ async def voice_bridge_simulate_rx(
         status="completed"
     )
 
-    voice_cfg = voice_gateway.get_config()
-    voice_status = voice_gateway.get_status()
-    voice_logs = voice_gateway.get_recent_logs(limit=30)
-
     return render_template(
         request,
-        "components/meshtastic_voice_bridge.html",
-        {
-            "voice_cfg": voice_cfg,
-            "voice_status": voice_status,
-            "voice_logs": voice_logs,
-            "toast": {"type": "success", "message": f"Simulated voice transmission from RID {src_id} forwarded to Mesh Channel {mesh_channel}!"}
-        }
+        "meshtastic.html",
+        _get_meshtastic_context(toast={"type": "success", "message": f"Simulated voice transmission from RID {src_id} forwarded to Mesh Channel {mesh_channel}!"})
     )

@@ -18,7 +18,7 @@ class Settings(BaseModel):
     """Nexus application runtime settings."""
 
     app_name: str = "DVM Nexus"
-    app_version: str = "1.0.45"
+    app_version: str = "1.0.46"
     debug: bool = Field(default_factory=lambda: os.getenv("NEXUS_DEBUG", "0") in ("1", "true", "True"))
 
     # Active DVMHost files location (/opt/dvm on standard Linux install)
