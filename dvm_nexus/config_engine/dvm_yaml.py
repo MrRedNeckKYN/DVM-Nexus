@@ -6,6 +6,7 @@ Provides structured access, modifications, and validation for DVMHost files.
 import os
 import csv
 import io
+import subprocess
 import yaml
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
@@ -77,11 +78,13 @@ class DVMConfigManager:
         # Fix directory and file permissions on Linux so dvmhost can read and write logs
         if os.name != "nt":
             try:
-                if self.dvm_dir.exists():
-                    self.dvm_dir.chmod(0o777)
-                for p in [self.config_path, self.iden_path, self.tg_rules_path, self.rid_acl_path]:
-                    if p.exists():
-                        p.chmod(0o666)
+                subprocess.run(["chmod", "-R", "a+rwX", str(self.dvm_dir)], capture_output=True)
+                import pwd
+                try:
+                    pwd.getpwnam("dvmhost")
+                    subprocess.run(["chown", "-R", "dvmhost:dvmhost", str(self.dvm_dir)], capture_output=True)
+                except KeyError:
+                    pass
             except Exception:
                 pass
 
@@ -104,22 +107,25 @@ class DVMConfigManager:
         data["daemon"] = False
 
         # Configure logging for systemd journald and prevent file open panics
-        if "log" in data and isinstance(data["log"], dict):
-            data["log"]["useSyslog"] = True
-            if data["log"].get("filePath") in (".", None, ""):
-                data["log"]["filePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
-            if data["log"].get("activityFilePath") in (".", None, ""):
-                data["log"]["activityFilePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
+        if "log" not in data or not isinstance(data["log"], dict):
+            data["log"] = {}
+        data["log"]["useSyslog"] = True
+        data["log"]["filePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
+        data["log"]["activityFilePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
+        data["log"]["fileRoot"] = data["log"].get("fileRoot") or "DVM"
 
         content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
         backup_manager.atomic_write(self.config_path, content)
 
         if os.name != "nt":
             try:
-                if self.dvm_dir.exists():
-                    self.dvm_dir.chmod(0o777)
-                if self.config_path.exists():
-                    self.config_path.chmod(0o666)
+                subprocess.run(["chmod", "-R", "a+rwX", str(self.dvm_dir)], capture_output=True)
+                import pwd
+                try:
+                    pwd.getpwnam("dvmhost")
+                    subprocess.run(["chown", "-R", "dvmhost:dvmhost", str(self.dvm_dir)], capture_output=True)
+                except KeyError:
+                    pass
             except Exception:
                 pass
 

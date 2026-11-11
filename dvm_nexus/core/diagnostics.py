@@ -431,19 +431,21 @@ class DiagnosticsEngine:
                 modified = True
 
             # Enforce logging settings for systemd journald
-            if "log" in cfg and isinstance(cfg["log"], dict):
-                if not cfg["log"].get("useSyslog"):
-                    cfg["log"]["useSyslog"] = True
-                    fixes_applied.append("Enabled 'log.useSyslog: true' (systemd journal output)")
-                    modified = True
-                if cfg["log"].get("filePath") in (".", None, ""):
-                    cfg["log"]["filePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
-                    fixes_applied.append("Set 'log.filePath: /opt/dvm' absolute path")
-                    modified = True
-                if cfg["log"].get("activityFilePath") in (".", None, ""):
-                    cfg["log"]["activityFilePath"] = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
-                    fixes_applied.append("Set 'log.activityFilePath: /opt/dvm' absolute path")
-                    modified = True
+            if "log" not in cfg or not isinstance(cfg["log"], dict):
+                cfg["log"] = {}
+            if not cfg["log"].get("useSyslog"):
+                cfg["log"]["useSyslog"] = True
+                fixes_applied.append("Enabled 'log.useSyslog: true' (systemd journal output)")
+                modified = True
+            target_log_path = "/opt/dvm" if os.name != "nt" else str(self.dvm_dir)
+            if cfg["log"].get("filePath") != target_log_path:
+                cfg["log"]["filePath"] = target_log_path
+                fixes_applied.append(f"Set 'log.filePath: {target_log_path}' absolute path")
+                modified = True
+            if cfg["log"].get("activityFilePath") != target_log_path:
+                cfg["log"]["activityFilePath"] = target_log_path
+                fixes_applied.append(f"Set 'log.activityFilePath: {target_log_path}' absolute path")
+                modified = True
 
             # Check if raw config has yaml-cpp incompatible sequence indentation
             raw_cfg = cfg_file.read_text(encoding="utf-8") if cfg_file.exists() else ""
@@ -471,15 +473,29 @@ class DiagnosticsEngine:
                         backup_manager.atomic_write(target, src_example.read_text(encoding="utf-8"))
                         fixes_applied.append(f"Restored missing data table '{tbl}' from template")
 
-            # 4. Fix permissions on Linux so dvmhost can read and write files/logs
+            # 4. Fix permissions and systemd working directory on Linux so dvmhost can read and write files/logs
             if os.name != "nt":
                 try:
-                    if self.dvm_dir.exists():
-                        self.dvm_dir.chmod(0o777)
-                    for p in [cfg_file, self.dvm_dir / "iden_table.dat", self.dvm_dir / "rid_acl.dat", self.dvm_dir / "talkgroup_rules.yml"]:
-                        if p.exists():
-                            p.chmod(0o666)
-                    fixes_applied.append("Set read/write permissions (0777/0666) on /opt/dvm for dvmhost")
+                    subprocess.run(["chmod", "-R", "a+rwX", str(self.dvm_dir)], capture_output=True)
+                    import pwd
+                    try:
+                        pwd.getpwnam("dvmhost")
+                        subprocess.run(["chown", "-R", "dvmhost:dvmhost", str(self.dvm_dir)], capture_output=True)
+                    except KeyError:
+                        pass
+
+                    # Configure systemd drop-in override for dvmhost to ensure WorkingDirectory and write paths
+                    override_dir = Path("/etc/systemd/system/dvmhost.service.d")
+                    override_dir.mkdir(parents=True, exist_ok=True)
+                    override_conf = override_dir / "override.conf"
+                    override_conf.write_text(
+                        "[Service]\n"
+                        "WorkingDirectory=/opt/dvm\n"
+                        "ReadWritePaths=/opt/dvm\n",
+                        encoding="utf-8"
+                    )
+                    subprocess.run(["systemctl", "daemon-reload"], capture_output=True)
+                    fixes_applied.append("Set permissions (chmod a+rwX, chown dvmhost) and systemd WorkingDirectory=/opt/dvm")
                 except Exception:
                     pass
 

@@ -64,11 +64,20 @@ pm = ProfileManager()
 print('Seeded profiles:', [p['id'] for p in pm.list_profiles()])
 "
 
-# Ensure permissions on /opt/dvm
-chmod -R 755 "${DVM_DIR}" 2>/dev/null || true
-if [[ -f "${DVM_DIR}/config.yml" ]]; then
-    chmod 644 "${DVM_DIR}/config.yml" 2>/dev/null || true
+# Ensure permissions on /opt/dvm so dvmhost can write logs and state files
+chmod -R a+rwX "${DVM_DIR}" 2>/dev/null || true
+if id "dvmhost" &>/dev/null; then
+    chown -R dvmhost:dvmhost "${DVM_DIR}" 2>/dev/null || true
 fi
+
+# Ensure dvmhost systemd service has WorkingDirectory=/opt/dvm
+mkdir -p /etc/systemd/system/dvmhost.service.d
+cat << 'EOF' > /etc/systemd/system/dvmhost.service.d/override.conf
+[Service]
+WorkingDirectory=/opt/dvm
+ReadWritePaths=/opt/dvm
+EOF
+systemctl daemon-reload 2>/dev/null || true
 
 # Step 6: Install and activate systemd service
 echo -e "${YELLOW}[*] Registering systemd service...${NC}"
