@@ -20,29 +20,49 @@
 {% endif %}
 
 <!-- Top Live OTA P25 Commands -->
+{% set p25_cc_on = (p25.control and p25.control.enable) %}
+{% set p25_cc_ded = (p25.control and p25.control.dedicated) %}
+{% set p25_cc_mode = 'dedicated' if (p25_cc_on and p25_cc_ded) else ('non_dedicated' if p25_cc_on else 'disabled') %}
+{% set p25_arch_mode = 'simplex' if not duplex else ('duplex_dedicated' if p25_cc_mode == 'dedicated' else ('duplex_nondedicated' if p25_cc_mode == 'non_dedicated' else 'duplex_conv')) %}
+{% set p25_ota_ready = (duplex and p25_cc_on) %}
 <div class="card" style="border-left:4px solid var(--accent-indigo);">
   <div class="card-header">
-    <div class="card-title">⚡ Live Over-The-Air P25 Commands</div>
+    <div class="card-title">⚡ Live Over-The-Air P25 TSBK Commands</div>
     {% if is_standby %}
       <span class="badge badge-muted">Standby (Radio in DMR Mode)</span>
+    {% elif p25_ota_ready %}
+      <span id="p25-ota-mode-badge" class="badge badge-indigo">REST API Direct (Duplex + P25 CC Ready)</span>
     {% else %}
-      <span class="badge badge-indigo">REST API Direct</span>
+      <span id="p25-ota-mode-badge" class="badge badge-warning">⚠️ Requires Full Duplex + P25 Control Channel</span>
     {% endif %}
+  </div>
+  <div id="p25-ota-cc-warn" style="margin-bottom:0.85rem; padding:0.75rem 1rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.45); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-main); {% if p25_ota_ready or is_standby %}display:none;{% endif %}">
+    ⚠️ <strong>DVMHost Prerequisite Notice:</strong> In <code>DVMHost</code> (<code>p25::packet::ControlSignaling.cpp</code>), P25 TSBK Over-The-Air commands are only transmitted over RF when <strong>Full Duplex</strong> (<code>duplex: true</code>) <em>and</em> the <strong>P25 Control Channel</strong> (<code>protocols.p25.control.enable: true</code>) are active. Click <strong>3. Full Duplex + Non-Dedicated CC</strong> or <strong>4. Full Duplex + Dedicated 24/7 CC</strong> below and press <strong>Save</strong> to transmit OTA commands.
   </div>
   <form hx-post="/p25/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
     <div class="ota-cmd-field">
       <label class="form-label">Command</label>
-      <select name="action" class="form-control" {% if is_standby %}disabled{% endif %}>
-        <option value="check">Radio Check</option>
-        <option value="page">Radio Page / Call Alert</option>
-        <option value="inhibit">Inhibit (Stun / Kill)</option>
-        <option value="uninhibit">Uninhibit (Revive)</option>
-        <option value="dyn-regrp">Dynamic Regroup</option>
+      <select name="action" id="p25-ota-action-select" class="form-control" onchange="syncP25OtaCommand()" {% if is_standby %}disabled{% endif %}>
+        <option value="check">Radio Check (TSBK Radio Unit Monitor)</option>
+        <option value="page">Radio Page / Call Alert (TSBK Call Alert)</option>
+        <option value="inhibit">Inhibit (Stun / Kill Radio)</option>
+        <option value="uninhibit">Uninhibit (Revive Radio)</option>
+        <option value="unit-reg">Force Unit Registration Request</option>
+        <option value="group-aff-req">Query Group Affiliation (GAQ)</option>
+        <option value="dyn-regrp">Dynamic Regroup (Assign TGID)</option>
+        <option value="dyn-regrp-cancel">Cancel Dynamic Regroup</option>
+        <option value="dyn-regrp-lock">Lock Dynamic Regroup Selector</option>
+        <option value="dyn-regrp-unlock">Unlock Dynamic Regroup Selector</option>
+        <option value="cc-burst">🗼 Fire P25 Control Channel Burst Now</option>
       </select>
     </div>
-    <div class="ota-cmd-field">
+    <div class="ota-cmd-field" id="p25-ota-rid-group">
       <label class="form-label">Target Radio ID (RID)</label>
-      <input type="number" name="rid" class="form-control" placeholder="e.g. 1234567" {% if is_standby %}disabled{% endif %} required>
+      <input type="number" name="rid" id="p25-ota-rid-input" class="form-control" placeholder="e.g. 1234567" value="1" min="1" {% if is_standby %}disabled{% endif %} required>
+    </div>
+    <div class="ota-cmd-field" id="p25-ota-tgid-group" style="display:none;">
+      <label class="form-label">Regroup TGID</label>
+      <input type="number" name="tg_id" id="p25-ota-tgid-input" class="form-control" placeholder="e.g. 10100" value="1" min="1" {% if is_standby %}disabled{% endif %}>
     </div>
     <div class="ota-cmd-btn-wrap">
       {% if is_standby %}
@@ -58,10 +78,6 @@
 <form id="p25-config-form" hx-post="/p25/save" hx-trigger="submit" hx-target="#toast-container" hx-swap="beforeend" data-dirty-guard>
 
   <!-- Section 1: Radio Frequencies & Station Identity -->
-  {% set p25_cc_on = (p25.control and p25.control.enable) %}
-  {% set p25_cc_ded = (p25.control and p25.control.dedicated) %}
-  {% set p25_cc_mode = 'dedicated' if (p25_cc_on and p25_cc_ded) else ('non_dedicated' if p25_cc_on else 'disabled') %}
-  {% set p25_arch_mode = 'simplex' if not duplex else ('duplex_dedicated' if p25_cc_mode == 'dedicated' else ('duplex_nondedicated' if p25_cc_mode == 'non_dedicated' else 'duplex_conv')) %}
   <div class="card" style="border-left:4px solid var(--accent-indigo);">
     <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div>
@@ -814,6 +830,39 @@ function swapP25TxRx() {
   updateP25CodeplugSummary();
 }
 
+function syncP25OtaPrereqs() {
+  const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
+  const ccMode = document.getElementById('p25-cc-mode-select')?.value || 'disabled';
+  const ready = isDuplex && ccMode !== 'disabled';
+  const warnEl = document.getElementById('p25-ota-cc-warn');
+  const badgeEl = document.getElementById('p25-ota-mode-badge');
+  if (warnEl) warnEl.style.display = ready ? 'none' : 'block';
+  if (badgeEl) {
+    badgeEl.className = ready ? 'badge badge-indigo' : 'badge badge-warning';
+    badgeEl.textContent = ready ? 'REST API Direct (Duplex + P25 CC Ready)' : '⚠️ Requires Full Duplex + P25 Control Channel';
+  }
+}
+
+function syncP25OtaCommand() {
+  const sel = document.getElementById('p25-ota-action-select');
+  const ridGrp = document.getElementById('p25-ota-rid-group');
+  const ridInp = document.getElementById('p25-ota-rid-input');
+  const tgidGrp = document.getElementById('p25-ota-tgid-group');
+  if (!sel) return;
+  const cmd = sel.value;
+  const isBurst = cmd === 'cc-burst';
+  const isDynRegrp = cmd === 'dyn-regrp';
+  if (ridGrp) ridGrp.style.display = isBurst ? 'none' : '';
+  if (tgidGrp) tgidGrp.style.display = isDynRegrp ? '' : 'none';
+  if (ridInp) {
+    if (isBurst) {
+      ridInp.removeAttribute('required');
+    } else {
+      ridInp.setAttribute('required', 'required');
+    }
+  }
+}
+
 function updateP25ArchCardHighlight() {
   const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
   const ccMode = document.getElementById('p25-cc-mode-select')?.value || 'disabled';
@@ -840,6 +889,7 @@ function updateP25ArchCardHighlight() {
       card.style.borderColor = 'var(--border-color)';
     }
   });
+  syncP25OtaPrereqs();
 }
 
 function selectP25Architecture(arch) {
@@ -1000,6 +1050,8 @@ document.addEventListener('DOMContentLoaded', function() {
   syncP25CcMode();
   syncP25CwId();
   syncP25NetMode();
+  syncP25OtaCommand();
+  syncP25OtaPrereqs();
 });
 </script>
 {% endblock %}

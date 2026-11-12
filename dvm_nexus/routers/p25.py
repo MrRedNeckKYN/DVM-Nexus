@@ -432,13 +432,40 @@ async def p25_iden_delete(request: Request, chid: int):
 async def p25_rid_action(
     request: Request,
     action: str = Form(...),
-    rid: int = Form(...),
+    rid: int = Form(0),
+    tg_id: int = Form(1),
 ):
     """Dispatch over-the-air P25 RID command."""
-    res = dvm_client.p25_rid_action(action=action, rid=rid)
+    cmd = action.lower().strip()
+    conf = dvm_config_manager.load_config_dict()
+    is_duplex = bool(conf.get("system", {}).get("duplex", True))
+    cc_enabled = bool(conf.get("protocols", {}).get("p25", {}).get("control", {}).get("enable", False))
+
+    if not is_duplex or not cc_enabled:
+        msg = "DVMHost requires Full Duplex + P25 Control Channel (protocols.p25.control.enable: true) to transmit P25 TSBK Over-The-Air commands. Select Card 3 (Full Duplex + Non-Dedicated CC) below, Save, and Restart Radio."
+        log_audit("P25_OTA", cmd.upper(), f"Blocked (duplex={is_duplex}, cc={cc_enabled}): {msg}")
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": msg},
+        )
+
+    if cmd not in ("cc", "cc-burst") and rid <= 0:
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": "Enter a valid Target Radio ID (RID > 0)."},
+        )
+
+    res = dvm_client.p25_rid_action(action=cmd, rid=rid, tg_id=tg_id)
     success = res.get("success", False)
-    msg = f"P25 {action.upper()} to RID {rid}: {'Success' if success else res.get('error', 'Failed')}"
-    log_audit("P25_OTA", action.upper(), f"Target RID: {rid}, Result: {msg}")
+    if cmd in ("cc", "cc-burst"):
+        msg = f"P25 Control Channel Burst: {'Transmitted over RF' if success else res.get('error', 'Failed')}"
+    elif cmd == "dyn-regrp":
+        msg = f"P25 Dynamic Regroup (RID {rid} -> TG {tg_id}): {'Transmitted over RF' if success else res.get('error', 'Failed')}"
+    else:
+        msg = f"P25 {cmd.upper()} to RID {rid}: {'Transmitted over RF' if success else res.get('error', 'Failed')}"
+    log_audit("P25_OTA", cmd.upper(), f"Target RID: {rid}, TG: {tg_id}, Result: {msg}")
 
     return render_template(
         request,

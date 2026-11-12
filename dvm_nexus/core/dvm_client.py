@@ -207,18 +207,42 @@ class DVMHostClient:
                                 retry_payload = json.loads(retry_body)
                             except Exception:
                                 retry_payload = {"raw": retry_body}
+                            r_inner_status = retry_payload.get("status") if isinstance(retry_payload, dict) else None
+                            r_ok = (retry_code in (200, 201)) and (r_inner_status in (None, 200, 201))
+                            r_err = None
+                            if not r_ok:
+                                r_err = (
+                                    str(retry_payload.get("message"))
+                                    if isinstance(retry_payload, dict) and retry_payload.get("message")
+                                    else f"DVMHost REST error (status {r_inner_status or retry_code})"
+                                )
+                            eff_r_status = r_inner_status if isinstance(r_inner_status, int) else retry_code
                             return {
-                                "success": retry_code in (200, 201) and (
-                                    not isinstance(retry_payload, dict) or retry_payload.get("status") in (None, 200, 201)
-                                ),
-                                "status_code": retry_code,
+                                "success": r_ok,
+                                "status": eff_r_status,
+                                "status_code": eff_r_status,
+                                "error": r_err,
                                 "data": retry_payload
                             }
                     return {"success": False, "error": "Unauthorized / Stale Token (401)", "status": 401}
 
+                # DVMHost errorPayload() returns HTTP 200 with {"status": 400/503, "message": "..."} in JSON body
+                inner_status = payload.get("status") if isinstance(payload, dict) else None
+                is_ok = (status_code in (200, 201)) and (inner_status in (None, 200, 201))
+                err_msg = None
+                if not is_ok:
+                    err_msg = (
+                        str(payload.get("message"))
+                        if isinstance(payload, dict) and payload.get("message")
+                        else f"DVMHost REST error (status {inner_status or status_code})"
+                    )
+
+                eff_status = inner_status if isinstance(inner_status, int) else status_code
                 return {
-                    "success": status_code in (200, 201),
-                    "status_code": status_code,
+                    "success": is_ok,
+                    "status": eff_status,
+                    "status_code": eff_status,
+                    "error": err_msg,
                     "data": payload
                 }
             except socket.timeout:
@@ -242,13 +266,52 @@ class DVMHostClient:
         """Set modem mode: 'idle', 'lockout', 'dmr', 'p25', 'nxdn'."""
         return self.request("PUT", "/mdm/mode", {"mode": mode})
 
-    def dmr_rid_action(self, action: str, rid: int, slot: int = 1) -> Dict[str, Any]:
-        """action: 'page', 'check', 'inhibit', 'uninhibit'"""
-        return self.request("PUT", "/dmr/rid", {"cmd": action, "rid": rid, "slot": slot})
+    def dmr_fire_beacon(self) -> Dict[str, Any]:
+        """Trigger an immediate DMR Roaming / TSCC Beacon burst over RF (GET /dmr/beacon)."""
+        return self.request("GET", "/dmr/beacon")
 
-    def p25_rid_action(self, action: str, rid: int) -> Dict[str, Any]:
-        """action: 'page', 'check', 'inhibit', 'uninhibit', 'dyn-regrp', 'unit-reg'"""
-        return self.request("PUT", "/p25/rid", {"cmd": action, "rid": rid})
+    def p25_fire_cc(self) -> Dict[str, Any]:
+        """Trigger an immediate P25 Control Channel burst over RF (GET /p25/cc)."""
+        return self.request("GET", "/p25/cc")
+
+    def dmr_rid_action(self, action: str, rid: int, slot: int = 1) -> Dict[str, Any]:
+        """
+        Dispatch DMR OTA command via DVMHost REST API (src/host/restapi/RESTAPI.cpp:restAPI_PutDMRRID).
+        action: 'page', 'check', 'inhibit', 'uninhibit', or 'beacon'
+        Requires JSON schema: {"command": action, "dstId": uint32, "slot": uint8}
+        """
+        cmd = str(action).lower().strip()
+        if cmd == "beacon":
+            return self.dmr_fire_beacon()
+        return self.request(
+            "PUT",
+            "/dmr/rid",
+            {
+                "command": cmd,
+                "dstId": int(rid),
+                "slot": int(slot),
+            },
+        )
+
+    def p25_rid_action(self, action: str, rid: int, tg_id: int = 1, src_id: int = 1) -> Dict[str, Any]:
+        """
+        Dispatch P25 OTA command via DVMHost REST API (src/host/restapi/RESTAPI.cpp:restAPI_PutP25RID).
+        action: 'page', 'check', 'inhibit', 'uninhibit', 'dyn-regrp', 'dyn-regrp-cancel',
+                'dyn-regrp-lock', 'dyn-regrp-unlock', 'group-aff-req', 'unit-reg', 'emerg', or 'cc-burst'
+        Requires JSON schema: {"command": action, "dstId": uint32, ...}
+        """
+        cmd = str(action).lower().strip()
+        if cmd in ("cc", "cc-burst"):
+            return self.p25_fire_cc()
+        payload: Dict[str, Any] = {
+            "command": cmd,
+            "dstId": int(rid),
+        }
+        if cmd == "dyn-regrp":
+            payload["tgId"] = int(tg_id or 1)
+        elif cmd == "emerg":
+            payload["srcId"] = int(src_id or 1)
+        return self.request("PUT", "/p25/rid", payload)
 
     def dmr_send_text(self, text: str, tg_or_rid: int, is_group: bool = True, slot: int = 1) -> Dict[str, Any]:
         """Send DMR Text Message (TMS/SMS) to talkgroup or individual subscriber."""

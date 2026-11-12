@@ -388,14 +388,37 @@ async def dmr_rid_delete(request: Request, rid: int):
 async def dmr_rid_action(
     request: Request,
     action: str = Form(...),
-    rid: int = Form(...),
+    rid: int = Form(0),
     slot: int = Form(1),
 ):
-    """Dispatch over-the-air DMR RID command (page, check, inhibit, uninhibit)."""
-    res = dvm_client.dmr_rid_action(action=action, rid=rid, slot=slot)
+    """Dispatch over-the-air DMR RID command (page, check, inhibit, uninhibit, beacon)."""
+    cmd = action.lower().strip()
+    conf = dvm_config_manager.load_config_dict()
+    is_duplex = bool(conf.get("system", {}).get("duplex", True))
+
+    if not is_duplex:
+        msg = "DVMHost only transmits DMR CSBK Over-The-Air commands in Full Duplex mode (system.duplex: true). Select Full Duplex below, Save, and Restart Radio."
+        log_audit("DMR_OTA", cmd.upper(), f"Blocked in Simplex: {msg}")
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": msg},
+        )
+
+    if cmd != "beacon" and rid <= 0:
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": "Enter a valid Target Radio ID (RID > 0)."},
+        )
+
+    res = dvm_client.dmr_rid_action(action=cmd, rid=rid, slot=slot)
     success = res.get("success", False)
-    msg = f"DMR {action.upper()} to RID {rid}: {'Success' if success else res.get('error', 'Failed')}"
-    log_audit("DMR_OTA", action.upper(), f"Target RID: {rid}, Slot: {slot}, Result: {msg}")
+    if cmd == "beacon":
+        msg = f"DMR Beacon / TSCC Burst: {'Transmitted over RF' if success else res.get('error', 'Failed')}"
+    else:
+        msg = f"DMR {cmd.upper()} to RID {rid} (Slot {slot}): {'Transmitted over RF' if success else res.get('error', 'Failed')}"
+    log_audit("DMR_OTA", cmd.upper(), f"Target RID: {rid}, Slot: {slot}, Result: {msg}")
 
     return render_template(
         request,

@@ -22,28 +22,37 @@
 <!-- Top Header & Live OTA Command Bar -->
 <div class="card" style="border-left:4px solid var(--accent-cyan);">
   <div class="card-header">
-    <div class="card-title">📡 Live Over-The-Air DMR Subscriber Commands</div>
+    <div>
+      <div class="card-title">📡 Live Over-The-Air DMR Subscriber Commands</div>
+      <div style="font-size:0.78rem; color:var(--text-dim);">Transmits live DMR CSBK control signaling via DVMHost REST API (<code>PUT /dmr/rid</code> &amp; <code>GET /dmr/beacon</code>)</div>
+    </div>
     {% if is_standby %}
       <span class="badge badge-muted">Standby (Radio in P25 Mode)</span>
+    {% elif not duplex %}
+      <span class="badge badge-warning" id="dmr-ota-mode-badge">Requires Full Duplex Mode</span>
     {% else %}
-      <span class="badge badge-cyan">REST API Direct</span>
+      <span class="badge badge-cyan" id="dmr-ota-mode-badge">REST API Direct (Full Duplex Ready)</span>
     {% endif %}
+  </div>
+  <div id="dmr-ota-simplex-warn" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.55rem 0.85rem; margin-bottom:0.85rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.8rem; color:#fde68a;">
+    ⚠️ <strong>DVMHost Duplex Requirement:</strong> In upstream <code>dvmhost</code> (<code>ControlSignaling.cpp:290</code>), DMR CSBK Over-The-Air commands only queue RF frames when <strong>Full Duplex (<code>system.duplex: true</code>)</strong> is active. Select <strong>Full Duplex</strong> below, click <strong>Save</strong>, and restart the radio to transmit OTA commands.
   </div>
   <form hx-post="/dmr/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
     <div class="ota-cmd-field">
       <label class="form-label">Command</label>
-      <select name="action" class="form-control" {% if is_standby %}disabled{% endif %}>
-        <option value="check">Radio Check</option>
-        <option value="page">Radio Page / Call Alert</option>
-        <option value="inhibit">Inhibit (Stun / Kill)</option>
-        <option value="uninhibit">Uninhibit (Revive)</option>
+      <select name="action" id="dmr-ota-action-select" class="form-control" onchange="syncDmrOtaCommand()" {% if is_standby %}disabled{% endif %}>
+        <option value="check">Radio Check (CSBK Ext Func)</option>
+        <option value="page">Radio Page / Call Alert (CSBK)</option>
+        <option value="inhibit">Inhibit (Stun / Kill Radio)</option>
+        <option value="uninhibit">Uninhibit (Revive Radio)</option>
+        <option value="beacon">🗼 Fire Roaming / TSCC Beacon Burst</option>
       </select>
     </div>
-    <div class="ota-cmd-field">
+    <div class="ota-cmd-field" id="dmr-ota-rid-group">
       <label class="form-label">Target Radio ID (RID)</label>
-      <input type="number" name="rid" class="form-control" placeholder="e.g. 1234567" {% if is_standby %}disabled{% endif %} required>
+      <input type="number" name="rid" id="dmr-ota-rid-input" class="form-control" placeholder="e.g. 1234567" {% if is_standby %}disabled{% endif %} required>
     </div>
-    <div class="ota-cmd-slot">
+    <div class="ota-cmd-slot" id="dmr-ota-slot-group">
       <label class="form-label">Time Slot</label>
       <select name="slot" class="form-control" {% if is_standby %}disabled{% endif %}>
         <option value="1">Slot 1</option>
@@ -859,12 +868,19 @@ function syncDmrDuplexMode() {
   const simplexNotice = document.getElementById('dmr-simplex-notice');
   const ccCard = document.getElementById('dmr-control-channel-card');
   const txHangGrp = document.getElementById('dmr-tx-hang-group');
+  const otaWarn = document.getElementById('dmr-ota-simplex-warn');
+  const otaBadge = document.getElementById('dmr-ota-mode-badge');
 
   if (rxGroup) rxGroup.style.display = isDuplex ? 'block' : 'none';
   if (presetsBar) presetsBar.style.display = isDuplex ? 'flex' : 'none';
   if (simplexNotice) simplexNotice.style.display = isDuplex ? 'none' : 'block';
   if (ccCard) ccCard.style.display = isDuplex ? 'block' : 'none';
   if (txHangGrp) txHangGrp.style.display = isDuplex ? 'block' : 'none';
+  if (otaWarn) otaWarn.style.display = isDuplex ? 'none' : 'block';
+  if (otaBadge) {
+    otaBadge.className = isDuplex ? 'badge badge-info' : 'badge badge-warning';
+    otaBadge.textContent = isDuplex ? 'REST API Direct (Full Duplex RF Ready)' : '⚠️ Requires Full Duplex to TX RF';
+  }
 
   if (txLabel) {
     txLabel.textContent = isDuplex ? 'Hotspot TX / Repeater Output (MHz)' : 'Simplex Operating Frequency (MHz)';
@@ -1014,6 +1030,24 @@ function syncDmrCwId() {
   }
 }
 
+function syncDmrOtaCommand() {
+  const sel = document.getElementById('dmr-ota-action-select');
+  const ridGrp = document.getElementById('dmr-ota-rid-group');
+  const ridInp = document.getElementById('dmr-ota-rid-input');
+  const slotGrp = document.getElementById('dmr-ota-slot-group');
+  if (!sel) return;
+  const isBeacon = sel.value === 'beacon';
+  if (ridGrp) ridGrp.style.display = isBeacon ? 'none' : '';
+  if (slotGrp) slotGrp.style.display = isBeacon ? 'none' : '';
+  if (ridInp) {
+    if (isBeacon) {
+      ridInp.removeAttribute('required');
+    } else {
+      ridInp.setAttribute('required', 'required');
+    }
+  }
+}
+
 function syncDmrNetMode() {
   const netSel = document.getElementById('dmr-net-enable-select');
   const netFields = document.getElementById('dmr-net-fields');
@@ -1027,6 +1061,7 @@ document.addEventListener('DOMContentLoaded', function() {
   syncDmrTsccMode();
   syncDmrCwId();
   syncDmrNetMode();
+  syncDmrOtaCommand();
 });
 </script>
 {% endblock %}
