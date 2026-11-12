@@ -11,7 +11,20 @@
     </div>
   </div>
 
-  <form hx-post="/modem/save" hx-target="#toast-container" hx-swap="beforeend">
+  {% if not any_ports_detected %}
+    <div class="alert alert-warning" role="alert" style="margin-bottom:1rem;">
+      ⚠️ <strong>No serial modem detected.</strong> No <code>/dev/ttyAMA*</code>, <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code> or <code>/dev/serial*</code> device exists right now.
+      Check the Duplex Hat seating / USB cable and the UART setup, then reload this page. DVMHost cannot go on air without a modem.
+    </div>
+  {% elif not port_detected %}
+    <div class="alert alert-warning" role="alert" style="margin-bottom:1rem;">
+      ⚠️ The configured port <code>{{ uart_port }}</code> does not exist on this system. Detected devices:
+      {% for p in available_ports %}<code>{{ p }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+      Pick one of these below and save.
+    </div>
+  {% endif %}
+
+  <form hx-post="/modem/save" hx-target="#toast-container" hx-swap="beforeend" data-dirty-guard>
     <div style="margin-bottom:1.5rem;">
       <h3 style="font-size:1rem; margin-bottom:1rem; color:var(--accent-cyan);">Modem Hardware Controller &amp; Serial UART</h3>
       <div class="form-row">
@@ -147,8 +160,10 @@
       </div>
     </details>
 
-    <div style="display:flex; justify-content:flex-end;">
-      <button type="submit" class="btn btn-primary" style="padding:0.6rem 2rem;">
+    <div class="save-bar" role="region" aria-label="Save modem settings">
+      <input type="hidden" id="config-rev-input" name="config_rev" value="{{ config_rev }}">
+      <span class="save-bar-status" data-save-status>No unsaved changes. Edits are written only when you press Save.</span>
+      <button type="submit" class="btn btn-primary save-bar-btn">
         💾 Save Modem Settings
       </button>
     </div>

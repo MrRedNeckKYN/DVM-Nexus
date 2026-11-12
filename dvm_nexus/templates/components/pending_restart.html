@@ -1,0 +1,11 @@
+{% if service and service.is_running and service.config_pending_restart %}
+<div class="pending-restart-banner" role="status">
+  <span>⚠️ Configuration was saved after DVMHost started — your changes are <strong>not live yet</strong>.</span>
+  <button type="button" class="btn btn-warning btn-sm"
+          hx-post="/api/service/restart-quick" hx-swap="none"
+          hx-confirm="Restart DVMHost now to apply the saved configuration? Any active call will drop."
+          hx-disabled-elt="this">
+    🔄 Restart to apply
+  </button>
+</div>
+{% endif %}

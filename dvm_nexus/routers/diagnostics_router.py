@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/diagnostics", response_class=HTMLResponse)
-async def diagnostics_page(request: Request):
+def diagnostics_page(request: Request):
     """Render the full Diagnostics, Health Doctor, and Live Logs page."""
     health = diagnostics_engine.run_health_checks()
     logs_data = diagnostics_engine.get_service_logs(service_name="dvmhost", lines=80, filter_level="all")
@@ -37,7 +37,7 @@ async def diagnostics_page(request: Request):
 
 
 @router.get("/components/diagnostics-logs", response_class=HTMLResponse)
-async def diagnostics_logs_component(
+def diagnostics_logs_component(
     request: Request,
     service: str = Query("dvmhost"),
     lines: int = Query(80),
@@ -57,7 +57,7 @@ async def diagnostics_logs_component(
 
 
 @router.get("/components/diagnostics-checks", response_class=HTMLResponse)
-async def diagnostics_checks_component(request: Request):
+def diagnostics_checks_component(request: Request):
     """HTMX fragment for Health Doctor checklist."""
     health = diagnostics_engine.run_health_checks()
     return render_template(
@@ -68,7 +68,7 @@ async def diagnostics_checks_component(request: Request):
 
 
 @router.post("/components/diagnostics-clear-logs", response_class=HTMLResponse)
-async def diagnostics_clear_logs_component(
+def diagnostics_clear_logs_component(
     request: Request,
     service: str = Form("dvmhost")
 ):
@@ -88,7 +88,7 @@ async def diagnostics_clear_logs_component(
 
 
 @router.post("/components/diagnostics-autofix", response_class=HTMLResponse)
-async def diagnostics_autofix_component(request: Request):
+def diagnostics_autofix_component(request: Request):
     """HTMX action to execute 1-Click Auto-Repair on all detected configuration issues."""
     result = diagnostics_engine.auto_fix_all()
     health = diagnostics_engine.run_health_checks()
@@ -108,14 +108,14 @@ async def diagnostics_autofix_component(request: Request):
 
 
 @router.get("/api/diagnostics/status")
-async def api_diagnostics_status():
+def api_diagnostics_status():
     """JSON API returning full automated diagnostic report."""
     health = diagnostics_engine.run_health_checks()
     return JSONResponse(health)
 
 
 @router.get("/api/diagnostics/logs")
-async def api_diagnostics_logs(
+def api_diagnostics_logs(
     service: str = Query("dvmhost"),
     lines: int = Query(100),
     filter: str = Query("all")
@@ -126,7 +126,7 @@ async def api_diagnostics_logs(
 
 
 @router.get("/api/diagnostics/export", response_class=PlainTextResponse)
-async def api_diagnostics_export(service: str = Query("dvmhost"), lines: int = Query(200)):
+def api_diagnostics_export(service: str = Query("dvmhost"), lines: int = Query(200)):
     """Export raw journal logs as downloadable plain text."""
     logs_data = diagnostics_engine.get_service_logs(service_name=service, lines=lines, filter_level="all")
     content = "\n".join(e["raw"] for e in logs_data["entries"])
@@ -137,7 +137,7 @@ async def api_diagnostics_export(service: str = Query("dvmhost"), lines: int = Q
 
 
 @router.post("/api/system/reboot", response_class=HTMLResponse)
-async def api_system_reboot(request: Request):
+def api_system_reboot(request: Request):
     """Reboot the host system."""
     if os.name != "nt":
         subprocess.Popen(["sudo", "systemctl", "reboot"])

@@ -22,7 +22,7 @@
   <!-- Live Status Hero Card Container (HTMX polled every 12s) -->
   <div id="network-status-container"
        hx-get="/components/network-status"
-       hx-trigger="every 12s"
+       hx-trigger="every 12s [document.visibilityState==='visible']"
        hx-swap="innerHTML">
     {% include "components/network_status.html" %}
   </div>

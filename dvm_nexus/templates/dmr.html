@@ -61,7 +61,7 @@
 </div>
 
 <!-- Main DMR Configuration Form -->
-<form id="dmr-config-form" hx-post="/dmr/save" hx-trigger="change delay:500ms, submit" hx-target="#toast-container" hx-swap="beforeend">
+<form id="dmr-config-form" hx-post="/dmr/save" hx-trigger="submit" hx-target="#toast-container" hx-swap="beforeend" data-dirty-guard>
 
   <!-- Section 1: Radio Frequencies & Station Identity -->
   <div class="card" style="border-left:4px solid var(--accent-cyan);">
@@ -70,7 +70,7 @@
         <div class="card-title">📻 Radio Frequencies &amp; Station Identity</div>
         <span style="font-size:0.85rem; color:var(--text-dim);">Operating Frequencies, Station Callsign &amp; Duplex Mode</span>
       </div>
-      <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Auto-Saves to Active Config</span>
+      <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Saved when you press Save</span>
     </div>
 
     <div class="form-row">
@@ -447,8 +447,10 @@
     </div>
   </details>
 
-  <div style="display:flex; justify-content:flex-end; margin-bottom: 2rem;">
-    <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2.25rem; font-weight:700; font-size:1rem;">
+  <div class="save-bar" role="region" aria-label="Save DMR configuration">
+    <input type="hidden" id="config-rev-input" name="config_rev" value="{{ config_rev }}">
+    <span class="save-bar-status" data-save-status>No unsaved changes. Edits are written only when you press Save.</span>
+    <button type="submit" class="btn btn-primary save-bar-btn">
       💾 Save All DMR Configuration
     </button>
   </div>

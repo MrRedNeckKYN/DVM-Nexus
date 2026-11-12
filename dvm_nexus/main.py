@@ -5,6 +5,7 @@ FastAPI Application Entry Point
 
 import os
 import asyncio
+import logging
 import secrets
 import base64
 from contextlib import asynccontextmanager
@@ -16,6 +17,7 @@ from starlette.responses import Response
 
 from dvm_nexus.core.config import settings
 from dvm_nexus.core.database import init_db, log_audit
+from dvm_nexus.core.security import OriginCheckMiddleware
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 from dvm_nexus.config_engine.profile_manager import profile_manager
 
@@ -36,6 +38,8 @@ from dvm_nexus.routers import (
     terminal_router,
 )
 
+logger = logging.getLogger("dvm_nexus.main")
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -55,14 +59,16 @@ async def lifespan(app: FastAPI):
         network_controller.ensure_hotspot_provisioned()
         watchdog_task = asyncio.create_task(network_controller.run_watchdog_loop())
     except Exception:
-        pass
+        logger.exception("Hotspot provisioning / failover watchdog failed to start")
+        log_audit("SYSTEM", "WATCHDOG_START_FAILED", "Hotspot provisioning or failover watchdog failed (see logs)", status="warning")
 
     # Start Real-Time Radio Telemetry & Last Heard Engine
     try:
         from dvm_nexus.core.telemetry_service import telemetry_service
         telemetry_service.start()
     except Exception:
-        pass
+        logger.exception("Telemetry service failed to start")
+        log_audit("SYSTEM", "TELEMETRY_START_FAILED", "Telemetry service failed to start (see logs)", status="warning")
 
     yield
     # Shutdown
@@ -72,7 +78,7 @@ async def lifespan(app: FastAPI):
         from dvm_nexus.core.telemetry_service import telemetry_service
         telemetry_service.stop()
     except Exception:
-        pass
+        logger.exception("Telemetry service failed to stop cleanly")
     log_audit("SYSTEM", "SHUTDOWN", "DVM Nexus shutdown")
 
 
@@ -125,6 +131,9 @@ def create_app() -> FastAPI:
 
     # Optional Basic Auth
     app.add_middleware(BasicAuthMiddleware)
+
+    # Same-origin guard (anti-CSRF / cross-site WebSocket hijacking). Added last so it runs first.
+    app.add_middleware(OriginCheckMiddleware)
 
     # Static files
     if STATIC_DIR.exists():

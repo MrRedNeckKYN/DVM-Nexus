@@ -37,19 +37,24 @@ async def api_system_metrics():
     return JSONResponse(get_system_metrics())
 
 
+def _collect_stream_payload() -> dict:
+    return {
+        "sys": get_system_metrics(),
+        "service": service_controller.get_status(),
+    }
+
+
 async def event_generator() -> AsyncIterator[str]:
-    """SSE generator streaming system health and service status."""
+    """SSE generator streaming system health and service status (blocking work runs in a thread)."""
     while True:
         try:
-            payload = {
-                "sys": get_system_metrics(),
-                "service": service_controller.get_status(),
-            }
+            payload = await asyncio.to_thread(_collect_stream_payload)
             yield f"data: {json.dumps(payload)}\n\n"
         except asyncio.CancelledError:
             break
         except Exception as exc:
             logger.warning(f"Error in SSE stream generator: {exc}")
+            yield f"event: error\ndata: {json.dumps({'error': 'telemetry unavailable'})}\n\n"
         await asyncio.sleep(2.0)
 
 

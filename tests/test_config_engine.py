@@ -124,3 +124,43 @@ def test_dvm_config_manager_mutual_exclusion_enforcement(tmp_path):
     # DMR must remain True, P25 must be forced to False
     assert loaded["protocols"]["dmr"]["enable"] is True
     assert loaded["protocols"]["p25"]["enable"] is False
+
+
+def test_frequency_port_serial_and_raw_config_validators():
+    from dvm_nexus.config_engine.network_validator import (
+        validate_frequencies,
+        validate_int_range,
+        validate_port,
+        validate_serial_port,
+        validate_raw_config,
+    )
+
+    # Frequencies in valid VHF/UHF/700-900 bands (MHz)
+    assert validate_frequencies(434.0, 439.0) == []
+    # Out-of-band frequencies rejected
+    freq_errs = validate_frequencies(50.0, 999.0)
+    assert len(freq_errs) == 2
+
+    # Range & port bounds
+    assert validate_int_range("RF Level", 100, 0, 100) == []
+    assert len(validate_int_range("RF Level", 150, 0, 100)) == 1
+    assert validate_port("REST API Port", 9990) == []
+    assert len(validate_port("REST API Port", 70000)) == 1
+
+    # Serial port path validation
+    assert validate_serial_port("/dev/ttyAMA0") == []
+    assert validate_serial_port("COM3") == []
+    assert len(validate_serial_port("invalid port!")) == 1
+
+    # Structural raw config validation
+    bad_cfg = {
+        "iAgreeNotToBeStupid": False,
+        "daemon": True,
+        "system": {},
+        "protocols": {"dmr": {"enable": True}, "p25": {"enable": True}},
+    }
+    raw_errs = validate_raw_config(bad_cfg)
+    assert any("iAgreeNotToBeStupid" in e for e in raw_errs)
+    assert any("daemon" in e for e in raw_errs)
+    assert any("HS_NO_DUAL_MODE" in e for e in raw_errs)
+

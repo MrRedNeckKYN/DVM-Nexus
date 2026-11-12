@@ -9,6 +9,7 @@ import os
 import io
 import wave
 import time
+import array
 import socket
 import select
 import struct
@@ -22,6 +23,37 @@ from dvm_nexus.core.database import get_db_connection, log_audit
 logger = logging.getLogger("dvm_nexus.meshtastic.voice_gateway")
 
 
+def _resample_pcm16_mono(pcm_bytes: bytes, src_rate: int = 22050, dst_rate: int = 8000) -> bytes:
+    """Resample 16-bit signed little-endian mono PCM from ``src_rate`` to ``dst_rate`` via linear interpolation."""
+    if not pcm_bytes or src_rate <= 0 or dst_rate <= 0 or src_rate == dst_rate:
+        return pcm_bytes
+    # Ensure even byte length for 16-bit samples
+    if len(pcm_bytes) % 2 != 0:
+        pcm_bytes = pcm_bytes[:-1]
+    src_samples = array.array("h")
+    src_samples.frombytes(pcm_bytes)
+    n_src = len(src_samples)
+    if n_src < 2:
+        return pcm_bytes
+    n_dst = max(1, int(n_src * dst_rate / src_rate))
+    ratio = (n_src - 1) / max(1, n_dst - 1)
+    dst_samples = array.array("h", [0] * n_dst)
+    for i in range(n_dst):
+        pos = i * ratio
+        idx = int(pos)
+        frac = pos - idx
+        if idx + 1 < n_src:
+            val = int(src_samples[idx] * (1.0 - frac) + src_samples[idx + 1] * frac)
+        else:
+            val = src_samples[idx]
+        if val > 32767:
+            val = 32767
+        elif val < -32768:
+            val = -32768
+        dst_samples[i] = val
+    return dst_samples.tobytes()
+
+
 class VoiceBridgeGateway:
     """Manages audio UDP streaming, offline STT (Whisper), and offline TTS (Piper)."""
 
@@ -30,11 +62,14 @@ class VoiceBridgeGateway:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
+        self._tts_lock = threading.Lock()
+        self._stt_lock = threading.Lock()
 
         # State tracking for UI
         self._state = "idle"  # idle, listening, transcribing, transmitting
         self._last_active_time = time.time()
         self._last_tts_time = 0.0
+        self._tts_active = False
         self._current_src_id = 0
         self._current_dst_id = 0
 
@@ -66,10 +101,19 @@ class VoiceBridgeGateway:
         finally:
             conn.close()
 
+    def _is_echo_locked(self, cfg: Optional[Dict[str, str]] = None) -> bool:
+        """True while TTS is actively transmitting or within the post-TX echo lockout window."""
+        if self._tts_active:
+            return True
+        if cfg is None:
+            cfg = self.get_config()
+        echo_lock = float(cfg.get("echo_lockout_sec", "3.0"))
+        return (time.time() - self._last_tts_time) < echo_lock
+
     def get_status(self) -> Dict[str, Any]:
         """Return runtime status for Web UI and live status pills."""
         cfg = self.get_config()
-        is_echo_locked = (time.time() - self._last_tts_time) < float(cfg.get("echo_lockout_sec", "3.0"))
+        is_echo_locked = self._is_echo_locked(cfg)
         return {
             "enabled": cfg.get("enabled", "0") == "1",
             "stt_enabled": cfg.get("stt_enabled", "1") == "1",
@@ -173,24 +217,32 @@ class VoiceBridgeGateway:
 
                     # Check Echo-Lockout Cooldown (prevent loopback while TTS is transmitting)
                     cfg = self.get_config()
-                    echo_lock = float(cfg.get("echo_lockout_sec", "3.0"))
-                    if (now - self._last_tts_time) < echo_lock:
+                    if self._is_echo_locked(cfg):
                         continue
 
                     # Parse dvmbridge audio packet
                     # dvmbridge metadata format (if enabled):
                     # Bytes 0-3: Tag/Magic or Seq, or direct 16-bit PCM samples
                     audio_payload = data
+                    usrp_eot = False
                     if len(data) >= 12 and data[:4] == b"DVMB":
                         # Custom metadata header: [4s: 'DVMB'][4B: srcId][4B: dstId]
                         src_id, dst_id = struct.unpack("!II", data[4:12])
                         audio_payload = data[12:]
-                    elif len(data) >= 12 and data[:4] == b"USRP":
-                        # USRP header is 32 bytes
-                        if len(data) > 32:
-                            audio_payload = data[32:]
+                    elif len(data) >= 32 and data[:4] == b"USRP":
+                        # USRP 32-byte header: [4s 'USRP'][seq][memory][keyup][talkgroup][type][mpxid][reserved]
+                        _seq, _mem, keyup, talkgroup, _pkt_type, mpxid, reserved = struct.unpack(">iiiiiii", data[4:32])
+                        if talkgroup > 0:
+                            dst_id = talkgroup
+                        if mpxid > 0:
+                            src_id = mpxid
+                        elif reserved > 0:
+                            src_id = reserved
+                        audio_payload = data[32:]
+                        if keyup == 0 and call_active:
+                            usrp_eot = True
 
-                    if len(audio_payload) > 0:
+                    if len(audio_payload) > 0 and not usrp_eot:
                         pcm_buffer.extend(audio_payload)
                         last_packet_time = now
                         if not call_active:
@@ -199,8 +251,8 @@ class VoiceBridgeGateway:
                             self._current_src_id = src_id
                             self._current_dst_id = dst_id
 
-                # Check for End of Transmission (silence / hangover exceeded)
-                if call_active and (now - last_packet_time) > silence_timeout:
+                # Check for End of Transmission (USRP keyup=0 or silence hangover exceeded)
+                if call_active and (usrp_eot if (ready[0] and len(data) >= 32 and data[:4] == b"USRP") else False or (now - last_packet_time) > silence_timeout):
                     call_active = False
                     self._state = "transcribing"
                     audio_to_process = bytes(pcm_buffer)
@@ -260,7 +312,10 @@ class VoiceBridgeGateway:
 
             # Send via Meshtastic Manager
             if self._manager:
-                self._manager.send_text(mesh_msg, channel_index=mesh_channel)
+                if hasattr(self._manager, "send_message"):
+                    self._manager.send_message(mesh_msg, recipient="^all", channel=mesh_channel)
+                elif hasattr(self._manager, "send_text"):
+                    self._manager.send_text(mesh_msg, channel_index=mesh_channel)
 
             self.log_activity(
                 direction="radio_to_mesh",
@@ -280,37 +335,38 @@ class VoiceBridgeGateway:
             self._state = "idle"
 
     def transcribe_audio(self, pcm_bytes: bytes) -> str:
-        """Run speech-to-text using faster-whisper or fallback."""
+        """Run speech-to-text using faster-whisper or fallback (serialized via _stt_lock)."""
         cfg = self.get_config()
         model_name = cfg.get("whisper_model", "tiny.en")
 
-        try:
-            from faster_whisper import WhisperModel
-            if self._whisper_model is None or self._whisper_model_name != model_name:
-                logger.info(f"Loading faster-whisper model: {model_name}")
-                self._whisper_model = WhisperModel(model_name, device="cpu", compute_type="int8")
-                self._whisper_model_name = model_name
+        with self._stt_lock:
+            try:
+                from faster_whisper import WhisperModel
+                if self._whisper_model is None or self._whisper_model_name != model_name:
+                    logger.info(f"Loading faster-whisper model: {model_name}")
+                    self._whisper_model = WhisperModel(model_name, device="cpu", compute_type="int8")
+                    self._whisper_model_name = model_name
 
-            # Convert 8kHz PCM to in-memory WAV for Whisper
-            wav_io = io.BytesIO()
-            with wave.open(wav_io, "wb") as wav:
-                wav.setnchannels(1)
-                wav.setsampwidth(2)
-                wav.setframerate(8000)
-                wav.writeframes(pcm_bytes)
-            wav_io.seek(0)
+                # Convert 8kHz PCM to in-memory WAV for Whisper
+                wav_io = io.BytesIO()
+                with wave.open(wav_io, "wb") as wav:
+                    wav.setnchannels(1)
+                    wav.setsampwidth(2)
+                    wav.setframerate(8000)
+                    wav.writeframes(pcm_bytes)
+                wav_io.seek(0)
 
-            segments, _ = self._whisper_model.transcribe(wav_io, beam_size=1, language="en")
-            transcription = " ".join([seg.text.strip() for seg in segments])
-            return transcription
+                segments, _ = self._whisper_model.transcribe(wav_io, beam_size=1, language="en")
+                transcription = " ".join([seg.text.strip() for seg in segments])
+                return transcription
 
-        except ImportError:
-            # Graceful simulation fallback when faster-whisper is not yet installed in host env
-            logger.warning("faster-whisper is not installed. Using simulation mode.")
-            return "[Voice Audio Received]"
-        except Exception as e:
-            logger.error(f"Error in Whisper transcription: {e}")
-            return ""
+            except ImportError:
+                # Graceful simulation fallback when faster-whisper is not yet installed in host env
+                logger.warning("faster-whisper is not installed. Using simulation mode.")
+                return "[Voice Audio Received]"
+            except Exception as e:
+                logger.error(f"Error in Whisper transcription: {e}")
+                return ""
 
     # --------------------------------------------------------------------------
     # TTS: Meshtastic Text -> Radio Voice
@@ -340,61 +396,69 @@ class VoiceBridgeGateway:
         return True
 
     def _synthesize_and_transmit_tts(self, sender_id: str, sender_name: str, text: str, channel: int):
-        """Synthesize text using Piper TTS and stream 8kHz PCM to dvmbridge."""
-        try:
-            self._state = "transmitting"
-            self._last_tts_time = time.time()
-            cfg = self.get_config()
-            target_tg = int(cfg.get("voice_talkgroup", "99"))
-            tx_port = int(cfg.get("udp_tx_port", "32001"))
-            tx_host = cfg.get("udp_host", "127.0.0.1")
+        """Synthesize text using Piper TTS and stream 8kHz PCM to dvmbridge (serialized via _tts_lock)."""
+        with self._tts_lock:
+            sock = None
+            try:
+                self._tts_active = True
+                self._state = "transmitting"
+                self._last_tts_time = time.time()
+                cfg = self.get_config()
+                target_tg = int(cfg.get("voice_talkgroup", "99"))
+                tx_port = int(cfg.get("udp_tx_port", "32001"))
+                tx_host = cfg.get("udp_host", "127.0.0.1")
 
-            spoken_text = f"{sender_name} says: {text}"
-            pcm_data = self.synthesize_speech(spoken_text)
+                spoken_text = f"{sender_name} says: {text}"
+                pcm_data = self.synthesize_speech(spoken_text)
 
-            if not pcm_data:
-                return
+                if not pcm_data:
+                    return
 
-            # Transmit UDP PCM frames in 20ms chunks (160 samples = 320 bytes @ 8kHz 16-bit mono)
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            chunk_size = 320
-            duration = len(pcm_data) / (8000 * 2)
+                # Transmit UDP PCM frames in 20ms chunks (160 samples = 320 bytes @ 8kHz 16-bit mono)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                chunk_size = 320
+                duration = len(pcm_data) / (8000 * 2)
 
-            for i in range(0, len(pcm_data), chunk_size):
-                chunk = pcm_data[i:i + chunk_size]
-                if len(chunk) < chunk_size:
-                    chunk = chunk + b"\x00" * (chunk_size - len(chunk))
+                for i in range(0, len(pcm_data), chunk_size):
+                    chunk = pcm_data[i:i + chunk_size]
+                    if len(chunk) < chunk_size:
+                        chunk = chunk + b"\x00" * (chunk_size - len(chunk))
 
-                # Prefix dvmbridge metadata header: [4B 'DVMB'][4B srcId=9000000][4B dstId=target_tg]
-                header = struct.pack("!4sII", b"DVMB", 9000000, target_tg)
-                sock.sendto(header + chunk, (tx_host, tx_port))
-                time.sleep(0.019)  # 20ms pacing
+                    # Prefix dvmbridge metadata header: [4B 'DVMB'][4B srcId=9000000][4B dstId=target_tg]
+                    header = struct.pack("!4sII", b"DVMB", 9000000, target_tg)
+                    sock.sendto(header + chunk, (tx_host, tx_port))
+                    self._last_tts_time = time.time()
+                    time.sleep(0.019)  # 20ms pacing
 
-            sock.close()
-            self._last_tts_time = time.time()
+                self.log_activity(
+                    direction="mesh_to_radio",
+                    protocol=cfg.get("protocol", "dmr"),
+                    text=text,
+                    radio_src_id=9000000,
+                    radio_dest_id=target_tg,
+                    mesh_node_id=sender_id,
+                    mesh_channel=channel,
+                    duration_sec=round(duration, 2),
+                    status="completed"
+                )
+                logger.info(f"VoiceBridge TTS -> Radio TG {target_tg}: '{spoken_text}' ({duration:.1f}s)")
 
-            self.log_activity(
-                direction="mesh_to_radio",
-                protocol=cfg.get("protocol", "dmr"),
-                text=text,
-                radio_src_id=9000000,
-                radio_dest_id=target_tg,
-                mesh_node_id=sender_id,
-                mesh_channel=channel,
-                duration_sec=round(duration, 2),
-                status="completed"
-            )
-            logger.info(f"VoiceBridge TTS -> Radio TG {target_tg}: '{spoken_text}' ({duration:.1f}s)")
-
-        except Exception as e:
-            logger.error(f"VoiceBridge TTS playback failed: {e}")
-        finally:
-            self._state = "idle"
+            except Exception as e:
+                logger.error(f"VoiceBridge TTS playback failed: {e}")
+            finally:
+                if sock is not None:
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+                self._last_tts_time = time.time()
+                self._tts_active = False
+                self._state = "idle"
 
     def synthesize_speech(self, text: str) -> bytes:
-        """Synthesize text to 8kHz 16-bit mono PCM using Piper or fallback tone."""
+        """Synthesize text to 8kHz 16-bit mono PCM using Piper (downsampled from 22.05kHz) or fallback tone."""
         try:
-            # Check for piper python library or binary
+            # Check for piper python library or binary (en_US-lessac-medium outputs 22050 Hz 16-bit mono PCM)
             import subprocess
             res = subprocess.run(
                 ["piper", "--output_raw", "--model", "en_US-lessac-medium"],
@@ -403,7 +467,7 @@ class VoiceBridgeGateway:
                 timeout=5
             )
             if res.returncode == 0 and res.stdout:
-                return res.stdout
+                return _resample_pcm16_mono(res.stdout, src_rate=22050, dst_rate=8000)
         except Exception:
             pass
 

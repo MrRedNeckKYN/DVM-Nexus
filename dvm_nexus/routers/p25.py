@@ -10,7 +10,9 @@ from typing import List, Dict, Any, Optional
 
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
-from dvm_nexus.config_engine.network_validator import validate_p25_settings
+from dvm_nexus.config_engine.network_validator import (
+    validate_p25_settings, validate_frequencies, validate_int_range, validate_port,
+)
 from dvm_nexus.config_engine.iden_calculator import (
     read_iden_table_file,
     format_iden_table,
@@ -69,6 +71,7 @@ async def p25_page(request: Request):
             "active_rx_mhz": rx_freq_mhz,
             "talkgroups": talkgroups,
             "rids": rids,
+            "config_rev": dvm_config_manager.get_config_revision(),
         }
     )
 
@@ -133,8 +136,16 @@ async def p25_save(
     adf_gain_mode: int = Form(2),
     afc_enable: bool = Form(True),
     tx_level: int = Form(50),
+    config_rev: str = Form(""),
 ):
     """Save comprehensive P25 parameters safely, preserving profile settings without breaking standby mode."""
+    if config_rev and config_rev != dvm_config_manager.get_config_revision():
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": "Not saved: config.yml changed since this page was loaded (another tab/user, auto-repair or a restore). Reload the page to see the latest values, then re-apply your edit."}
+        )
+
     errors = validate_p25_settings({
         "nac": nac,
         "netId": wacn,
@@ -142,11 +153,17 @@ async def p25_save(
         "rfssId": rfss_id,
         "siteId": site_id,
     })
+    errors += validate_frequencies(tx_freq_mhz, rx_freq_mhz)
+    errors += validate_int_range("TX level", tx_level, 0, 100)
+    errors += validate_int_range("CW ID interval", cw_id_time, 1, 1440)
+    errors += validate_int_range("Call hang time", call_hang, 0, 600)
+    if net_enable:
+        errors += validate_port("Network port", net_port)
     if errors:
         return render_template(
             request,
             "components/toast.html",
-            {"type": "error", "message": "; ".join(errors)}
+            {"type": "error", "message": "Not saved - " + "; ".join(errors)}
         )
 
     if not duplex:
@@ -246,12 +263,12 @@ async def p25_save(
 
     log_audit("P25", "SAVE_CONFIG", f"Updated active P25 parameters: NAC={nac}, WACN={wacn}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz")
 
-    msg = f"✓ P25 settings auto-saved to active config! (TX: {tx_freq_mhz} MHz, NAC: {nac})"
+    msg = f"✓ P25 settings saved to active config (TX: {tx_freq_mhz} MHz, NAC: {nac}). Restart the radio to apply."
 
     return render_template(
         request,
-        "components/toast.html",
-        {"type": "success", "message": msg}
+        "components/toast_saved.html",
+        {"type": "success", "message": msg, "config_rev": dvm_config_manager.get_config_revision()}
     )
 
 

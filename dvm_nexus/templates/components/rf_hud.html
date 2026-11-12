@@ -1,11 +1,15 @@
 <div class="rf-hud-widget" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--shadow-sm);">
+  {% set svc_down = (hud.service_running is sameas false) %}
+  {% set ber = hud.ber_percent if (hud.ber_percent is number) else none %}
   <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
-    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem; min-width: 0;">
       <span style="font-size: 1.25rem;">📡</span>
-      <div>
+      <div style="min-width: 0;">
         <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.75px; color: var(--text-dim); font-weight: 600;">Live RF Transceiver Telemetry</div>
         <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-bright);">
-          {% if hud.state == 'RX' %}
+          {% if svc_down %}
+            <span style="color: var(--accent-danger);">⛔ DVMHost stopped &bull; no RF activity</span>
+          {% elif hud.state == 'RX' %}
             <span style="color: var(--accent-cyan);">🎙️ RF Receiving &bull; {{ hud.protocol }}</span>
           {% elif hud.state == 'TX' %}
             <span style="color: var(--accent-danger);">📻 Transmitting (Repeater Keyed) &bull; {{ hud.protocol }}</span>
@@ -17,8 +21,10 @@
     </div>
 
     <!-- Live Status Pill with Animation -->
-    <div style="display: flex; align-items: center; gap: 0.5rem;">
-      {% if hud.state == 'RX' %}
+    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+      {% if svc_down %}
+        <span class="badge badge-danger" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">● SERVICE STOPPED</span>
+      {% elif hud.state == 'RX' %}
         <span class="badge badge-warning" style="animation: pulse 1s infinite; font-size: 0.85rem; padding: 0.4rem 0.8rem;">
           ● ACTIVE CALL IN PROGRESS
         </span>
@@ -28,7 +34,7 @@
         </span>
       {% else %}
         <span class="badge badge-success" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">
-          ● CARRIER SQUELCH OPEN
+          ● IDLE &bull; CHANNEL CLEAR
         </span>
       {% endif %}
       <span class="badge badge-secondary" style="font-size: 0.75rem;">Auto-Sync 1.5s</span>
@@ -36,13 +42,13 @@
   </div>
 
   <!-- HUD Grid: Active Talker, Target TG, Slot Activity, Signal & Quality -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; background: var(--bg-surface-2); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
-    
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 0.75rem; background: var(--bg-surface-2); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+
     <!-- Active Talker -->
-    <div>
+    <div style="min-width: 0;">
       <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">CURRENT TALKER</div>
       <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--accent-cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-        {% if hud.source_id %}
+        {% if hud.source_id and hud.state in ('RX', 'TX') %}
           {{ hud.source_alias or 'Radio' }} ({{ hud.source_id }})
         {% else %}
           <span style="color: var(--text-dim); font-weight: normal;">None (Standby)</span>
@@ -54,8 +60,8 @@
     <div>
       <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">TARGET TALKGROUP</div>
       <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--text-bright);">
-        {% if hud.dest_id %}
-          TG {{ hud.dest_id }} <span style="font-size: 0.75rem; color: var(--text-dim);">({{ hud.call_type|default('Group') }})</span>
+        {% if hud.dest_id and hud.state in ('RX', 'TX') %}
+          TG {{ hud.dest_id }} <span style="font-size: 0.75rem; color: var(--text-dim);">({{ hud.call_type or 'Group' }})</span>
         {% else %}
           <span style="color: var(--text-dim); font-weight: normal;">--</span>
         {% endif %}
@@ -75,31 +81,41 @@
       </div>
     </div>
 
-    <!-- Signal & BER Quality -->
+    <!-- Signal & BER Quality (last call) -->
     <div>
       <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">RF SIGNAL &amp; QUALITY</div>
       <div style="font-size: 0.85rem; font-weight: 600;">
-        {% if hud.rssi_dbm %}
+        {% if hud.rssi_dbm is number %}
           <span style="color: var(--accent-emerald);">{{ hud.rssi_dbm }} dBm</span>
         {% else %}
           <span style="color: var(--text-dim);">-- dBm</span>
         {% endif %}
         &bull;
-        <span style="color: {% if hud.ber_percent is not none and hud.ber_percent < 1.0 %}var(--accent-emerald){% elif hud.ber_percent is not none and hud.ber_percent < 3.0 %}var(--warning){% else %}var(--accent-danger){% endif %};">
-          BER: {{ hud.ber_percent|default(0.0) }}%
-        </span>
+        {% if ber is not none %}
+          <span style="color: {% if ber < 1.0 %}var(--accent-emerald){% elif ber < 3.0 %}var(--warning){% else %}var(--accent-danger){% endif %};">
+            BER: {{ '%.1f'|format(ber) }}%
+          </span>
+        {% else %}
+          <span style="color: var(--text-dim);">BER: --</span>
+        {% endif %}
       </div>
     </div>
 
-    <!-- Modem Hardware Registers -->
+    <!-- Modem Hardware Registers (only shown when DVMHost REST telemetry is live) -->
     <div>
       <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">MODEM HARDWARE</div>
       <div style="font-size: 0.8rem; color: var(--text-dim);">
-        Overf: 
-        <span style="color: {% if (hud.adc_overflow|default(0)) > 0 or (hud.dac_overflow|default(0)) > 0 %}var(--accent-danger){% else %}var(--accent-emerald){% endif %};">
-          A:{{ hud.adc_overflow|default(0) }} D:{{ hud.dac_overflow|default(0) }}
-        </span>
-        &bull; Buf: <span class="font-mono">{{ hud.dmr_free_space|default(0) }}B</span>
+        {% if hud.rest_ok and hud.adc_overflow is not none %}
+          Overf:
+          <span style="color: {% if hud.adc_overflow > 0 or (hud.dac_overflow or 0) > 0 %}var(--accent-danger){% else %}var(--accent-emerald){% endif %};">
+            A:{{ hud.adc_overflow }} D:{{ hud.dac_overflow if hud.dac_overflow is not none else '--' }}
+          </span>
+          {% if hud.dmr_free_space is not none %}&bull; Buf: <span class="font-mono">{{ hud.dmr_free_space }}B</span>{% endif %}
+        {% elif svc_down %}
+          Service stopped
+        {% else %}
+          <span title="DVMHost REST API is not answering, so live modem registers are unavailable.">Telemetry unavailable</span>
+        {% endif %}
       </div>
     </div>
 

@@ -1,0 +1,160 @@
+<div id="voice-bridge-container">
+  <div class="card" style="border-left: 4px solid var(--accent-cyan); margin-bottom: 1.5rem;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <div class="card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+          <span>🎙️</span> Bidirectional Voice Bridge (STT &bull; TTS)
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          Transcribes incoming DMR / P25 voice traffic to Meshtastic via offline <code>faster-whisper</code>, and reads incoming mesh messages out loud over the air via offline <code>piper-tts</code>.
+        </div>
+      </div>
+      <div id="voice-bridge-status-badge">
+        {% if voice_status.enabled %}
+          {% if voice_status.state == 'listening' %}
+            <span class="badge badge-warning" style="animation: pulse 1s infinite;">
+              <span class="status-dot">●</span> 🎙️ RX VOICE DETECTED (RID {{ voice_status.current_src_id }})
+            </span>
+          {% elif voice_status.state == 'transcribing' %}
+            <span class="badge badge-warning">
+              <span class="status-dot">⚙️</span> TRANSCRIBING AUDIO...
+            </span>
+          {% elif voice_status.state == 'transmitting' %}
+            <span class="badge badge-danger" style="animation: pulse 1s infinite;">
+              <span class="status-dot">●</span> 📻 TX TTS TO RADIO (TG {{ voice_status.voice_talkgroup }})
+            </span>
+          {% else %}
+            <span class="badge badge-success">
+              <span class="status-dot">●</span> READY &bull; LISTENING ON TG {{ voice_status.voice_talkgroup }}
+            </span>
+          {% endif %}
+        {% else %}
+          <span class="badge badge-muted">
+            <span class="status-dot">■</span> BRIDGE DISABLED
+          </span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Configuration Form -->
+    <form hx-post="/meshtastic/voice-bridge/save" hx-target="#voice-bridge-container" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+        
+        <!-- Master Enable / Disable -->
+        <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <label class="form-label" style="font-weight: 600; color: var(--accent-cyan);">Master Voice Bridge State</label>
+          <select name="enabled" class="form-control" style="font-weight: 600;">
+            <option value="1" {% if voice_cfg.enabled == '1' %}selected{% endif %}>🟢 Active &bull; Running Audio Listener</option>
+            <option value="0" {% if voice_cfg.enabled != '1' %}selected{% endif %}>⚪ Disabled</option>
+          </select>
+          <span style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; display: block;">
+            Enables background PCM socket to <code>dvmbridge</code>.
+          </span>
+        </div>
+
+        <!-- Directional Feature Toggles -->
+        <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <label class="form-label" style="font-weight: 600; color: var(--accent-cyan);">Feature Engines</label>
+          <div style="display: flex; gap: 0.75rem; margin-top: 0.4rem; flex-wrap: wrap;">
+            <label style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; min-height: 36px; padding: 0.25rem 0.4rem;">
+              <input type="checkbox" name="stt_enabled" value="1" {% if voice_cfg.stt_enabled == '1' %}checked{% endif %} style="width: 18px; height: 18px;">
+              <span>🎙️ Voice &rarr; Text (STT)</span>
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; min-height: 36px; padding: 0.25rem 0.4rem;">
+              <input type="checkbox" name="tts_enabled" value="1" {% if voice_cfg.tts_enabled == '1' %}checked{% endif %} style="width: 18px; height: 18px;">
+              <span>📻 Text &rarr; Speech (TTS)</span>
+            </label>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.35rem; display: block;">
+            Operate either or both translation directions.
+          </span>
+        </div>
+
+        <!-- Dedicated Voice Talkgroup -->
+        <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <label class="form-label" style="font-weight: 600;">Dedicated Voice Bridge Talkgroup</label>
+          <input type="number" name="voice_talkgroup" class="form-control" value="{{ voice_cfg.voice_talkgroup|default('99') }}" min="1" max="16777215" required>
+          <span style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; display: block;">
+            Radio calls on this TG are transcribed; TTS audio keys up on this TG.
+          </span>
+        </div>
+
+        <!-- Target Mesh Channel -->
+        <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <label class="form-label" style="font-weight: 600;">Meshtastic Target Channel</label>
+          <select name="mesh_channel" class="form-control">
+            <option value="0" {% if voice_cfg.mesh_channel == '0' %}selected{% endif %}>Channel 0 (Primary Public)</option>
+            <option value="1" {% if voice_cfg.mesh_channel == '1' %}selected{% endif %}>Channel 1 (Secondary)</option>
+            <option value="2" {% if voice_cfg.mesh_channel == '2' %}selected{% endif %}>Channel 2</option>
+            <option value="3" {% if voice_cfg.mesh_channel == '3' %}selected{% endif %}>Channel 3</option>
+          </select>
+          <span style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; display: block;">
+            The mesh channel used for inbound text and outbound voice transcripts.
+          </span>
+        </div>
+
+        <!-- Whisper Model Size -->
+        <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <label class="form-label" style="font-weight: 600;">Whisper STT Model Size</label>
+          <select name="whisper_model" class="form-control">
+            <option value="tiny.en" {% if voice_cfg.whisper_model == 'tiny.en' %}selected{% endif %}>tiny.en (~75MB - Fastest, ~180ms latency on Pi 5)</option>
+            <option value="base.en" {% if voice_cfg.whisper_model == 'base.en' %}selected{% endif %}>base.en (~140MB - Higher accuracy)</option>
+          </select>
+          <span style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; display: block;">
+            Quantized <code>int8</code> inference runs 100% locally offline.
+          </span>
+        </div>
+
+        <!-- Echo Lockout & Audio UDP Ports -->
+        <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <label class="form-label" style="font-weight: 600;">Echo Lockout &amp; dvmbridge Ports</label>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="number" step="0.5" min="0" max="30" name="echo_lockout_sec" class="form-control" value="{{ voice_cfg.echo_lockout_sec|default('3.0') }}" title="Echo Lockout (Sec)" placeholder="Echo Lock (s)" required>
+            <input type="number" min="1024" max="65535" name="udp_rx_port" class="form-control" value="{{ voice_cfg.udp_rx_port|default('34001') }}" title="UDP RX Port" placeholder="RX Port" required>
+            <input type="number" min="1024" max="65535" name="udp_tx_port" class="form-control" value="{{ voice_cfg.udp_tx_port|default('32001') }}" title="UDP TX Port" placeholder="TX Port" required>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; display: block;">
+            Echo lockout cooldown prevents duplex hat TX from re-triggering Whisper STT.
+          </span>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <span style="font-size: 0.8rem; color: var(--text-dim);">
+          🛡️ Automatic rate-limiting and payload truncation (&le;200 bytes) active.
+        </span>
+        <button type="submit" class="btn btn-primary" onclick="this.classList.add('btn-loading');">
+          💾 Save Voice Bridge Settings
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Simulation / Test Card -->
+  <div class="card" style="background: var(--bg-secondary); border-left: 4px solid var(--accent-emerald); margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+      <div style="font-weight: 700; color: var(--text-bright);">⚡ Test Voice Bridge Simulation</div>
+      <span style="font-size: 0.75rem; color: var(--text-dim);">Injects an over-the-air voice frame to test Whisper &bull; Meshtastic dispatch</span>
+    </div>
+    <form hx-post="/meshtastic/voice-bridge/simulate-rx" hx-target="#voice-bridge-logs-card" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+      <div style="flex: 1; min-width: 120px;">
+        <label class="form-label" style="font-size: 0.75rem;">Caller Radio ID</label>
+        <input type="number" name="src_id" class="form-control" value="1001" required>
+      </div>
+      <div style="flex: 1; min-width: 120px;">
+        <label class="form-label" style="font-size: 0.75rem;">Talkgroup</label>
+        <input type="number" name="talkgroup" class="form-control" value="{{ voice_cfg.voice_talkgroup|default('99') }}" required>
+      </div>
+      <div style="flex: 3; min-width: 240px;">
+        <label class="form-label" style="font-size: 0.75rem;">Spoken Message Phrase</label>
+        <input type="text" name="phrase" class="form-control" value="Testing voice to text bridge on Talkgroup 99." required>
+      </div>
+      <button type="submit" class="btn btn-secondary" onclick="this.classList.add('btn-loading');">
+        🎙️ Simulate Voice Call
+      </button>
+    </form>
+  </div>
+
+  <!-- Real-time Activity Log Table -->
+  {% include "components/meshtastic_voice_logs.html" %}
+</div>

@@ -13,6 +13,7 @@ from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.backup_manager import backup_manager
 from dvm_nexus.config_engine.diff_engine import generate_unified_diff, generate_structured_diff
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+from dvm_nexus.config_engine.network_validator import validate_raw_config, validate_port
 from dvm_nexus.core.service_controller import service_controller
 from dvm_nexus.core.database import log_audit
 
@@ -60,6 +61,13 @@ async def config_api_settings_save(
     rpc_password: str = Form("ULTRA-VERY-SECURE-DEFAULT"),
 ):
     """Save DVMHost REST and RPC API connection settings directly to active config."""
+    port_errors = validate_port("REST port", rest_port) + validate_port("RPC port", rpc_port)
+    if port_errors:
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": "Not saved - " + "; ".join(port_errors)}
+        )
     conf = dvm_config_manager.load_config_dict()
     if "network" not in conf or not isinstance(conf["network"], dict):
         conf["network"] = {}
@@ -156,14 +164,22 @@ async def config_rollback(request: Request, revision_id: int):
 
 @router.post("/config/raw-save", response_class=HTMLResponse)
 async def config_raw_save(request: Request, raw_content: str = Form(...)):
-    """Validate and atomically save raw YAML with backup."""
+    """Validate (syntax + structure) and atomically save raw YAML with backup."""
     try:
-        yaml.safe_load(raw_content)
+        parsed = yaml.safe_load(raw_content)
     except yaml.YAMLError as exc:
         return render_template(
             request,
             "components/toast.html",
             {"type": "error", "message": f"YAML Syntax Error: {exc}"}
+        )
+
+    problems = validate_raw_config(parsed)
+    if problems:
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": "Not saved - " + "; ".join(problems)}
         )
 
     backup_manager.create_backup(summary="Manual raw YAML edit", changed_files=["config.yml"])

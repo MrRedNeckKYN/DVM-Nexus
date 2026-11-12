@@ -239,6 +239,10 @@ async def websocket_terminal(websocket: WebSocket):
             pass
         try:
             proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=1.5)
+            except asyncio.TimeoutError:
+                proc.kill()
         except Exception:
             pass
     else:

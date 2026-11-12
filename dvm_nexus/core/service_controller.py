@@ -7,10 +7,14 @@ import subprocess
 import shutil
 import time
 import os
+import logging
 import psutil
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dvm_nexus.core.config import settings
 from dvm_nexus.core.database import log_audit
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceController:
@@ -27,6 +31,18 @@ class ServiceController:
         self._cached_status: Optional[Dict[str, Any]] = None
         self._status_timestamp: float = 0.0
         self._status_ttl: float = 3.5  # seconds
+
+    @staticmethod
+    def _config_pending_restart(main_pid: Optional[int]) -> bool:
+        """True when config.yml was modified after the running dvmhost process started."""
+        try:
+            if not main_pid:
+                return False
+            started = psutil.Process(int(main_pid)).create_time()
+            cfg = Path(settings.dvm_dir) / "config.yml"
+            return cfg.exists() and cfg.stat().st_mtime > (started + 2.0)
+        except Exception:
+            return False
 
     def get_status(self, force: bool = False) -> Dict[str, Any]:
         """Query service status and PID with short in-memory cache to optimize UI polling."""
@@ -57,6 +73,7 @@ class ServiceController:
                 "exit_result": "exit-code" if self._dev_simulated_failed else None,
                 "is_systemd": False,
                 "simulated": True,
+                "config_pending_restart": self._config_pending_restart(pids[0] if pids else None),
             }
             self._cached_status = res
             self._status_timestamp = now
@@ -126,6 +143,7 @@ class ServiceController:
                 "active_since": props.get("ActiveEnterTimestamp", ""),
                 "is_systemd": True,
                 "simulated": False,
+                "config_pending_restart": bool(is_running and self._config_pending_restart(main_pid)),
             }
             self._cached_status = status_dict
             self._status_timestamp = now
@@ -156,7 +174,7 @@ class ServiceController:
             from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
             dvm_config_manager.ensure_active_config_exists()
         except Exception:
-            pass
+            logger.exception("Preflight: could not ensure active config exists")
 
         try:
             if os.name != "nt":
@@ -176,7 +194,7 @@ class ServiceController:
                         subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True, check=False)
                         log_audit("SERVICE", "SYSTEMD_FIX", "Installed Type=simple dvmhost.service unit to prevent startup timeouts")
         except Exception:
-            pass
+            logger.exception("Preflight: systemd unit self-heal failed")
 
     def start(self) -> Dict[str, Any]:
         """Start the dvmhost service."""

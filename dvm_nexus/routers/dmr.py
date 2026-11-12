@@ -10,7 +10,9 @@ from typing import List, Dict, Any, Optional
 
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
-from dvm_nexus.config_engine.network_validator import validate_dmr_settings
+from dvm_nexus.config_engine.network_validator import (
+    validate_dmr_settings, validate_frequencies, validate_int_range, validate_port,
+)
 from dvm_nexus.core.dvm_client import dvm_client
 from dvm_nexus.core.service_controller import service_controller
 from dvm_nexus.core.database import log_audit
@@ -60,6 +62,7 @@ async def dmr_page(request: Request):
             "rx_freq_mhz": rx_freq_mhz,
             "talkgroups": talkgroups,
             "rids": rids,
+            "config_rev": dvm_config_manager.get_config_revision(),
         }
     )
 
@@ -117,14 +120,30 @@ async def dmr_save(
     afc_enable: bool = Form(True),
     dmr_rx_delay: int = Form(7),
     tx_level: int = Form(50),
+    config_rev: str = Form(""),
 ):
     """Save comprehensive DMR parameters safely, preserving profile settings without breaking standby mode."""
+    if config_rev and config_rev != dvm_config_manager.get_config_revision():
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": "Not saved: config.yml changed since this page was loaded (another tab/user, auto-repair or a restore). Reload the page to see the latest values, then re-apply your edit."}
+        )
+
     errors = validate_dmr_settings({"colorCode": color_code, "dmrNetId": dmr_net_id, "siteId": site_id})
+    errors += validate_frequencies(tx_freq_mhz, rx_freq_mhz)
+    errors += validate_int_range("TX level", tx_level, 0, 100)
+    errors += validate_int_range("Jitter buffer", jitter, 0, 5000)
+    errors += validate_int_range("CW ID interval", cw_id_time, 1, 1440)
+    errors += validate_int_range("Call hang time", call_hang, 0, 600)
+    errors += validate_int_range("TX hang time", tx_hang, 0, 600)
+    if net_enable:
+        errors += validate_port("Network port", net_port)
     if errors:
         return render_template(
             request,
             "components/toast.html",
-            {"type": "error", "message": "; ".join(errors)}
+            {"type": "error", "message": "Not saved - " + "; ".join(errors)}
         )
 
     if not duplex:
@@ -215,12 +234,12 @@ async def dmr_save(
 
     log_audit("DMR", "SAVE_CONFIG", f"Updated active DMR parameters: CC={color_code}, NetID={dmr_net_id}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz")
 
-    msg = f"✓ DMR settings auto-saved to active config! (TX: {tx_freq_mhz} MHz, CC: {color_code})"
+    msg = f"✓ DMR settings saved to active config (TX: {tx_freq_mhz} MHz, CC: {color_code}). Restart the radio to apply."
 
     return render_template(
         request,
-        "components/toast.html",
-        {"type": "success", "message": msg}
+        "components/toast_saved.html",
+        {"type": "success", "message": msg, "config_rev": dvm_config_manager.get_config_revision()}
     )
 
 

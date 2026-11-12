@@ -65,7 +65,7 @@ print('Seeded profiles:', [p['id'] for p in pm.list_profiles()])
 "
 
 # Ensure permissions on /opt/dvm so dvmhost can write logs and state files
-chmod -R a+rwX "${DVM_DIR}" 2>/dev/null || true
+chmod -R u+rwX,g+rwX,o-rwx "${DVM_DIR}" 2>/dev/null || true
 if id "dvmhost" &>/dev/null; then
     chown -R dvmhost:dvmhost "${DVM_DIR}" 2>/dev/null || true
 fi

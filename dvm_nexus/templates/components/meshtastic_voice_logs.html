@@ -1,0 +1,99 @@
+<div id="voice-bridge-logs-card" class="card" hx-get="/meshtastic/voice-bridge/logs" hx-trigger="every 5s [document.visibilityState==='visible']" hx-target="#voice-bridge-logs-card" hx-swap="outerHTML scroll:none">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="card-title">📜 Real-time Voice Bridge Activity Feed</div>
+    <span style="font-size: 0.75rem; color: var(--text-dim);">Live Auto-Refresh (5s)</span>
+  </div>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Direction</th>
+          <th>Proto</th>
+          <th>Radio (Src &rarr; Dest)</th>
+          <th>Mesh (Node / Ch)</th>
+          <th>Message Text &bull; Transcript</th>
+          <th>Duration</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if voice_logs and voice_logs|length > 0 %}
+          {% for log in voice_logs %}
+            <tr>
+              <td style="font-size: 0.8rem; color: var(--text-dim); white-space: nowrap;">
+                {{ (log.timestamp|string)[11:19] }}
+              </td>
+              <td>
+                {% if log.direction == 'radio_to_mesh' %}
+                  <span class="badge badge-cyan" style="font-size: 0.75rem;">🎙️ Radio &rarr; Mesh (STT)</span>
+                {% else %}
+                  <span class="badge badge-warning" style="font-size: 0.75rem;">📻 Mesh &rarr; Radio (TTS)</span>
+                {% endif %}
+              </td>
+              <td><span class="badge badge-secondary" style="font-size: 0.7rem;">{{ log.protocol|upper }}</span></td>
+              <td style="font-family: monospace; font-size: 0.8rem;">
+                {{ log.radio_src_id }} &rarr; TG {{ log.radio_dest_id }}
+              </td>
+              <td style="font-size: 0.8rem; color: var(--text-muted);">
+                Ch {{ log.mesh_channel }} ({{ log.mesh_node_id }})
+              </td>
+              <td style="font-size: 0.85rem; max-width: 280px; word-break: break-word;">
+                <strong>{{ log.text }}</strong>
+              </td>
+              <td style="font-size: 0.8rem; color: var(--text-dim); white-space: nowrap;">
+                {{ log.duration_sec }}s
+              </td>
+              <td>
+                <span class="badge badge-success" style="font-size: 0.75rem;">{{ log.status }}</span>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+              No voice bridge events recorded yet. Key up on Talkgroup {{ voice_cfg.voice_talkgroup|default('99') }} or send a mesh message to test!
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if oob_status %}
+  <div id="voice-bridge-status-badge" hx-swap-oob="true">
+    {% if voice_status.enabled %}
+      {% if voice_status.state == 'listening' %}
+        <span class="badge badge-warning" style="animation: pulse 1s infinite;">
+          <span class="status-dot">●</span> 🎙️ RX VOICE DETECTED (RID {{ voice_status.current_src_id }})
+        </span>
+      {% elif voice_status.state == 'transcribing' %}
+        <span class="badge badge-warning">
+          <span class="status-dot">⚙️</span> TRANSCRIBING AUDIO...
+        </span>
+      {% elif voice_status.state == 'transmitting' %}
+        <span class="badge badge-danger" style="animation: pulse 1s infinite;">
+          <span class="status-dot">●</span> 📻 TX TTS TO RADIO (TG {{ voice_status.voice_talkgroup }})
+        </span>
+      {% else %}
+        <span class="badge badge-success">
+          <span class="status-dot">●</span> READY &bull; LISTENING ON TG {{ voice_status.voice_talkgroup }}
+        </span>
+      {% endif %}
+    {% else %}
+      <span class="badge badge-muted">
+        <span class="status-dot">■</span> BRIDGE DISABLED
+      </span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if toast %}
+  <div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+    <div class="toast toast-{{ toast.type }}">
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
+  {% endif %}
+</div>

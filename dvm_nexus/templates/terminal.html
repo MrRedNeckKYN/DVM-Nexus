@@ -78,7 +78,7 @@
     <!-- Output Area -->
     <div id="terminal-screen" style="flex: 1; padding: 1rem; overflow-y: auto; font-family: 'Cascadia Code', Consolas, 'Courier New', monospace; font-size: 0.88rem; line-height: 1.45; color: #f1f5f9; white-space: pre-wrap; word-break: break-all; scroll-behavior: smooth;">
 <span style="color: #38bdf8; font-weight: bold;">========================================================================================</span>
-<span style="color: #10b981; font-weight: bold;">  DVM Nexus Interactive Console (v1.0.22) &bull; Raspberry Pi &amp; DVMHost Diagnostic Shell</span>
+<span style="color: #10b981; font-weight: bold;">  DVM Nexus Interactive Console (v{{ app_version|default('1.0.49') }}) &bull; Raspberry Pi &amp; DVMHost Diagnostic Shell</span>
 <span style="color: #94a3b8;">  Type commands below or use the quick diagnostic buttons above. (History: ↑ / ↓)</span>
 <span style="color: #38bdf8; font-weight: bold;">========================================================================================</span>
 
@@ -238,7 +238,7 @@
       historyIndex = commandHistory.length;
 
       // Render command in output
-      var promptHtml = '\n<span style="color: #10b981; font-weight: bold;">pi@raspberrypi:' + escapeHtml(currentCwd) + '$</span> <span style="color: #f8fafc; font-weight: bold;">' + escapeHtml(cmd) + '</span>\n';
+      var promptHtml = '\n<span style="color: #10b981; font-weight: bold;">{{ terminal_user }}@{{ terminal_host }}:' + escapeHtml(currentCwd) + '$</span> <span style="color: #f8fafc; font-weight: bold;">' + escapeHtml(cmd) + '</span>\n';
       appendOutput(promptHtml);
 
       // Handle client-side 'clear'

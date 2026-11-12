@@ -38,7 +38,7 @@ class HotspotConfigPayload(BaseModel):
 # ==============================================================================
 
 @router.get("/network", response_class=HTMLResponse)
-async def network_page(request: Request):
+def network_page(request: Request):
     """Render the full Network & Wi-Fi Management dashboard page."""
     net_status = network_controller.get_status()
     networks = network_controller.scan_networks()
@@ -56,7 +56,7 @@ async def network_page(request: Request):
 
 
 @router.get("/components/network-status", response_class=HTMLResponse)
-async def network_status_component(request: Request):
+def network_status_component(request: Request):
     """HTMX polling fragment for Live Status Hero Card."""
     net_status = network_controller.get_status()
     return render_template(
@@ -67,7 +67,7 @@ async def network_status_component(request: Request):
 
 
 @router.get("/components/network-scan", response_class=HTMLResponse)
-async def network_scan_component(request: Request):
+def network_scan_component(request: Request):
     """HTMX fragment for triggering a live Wi-Fi scan."""
     networks = network_controller.scan_networks()
     net_status = network_controller.get_status()
@@ -79,7 +79,7 @@ async def network_scan_component(request: Request):
 
 
 @router.post("/components/network-toggle", response_class=HTMLResponse)
-async def network_toggle_component(request: Request, enable: Optional[str] = Form("false")):
+def network_toggle_component(request: Request, enable: Optional[str] = Form("false")):
     """HTMX action to toggle between Field Hotspot and Client Wi-Fi."""
     is_enable = enable.lower() in ("true", "1", "yes", "on")
     res = network_controller.toggle_hotspot(is_enable)
@@ -93,7 +93,7 @@ async def network_toggle_component(request: Request, enable: Optional[str] = For
 
 
 @router.post("/components/network-connect", response_class=HTMLResponse)
-async def network_connect_component(
+def network_connect_component(
     request: Request,
     ssid: str = Form(...),
     password: Optional[str] = Form(None)
@@ -114,7 +114,7 @@ async def network_connect_component(
 
 
 @router.post("/components/network-hotspot-config", response_class=HTMLResponse)
-async def network_hotspot_config_component(
+def network_hotspot_config_component(
     request: Request,
     ssid: str = Form(...),
     password: str = Form(...),
@@ -147,7 +147,7 @@ async def network_hotspot_config_component(
 
 
 @router.post("/components/network-hotspot-provision", response_class=HTMLResponse)
-async def network_hotspot_provision_component(request: Request):
+def network_hotspot_provision_component(request: Request):
     """1-Click HTMX action to auto-provision hotspot in NetworkManager."""
     res = network_controller.provision_hotspot()
     net_status = network_controller.get_status()
@@ -163,7 +163,7 @@ async def network_hotspot_provision_component(request: Request):
 
 
 @router.post("/components/network-sync-priorities", response_class=HTMLResponse)
-async def network_sync_priorities_component(request: Request):
+def network_sync_priorities_component(request: Request):
     """1-Click HTMX action to set all saved client Wi-Fi autoconnect priorities to 100."""
     res = network_controller.sync_client_priorities()
     net_status = network_controller.get_status()
@@ -183,7 +183,7 @@ async def network_sync_priorities_component(request: Request):
 # ==============================================================================
 
 @router.get("/api/network/status")
-async def api_network_status():
+def api_network_status():
     """
     GET /api/network/status
     Returns current network mode ("client" or "hotspot") and interface details.
@@ -193,7 +193,7 @@ async def api_network_status():
 
 
 @router.post("/api/network/hotspot/toggle")
-async def api_hotspot_toggle(payload: HotspotTogglePayload):
+def api_hotspot_toggle(payload: HotspotTogglePayload):
     """
     POST /api/network/hotspot/toggle
     Payload: { "enable": true | false }
@@ -207,7 +207,7 @@ async def api_hotspot_toggle(payload: HotspotTogglePayload):
 
 
 @router.get("/api/network/scan")
-async def api_network_scan():
+def api_network_scan():
     """
     GET /api/network/scan
     Scans for Wi-Fi networks and returns sanitized, deduplicated, sorted JSON list.
@@ -217,7 +217,7 @@ async def api_network_scan():
 
 
 @router.post("/api/network/connect")
-async def api_network_connect(payload: NetworkConnectPayload):
+def api_network_connect(payload: NetworkConnectPayload):
     """
     POST /api/network/connect
     Payload: { "ssid": "...", "password": "..." }
@@ -236,7 +236,7 @@ async def api_network_connect(payload: NetworkConnectPayload):
 
 
 @router.get("/api/network/hotspot/config")
-async def api_hotspot_get_config():
+def api_hotspot_get_config():
     """
     GET /api/network/hotspot/config
     Returns current hotspot configuration and provisioning status.
@@ -247,7 +247,7 @@ async def api_hotspot_get_config():
 
 
 @router.post("/api/network/hotspot/config")
-async def api_hotspot_save_config(payload: HotspotConfigPayload):
+def api_hotspot_save_config(payload: HotspotConfigPayload):
     """
     POST /api/network/hotspot/config
     Updates hotspot configuration and re-provisions NetworkManager profile.
@@ -259,7 +259,7 @@ async def api_hotspot_save_config(payload: HotspotConfigPayload):
 
 
 @router.post("/api/network/hotspot/provision")
-async def api_hotspot_provision():
+def api_hotspot_provision():
     """
     POST /api/network/hotspot/provision
     1-Click auto-provisioning of Field-Hotspot in NetworkManager.
@@ -270,7 +270,7 @@ async def api_hotspot_provision():
 
 
 @router.post("/api/network/hotspot/sync-priorities")
-async def api_hotspot_sync_priorities():
+def api_hotspot_sync_priorities():
     """
     POST /api/network/hotspot/sync-priorities
     Elevates autoconnect-priority to 100 on all saved client Wi-Fi networks.

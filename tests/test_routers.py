@@ -234,3 +234,56 @@ def test_telemetry_service_log_parsing():
     assert p25_calls[0]["protocol"] == "p25"
     assert p25_calls[0]["duration_sec"] == 5.0
 
+    # 4. Upstream DVMHost / MMDVMHost log format (Slot X, received RF voice header ... to TG Y)
+    svc.process_log_line("M: 2026-11-11 12:00:00.000 DMR Slot 2, received RF voice header from N0CALL to TG 3100")
+    hud_up = svc.get_hud_status()
+    assert hud_up["state"] == "RX"
+    assert hud_up["active_slot"] == 2
+    assert hud_up["source_alias"] == "N0CALL"
+    assert hud_up["dest_id"] == 3100
+
+    svc.process_log_line("M: 2026-11-11 12:00:06.100 DMR Slot 2, received RF end of voice transmission from N0CALL to TG 3100, 6.1 seconds, BER: 0.8%, RSSI: -71/-71/-71 dBm")
+    hud_after = svc.get_hud_status()
+    assert hud_after["state"] == "IDLE"
+
+
+def test_origin_check_middleware_and_stale_config_rev(client):
+    """Cross-origin POSTs must be blocked (403) while same-origin POSTs succeed, and stale config_rev is caught."""
+    # Cross-origin POST blocked
+    bad_resp = client.post(
+        "/api/telemetry/simulate-call",
+        headers={"Origin": "https://evil.example.com", "Host": "localhost:8080"},
+    )
+    assert bad_resp.status_code == 403
+
+    # Same-origin POST allowed
+    ok_resp = client.post(
+        "/api/telemetry/simulate-call",
+        headers={"Origin": "http://localhost:8080", "Host": "localhost:8080"},
+    )
+    assert ok_resp.status_code == 200
+
+    # Stale config_rev rejected on /dmr/save
+    stale_resp = client.post(
+        "/dmr/save",
+        data={
+            "config_rev": "0000000000000000",
+            "rx_freq": 434.0,
+            "tx_freq": 439.0,
+            "color_code": 1,
+        },
+    )
+    assert stale_resp.status_code == 200
+    assert "config.yml changed since this page was loaded" in stale_resp.text
+
+
+def test_voice_gateway_resampler():
+    """Verify 22050 Hz -> 8000 Hz 16-bit PCM downsampler preserves duration."""
+    from dvm_nexus.meshtastic.voice_gateway import _resample_pcm16_mono
+    # 1 second of 22050 Hz 16-bit mono = 44100 bytes
+    raw_22k = b"\x00\x10" * 22050
+    out_8k = _resample_pcm16_mono(raw_22k, src_rate=22050, dst_rate=8000)
+    # 1 second of 8000 Hz 16-bit mono = 16000 bytes
+    assert len(out_8k) == 16000
+
+

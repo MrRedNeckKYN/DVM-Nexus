@@ -6,6 +6,7 @@ Provides structured access, modifications, and validation for DVMHost files.
 import os
 import csv
 import io
+import logging
 import subprocess
 import yaml
 from pathlib import Path
@@ -13,6 +14,8 @@ from typing import Dict, Any, List, Optional, Tuple
 from dvm_nexus.core.config import settings, DEFAULT_CONFIGS_DIR, PROFILES_DIR
 from dvm_nexus.config_engine.backup_manager import backup_manager
 from dvm_nexus.core.database import log_audit
+
+logger = logging.getLogger(__name__)
 
 
 class IndentedSafeDumper(yaml.SafeDumper):
@@ -26,6 +29,8 @@ class IndentedSafeDumper(yaml.SafeDumper):
 
 class DVMConfigManager:
     """Manages active DVMHost configuration files."""
+
+    _permissions_fixed = False
 
     def __init__(self, dvm_dir: Optional[Path] = None):
         self.dvm_dir = dvm_dir or settings.dvm_dir
@@ -95,20 +100,39 @@ class DVMConfigManager:
                             backup_manager.atomic_write(self.config_path, content)
                             log_audit("SAFETY", "AUTO_HEAL_ACTIVE_CONFIG", "Self-healed multi-protocol collision in active config.yml")
         except Exception:
-            pass
+            logger.exception("Could not self-heal multi-protocol collision in active config.yml")
 
-        # Fix directory and file permissions on Linux so dvmhost can read and write logs
-        if os.name != "nt":
+        self._ensure_permissions_once()
+
+    def _ensure_permissions_once(self):
+        """
+        One-time (per process) permission setup for the DVMHost directory on Linux.
+
+        Previously this ran `chmod -R a+rwX` + `chown -R` on EVERY config read, which forked
+        processes constantly and left /opt/dvm (REST/network passwords) world-writable.
+        Files are now owner/group accessible only; atomic_write() preserves mode/owner afterwards.
+        """
+        if os.name == "nt" or DVMConfigManager._permissions_fixed:
+            return
+        DVMConfigManager._permissions_fixed = True
+        try:
+            subprocess.run(["chmod", "-R", "u+rwX,g+rwX,o-rwx", str(self.dvm_dir)], capture_output=True, timeout=15)
+            import pwd
             try:
-                subprocess.run(["chmod", "-R", "a+rwX", str(self.dvm_dir)], capture_output=True)
-                import pwd
-                try:
-                    pwd.getpwnam("dvmhost")
-                    subprocess.run(["chown", "-R", "dvmhost:dvmhost", str(self.dvm_dir)], capture_output=True)
-                except KeyError:
-                    pass
-            except Exception:
+                pwd.getpwnam("dvmhost")
+                subprocess.run(["chown", "-R", "dvmhost:dvmhost", str(self.dvm_dir)], capture_output=True, timeout=15)
+            except KeyError:
                 pass
+        except Exception:
+            logger.exception("Could not normalise permissions on %s", self.dvm_dir)
+
+    def get_config_revision(self) -> str:
+        """Short content hash of config.yml; used to detect stale forms (edited elsewhere)."""
+        import hashlib
+        try:
+            return hashlib.sha256(self.config_path.read_bytes()).hexdigest()[:16]
+        except Exception:
+            return ""
 
     def load_config_raw(self) -> str:
         """Read config.yml text."""
@@ -229,18 +253,7 @@ class DVMConfigManager:
 
         content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
         backup_manager.atomic_write(self.config_path, content)
-
-        if os.name != "nt":
-            try:
-                subprocess.run(["chmod", "-R", "a+rwX", str(self.dvm_dir)], capture_output=True)
-                import pwd
-                try:
-                    pwd.getpwnam("dvmhost")
-                    subprocess.run(["chown", "-R", "dvmhost:dvmhost", str(self.dvm_dir)], capture_output=True)
-                except KeyError:
-                    pass
-            except Exception:
-                pass
+        # (permissions/ownership are preserved by atomic_write; no recursive chmod per save)
 
     def get_active_protocol(self) -> str:
         """Detect whether DMR or P25 is active."""

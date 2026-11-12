@@ -46,8 +46,21 @@ def _get_meshtastic_context(toast: Optional[dict] = None) -> dict:
     return ctx
 
 
+def _get_voice_bridge_context(toast: Optional[dict] = None, oob_status: bool = False) -> dict:
+    """Lightweight context for Voice Bridge HTMX fragments (does not overwrite form inputs during log polls)."""
+    ctx = {
+        "voice_cfg": voice_gateway.get_config(),
+        "voice_status": voice_gateway.get_status(),
+        "voice_logs": voice_gateway.get_recent_logs(limit=30),
+        "oob_status": oob_status,
+    }
+    if toast:
+        ctx["toast"] = toast
+    return ctx
+
+
 @router.get("", response_class=HTMLResponse)
-async def meshtastic_dashboard(request: Request):
+def meshtastic_dashboard(request: Request):
     return render_template(
         request,
         "meshtastic.html",
@@ -56,7 +69,7 @@ async def meshtastic_dashboard(request: Request):
 
 
 @router.post("/connect", response_class=HTMLResponse)
-async def connect_transport(
+def connect_transport(
     request: Request,
     transport_type: str = Form(...),
     serial_port: str = Form("auto"),
@@ -86,7 +99,7 @@ async def connect_transport(
 
 
 @router.post("/disconnect", response_class=HTMLResponse)
-async def disconnect_transport(request: Request):
+def disconnect_transport(request: Request):
     meshtastic_manager.disconnect()
     return Response(
         content='<span class="badge badge-warning" id="meshtastic-status-badge">Disconnected</span>',
@@ -96,13 +109,13 @@ async def disconnect_transport(request: Request):
 
 
 @router.post("/send", response_class=HTMLResponse)
-async def send_message(
+def send_message(
     request: Request,
     text: str = Form(...),
     recipient: str = Form("^all"),
     channel: int = Form(0)
 ):
-    res = meshtastic_manager.send_message(text=text, recipient=recipient, channel=channel)
+    meshtastic_manager.send_message(text=text, recipient=recipient, channel=channel)
     messages = meshtastic_manager.get_messages(limit=40)
     return render_template(
         request,
@@ -112,7 +125,7 @@ async def send_message(
 
 
 @router.get("/components/messages", response_class=HTMLResponse)
-async def get_messages_partial(request: Request):
+def get_messages_partial(request: Request):
     messages = meshtastic_manager.get_messages(limit=40)
     return render_template(
         request,
@@ -122,7 +135,7 @@ async def get_messages_partial(request: Request):
 
 
 @router.get("/components/nodes", response_class=HTMLResponse)
-async def get_nodes_partial(request: Request):
+def get_nodes_partial(request: Request):
     nodes = meshtastic_manager.get_nodes()
     return render_template(
         request,
@@ -132,7 +145,7 @@ async def get_nodes_partial(request: Request):
 
 
 @router.post("/simulate-inbound", response_class=HTMLResponse)
-async def simulate_inbound(
+def simulate_inbound(
     request: Request,
     text: str = Form(...),
     sender: str = Form("!4a12bc88"),
@@ -162,7 +175,7 @@ async def simulate_inbound(
 
 
 @router.post("/routes/add", response_class=HTMLResponse)
-async def add_route(
+def add_route(
     request: Request,
     name: str = Form(...),
     source_type: str = Form(...),
@@ -188,7 +201,7 @@ async def add_route(
 
 
 @router.post("/routes/{route_id}/delete", response_class=HTMLResponse)
-async def delete_route(request: Request, route_id: int):
+def delete_route(request: Request, route_id: int):
     meshtastic_bridge.delete_route(route_id)
     routes = meshtastic_bridge.get_routes()
     return render_template(
@@ -199,7 +212,7 @@ async def delete_route(request: Request, route_id: int):
 
 
 @router.post("/admins/add", response_class=HTMLResponse)
-async def add_admin(
+def add_admin(
     request: Request,
     node_id: str = Form(...),
     callsign_or_name: str = Form(...),
@@ -244,7 +257,7 @@ async def add_admin(
 
 
 @router.post("/admins/{node_id}/delete", response_class=HTMLResponse)
-async def delete_admin(request: Request, node_id: str):
+def delete_admin(request: Request, node_id: str):
     conn = get_db_connection()
     try:
         with conn:
@@ -269,7 +282,7 @@ async def delete_admin(request: Request, node_id: str):
 
 
 @router.post("/text-bridge/config", response_class=HTMLResponse)
-async def update_text_bridge_config(
+def update_text_bridge_config(
     request: Request,
     enabled: Optional[str] = Form(None),
     dmr_channel: int = Form(1),
@@ -296,7 +309,7 @@ async def update_text_bridge_config(
 
 
 @router.get("/components/bridged-messages", response_class=HTMLResponse)
-async def get_bridged_messages_partial(request: Request):
+def get_bridged_messages_partial(request: Request):
     bridged_messages = text_gateway.get_recent_messages(limit=30)
     return render_template(
         request,
@@ -306,7 +319,7 @@ async def get_bridged_messages_partial(request: Request):
 
 
 @router.post("/simulate-radio-text", response_class=HTMLResponse)
-async def simulate_radio_text(
+def simulate_radio_text(
     request: Request,
     protocol: str = Form("dmr"),
     src_id: int = Form(12345),
@@ -331,7 +344,7 @@ async def simulate_radio_text(
 
 
 @router.post("/send-radio-text", response_class=HTMLResponse)
-async def send_radio_text(
+def send_radio_text(
     request: Request,
     protocol: str = Form("dmr"),
     dest_id: int = Form(3100),
@@ -356,7 +369,7 @@ async def send_radio_text(
 
 
 @router.get("/api/status", response_class=JSONResponse)
-async def api_status():
+def api_status():
     return meshtastic_manager.get_status()
 
 
@@ -364,7 +377,7 @@ async def api_status():
 # Voice Bridge (STT / TTS) Endpoints
 # --------------------------------------------------------------------------
 @router.post("/voice-bridge/save", response_class=HTMLResponse)
-async def voice_bridge_save(
+def voice_bridge_save(
     request: Request,
     enabled: Optional[str] = Form(None),
     stt_enabled: Optional[str] = Form(None),
@@ -399,23 +412,23 @@ async def voice_bridge_save(
 
     return render_template(
         request,
-        "meshtastic.html",
-        _get_meshtastic_context(toast={"type": "success", "message": "Voice Bridge (STT/TTS) settings saved successfully!"})
+        "components/meshtastic_voice_bridge.html",
+        _get_voice_bridge_context(toast={"type": "success", "message": "Voice Bridge (STT/TTS) settings saved successfully!"})
     )
 
 
 @router.get("/voice-bridge/logs", response_class=HTMLResponse)
-async def voice_bridge_logs(request: Request):
-    """Poll live voice bridge activity logs and status."""
+def voice_bridge_logs(request: Request):
+    """Poll live voice bridge activity logs and status without resetting the settings form."""
     return render_template(
         request,
-        "meshtastic.html",
-        _get_meshtastic_context()
+        "components/meshtastic_voice_logs.html",
+        _get_voice_bridge_context(oob_status=True)
     )
 
 
 @router.post("/voice-bridge/simulate-rx", response_class=HTMLResponse)
-async def voice_bridge_simulate_rx(
+def voice_bridge_simulate_rx(
     request: Request,
     src_id: int = Form(1001),
     talkgroup: int = Form(99),
@@ -443,6 +456,9 @@ async def voice_bridge_simulate_rx(
 
     return render_template(
         request,
-        "meshtastic.html",
-        _get_meshtastic_context(toast={"type": "success", "message": f"Simulated voice transmission from RID {src_id} forwarded to Mesh Channel {mesh_channel}!"})
+        "components/meshtastic_voice_logs.html",
+        _get_voice_bridge_context(
+            toast={"type": "success", "message": f"Simulated voice transmission from RID {src_id} forwarded to Mesh Channel {mesh_channel}!"},
+            oob_status=True,
+        )
     )

@@ -278,7 +278,7 @@ window.addEventListener('beforeunload', () => {
   }
 });
 document.body.addEventListener('htmx:beforeSwap', (e) => {
-  if (e.detail.target && e.detail.target.id === 'diagnostics-log-stream' && !document.getElementById('terminal-auto-refresh')?.checked) {
+  if (e.detail.target && e.detail.target.id === 'diagnostics-log-stream' && !document.getElementById('chk-auto-refresh')?.checked) {
     if (autoRefreshTimer) {
       clearInterval(autoRefreshTimer);
       autoRefreshTimer = null;

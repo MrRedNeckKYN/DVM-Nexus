@@ -12,6 +12,7 @@ from pathlib import Path
 
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+from dvm_nexus.config_engine.network_validator import validate_serial_port, validate_int_range
 from dvm_nexus.core.database import log_audit
 from dvm_nexus.core.firmware_flasher import firmware_flasher
 
@@ -32,9 +33,13 @@ async def modem_page(request: Request):
     if os.name != "nt":
         for pattern in ["/dev/ttyAMA*", "/dev/ttyUSB*", "/dev/ttyACM*", "/dev/serial*"]:
             available_ports.extend(glob.glob(pattern))
-    if not available_ports:
+        available_ports = sorted(list(dict.fromkeys(available_ports)))
+        configured_port = str(uart_conf.get("port", "/dev/ttyAMA0"))
+        port_detected = os.path.exists(configured_port)
+    else:
+        # Development host (Windows): there is no serial device to detect; offer typical Pi names
         available_ports = ["/dev/ttyAMA0", "/dev/serial0", "/dev/ttyUSB0", "/dev/ttyACM0"]
-    available_ports = sorted(list(dict.fromkeys(available_ports)))
+        port_detected = True
 
     return render_template(
         request,
@@ -46,6 +51,8 @@ async def modem_page(request: Request):
             "uart_port": uart_conf.get("port", "/dev/ttyAMA0"),
             "uart_speed": uart_conf.get("speed", 115200),
             "available_ports": available_ports,
+            "port_detected": port_detected,
+            "any_ports_detected": bool(available_ports),
             "flasher": firmware_flasher.get_status(),
             "rx_invert": modem_conf.get("rxInvert", False),
             "tx_invert": modem_conf.get("txInvert", False),
@@ -53,6 +60,7 @@ async def modem_page(request: Request):
             "rx_level": modem_conf.get("rxLevel", 50),
             "tx_level": modem_conf.get("txLevel", 50),
             "hotspot": hotspot_conf,
+            "config_rev": dvm_config_manager.get_config_revision(),
         }
     )
 
@@ -76,8 +84,26 @@ async def modem_save(
     dmr_post_bw: int = Form(0),
     p25_disc_bw: int = Form(0),
     p25_post_bw: int = Form(0),
+    config_rev: str = Form(""),
 ):
     """Save modem parameters to config.yml safely."""
+    if config_rev and config_rev != dvm_config_manager.get_config_revision():
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": "Not saved: config.yml changed since this page was loaded (another tab/user, auto-repair or a restore). Reload the page to see the latest values, then re-apply your edit."}
+        )
+
+    errors = validate_serial_port(uart_port, uart_speed)
+    errors += validate_int_range("RX level", rx_level, 0, 100)
+    errors += validate_int_range("TX level", tx_level, 0, 100)
+    if errors:
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": "Not saved - " + "; ".join(errors)}
+        )
+
     conf = dvm_config_manager.load_config_dict()
     conf.setdefault("system", {})
     conf["system"]["duplex"] = duplex
@@ -111,8 +137,8 @@ async def modem_save(
 
     return render_template(
         request,
-        "components/toast.html",
-        {"type": "success", "message": "Modem settings saved successfully! Restart service to apply."}
+        "components/toast_saved.html",
+        {"type": "success", "message": "Modem settings saved. Restart the radio to apply.", "config_rev": dvm_config_manager.get_config_revision()}
     )
 
 

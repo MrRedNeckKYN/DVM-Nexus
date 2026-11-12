@@ -146,3 +146,80 @@ def validate_protocol_concurrency(config_data: Dict[str, Any]) -> List[str]:
         )
 
     return errors
+
+
+# ------------------------------------------------------------------------------
+# Generic radio / hardware sanity validators
+# ------------------------------------------------------------------------------
+MODEM_MIN_MHZ = 70.0
+MODEM_MAX_MHZ = 960.0
+ALLOWED_UART_SPEEDS = (9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600)
+_SERIAL_PORT_RE = re.compile(r"^(/dev/[A-Za-z0-9_./-]+|COM\d+)$")
+
+
+def validate_frequencies(tx_mhz: float, rx_mhz: float) -> List[str]:
+    """Sanity-check TX/RX frequencies against the ADF7021 modem tuning range."""
+    errors: List[str] = []
+    for label, value in (("TX", tx_mhz), ("RX", rx_mhz)):
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            errors.append(f"{label} frequency '{value}' is not a number")
+            continue
+        if not (MODEM_MIN_MHZ <= v <= MODEM_MAX_MHZ):
+            errors.append(
+                f"{label} frequency {v} MHz is outside the supported modem range "
+                f"({MODEM_MIN_MHZ:g}-{MODEM_MAX_MHZ:g} MHz)"
+            )
+    return errors
+
+
+def validate_int_range(label: str, value: Any, low: int, high: int) -> List[str]:
+    """Return an error list if value is not an integer within [low, high]."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return [f"{label} must be a whole number (got '{value}')"]
+    if not (low <= v <= high):
+        return [f"{label} must be between {low} and {high} (got {v})"]
+    return []
+
+
+def validate_port(label: str, value: Any) -> List[str]:
+    """Validate a TCP/UDP port number."""
+    return validate_int_range(label, value, 1, 65535)
+
+
+def validate_serial_port(path: str, speed: Any = None) -> List[str]:
+    """Validate a modem serial device path and optional baud rate."""
+    errors: List[str] = []
+    p = (path or "").strip()
+    if not _SERIAL_PORT_RE.match(p):
+        errors.append(f"Serial port '{p}' is not a valid device path (expected e.g. /dev/ttyAMA0 or /dev/ttyUSB0)")
+    if speed is not None:
+        try:
+            if int(speed) not in ALLOWED_UART_SPEEDS:
+                errors.append(f"UART speed {speed} is not supported (use one of {', '.join(map(str, ALLOWED_UART_SPEEDS))})")
+        except (TypeError, ValueError):
+            errors.append(f"UART speed '{speed}' must be a number")
+    return errors
+
+
+def validate_raw_config(data: Any) -> List[str]:
+    """
+    Structural validation for hand-edited config.yml content. Syntax-valid YAML can still stop
+    DVMHost from starting, so refuse the handful of settings the Nexus safety net always enforces.
+    """
+    if not isinstance(data, dict):
+        return ["config.yml must be a YAML mapping (key: value pairs) at the top level"]
+    errors: List[str] = []
+    if data.get("iAgreeNotToBeStupid") is not True:
+        errors.append("'iAgreeNotToBeStupid' must be set to true or DVMHost refuses to start")
+    if data.get("daemon") is True:
+        errors.append("'daemon' must be false - DVMHost runs under systemd and must stay in the foreground")
+    if not isinstance(data.get("system"), dict):
+        errors.append("Missing required 'system:' section")
+    if not isinstance(data.get("protocols"), dict):
+        errors.append("Missing required 'protocols:' section")
+    errors.extend(validate_protocol_concurrency(data))
+    return errors

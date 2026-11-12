@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <meta name="theme-color" content="#0b0f19">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,9 +11,10 @@
   <script src="/static/js/htmx.min.js"></script>
   <script>
     // Immediate Device Detection (executes before paint to prevent layout flashes)
+    // Matches CSS @media (max-width: 1023px) breakpoint so 769-1023px tablets keep navigation controls.
     (function() {
       function evaluateDevice() {
-        const isMobileScreen = window.innerWidth <= 768;
+        const isMobileScreen = window.innerWidth <= 1023;
         const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const root = document.documentElement;
         if (isMobileScreen || isMobileUA) {
@@ -184,10 +185,10 @@
             {% endif %}
           </div>
 
-          <div id="service-badge-container" hx-get="/components/service-badge" hx-trigger="every 6s">
+          <div id="service-badge-container" hx-get="/components/service-badge" hx-trigger="every 6s [document.visibilityState==='visible']">
             {% include "components/status_badge.html" %}
           </div>
-          <form hx-post="/api/service/restart" hx-swap="none" style="display:inline;">
+          <form hx-post="/api/service/restart-quick" hx-target="#toast-container" hx-swap="beforeend" hx-confirm="Restart DVMHost service now? Any active call will be interrupted." hx-disabled-elt="find button" style="display:inline;">
             <button type="submit" class="btn btn-secondary btn-sm restart-btn" title="Restart DVMHost Service">
               <span class="restart-icon">🔄</span>
               <span class="restart-text">Restart Radio</span>
@@ -195,6 +196,12 @@
           </form>
         </div>
       </header>
+
+      <!-- Global Connection Lost & Pending Restart Alerts -->
+      <div id="connection-lost-banner" class="connection-lost-banner" style="display:none;" role="alert">
+        ⚠️ Connection to DVM Nexus lost &mdash; retrying automatically&hellip; Telemetry shown below may be stale.
+      </div>
+      <div id="pending-restart-container" hx-get="/components/pending-restart" hx-trigger="load, every 6s [document.visibilityState==='visible']"></div>
 
       <main class="page-container">
         {% block content %}{% endblock %}
@@ -233,18 +240,18 @@
   </nav>
 
   <!-- Safe Radio Mode Switch Modal -->
-  <div class="nexus-modal-overlay" id="mode-switch-modal" style="display:none;">
+  <div class="nexus-modal-overlay" id="mode-switch-modal" role="dialog" aria-modal="true" aria-labelledby="mode-modal-title" style="display:none;" onclick="if(event.target===this) closeModeSwitchModal();">
     <div class="nexus-modal">
       <div class="nexus-modal-header">
         <div class="nexus-modal-title" id="mode-modal-title">Switch Radio Protocol</div>
-        <button type="button" class="nexus-modal-close" onclick="closeModeSwitchModal()">&times;</button>
+        <button type="button" class="nexus-modal-close" aria-label="Close modal" onclick="closeModeSwitchModal()">&times;</button>
       </div>
       <div class="nexus-modal-body">
         <p id="mode-modal-desc" style="color:var(--text-main); font-size:0.95rem; line-height:1.6; margin-bottom:1rem;"></p>
         <div class="switch-safety-box">
           <div class="safety-icon">🛡️</div>
           <div class="safety-content">
-            <div style="font-weight:600; color:var(--text-main); font-size:0.875rem;">Automatic Hardware & Config Safeguards:</div>
+            <div style="font-weight:600; color:var(--text-main); font-size:0.875rem;">Automatic Hardware &amp; Config Safeguards:</div>
             <ul style="font-size:0.8rem; color:var(--text-dim); margin-top:0.35rem; padding-left:1.15rem; line-height:1.5;">
               <li>Creates a full configuration snapshot of current settings.</li>
               <li>Gracefully releases MMDVM Duplex modem hardware serial locks.</li>
@@ -309,23 +316,113 @@
       });
     })();
 
-    // Simple auto-dismiss toast handler with timer tracking to prevent memory leaks
-    document.body.addEventListener('htmx:afterSwap', function(evt) {
-      const toasts = document.querySelectorAll('.toast:not([data-dismiss-attached])');
-      toasts.forEach(t => {
-        t.setAttribute('data-dismiss-attached', 'true');
-        const dismissTimer = setTimeout(() => {
-          t.style.opacity = '0';
-          setTimeout(() => t.remove(), 300);
-        }, 4000);
-        t._dismissTimer = dismissTimer;
-      });
+    // Programmatic toast helper + auto-dismiss timer tracking
+    function attachToastDismiss(toastEl) {
+      if (!toastEl || toastEl.getAttribute('data-dismiss-attached')) return;
+      toastEl.setAttribute('data-dismiss-attached', 'true');
+      const dismissTimer = setTimeout(() => {
+        toastEl.style.opacity = '0';
+        setTimeout(() => toastEl.remove(), 300);
+      }, 4500);
+      toastEl._dismissTimer = dismissTimer;
+    }
+
+    window.showNexusToast = function(type, message) {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const t = document.createElement('div');
+      t.className = `toast toast-${type || 'info'}`;
+      const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
+      const iconSpan = document.createElement('span');
+      iconSpan.textContent = icon + ' ';
+      const msgSpan = document.createElement('span');
+      msgSpan.textContent = message;
+      t.appendChild(iconSpan);
+      t.appendChild(msgSpan);
+      container.appendChild(t);
+      attachToastDismiss(t);
+    };
+
+    document.body.addEventListener('htmx:afterSwap', function() {
+      document.querySelectorAll('.toast:not([data-dismiss-attached])').forEach(attachToastDismiss);
     });
+
+    // Global HTMX Error Interception, Loading Cleanup & Connection Watchdog
+    (function() {
+      function clearLoadingButtons(elt) {
+        if (elt && elt.querySelectorAll) {
+          elt.querySelectorAll('.btn-loading').forEach(b => b.classList.remove('btn-loading'));
+          if (elt.classList && elt.classList.contains('btn-loading')) {
+            elt.classList.remove('btn-loading');
+          }
+        }
+        document.querySelectorAll('.btn-loading').forEach(b => b.classList.remove('btn-loading'));
+      }
+
+      document.body.addEventListener('htmx:sendError', function(evt) {
+        const banner = document.getElementById('connection-lost-banner');
+        if (banner) banner.style.display = 'flex';
+        clearLoadingButtons(evt.detail && evt.detail.elt);
+      });
+
+      document.body.addEventListener('htmx:responseError', function(evt) {
+        clearLoadingButtons(evt.detail && evt.detail.elt);
+        const xhr = evt.detail && evt.detail.xhr;
+        const status = xhr ? xhr.status : 'unknown';
+        window.showNexusToast('error', `Request failed (HTTP ${status}). Check network or server logs.`);
+      });
+
+      document.body.addEventListener('htmx:afterRequest', function(evt) {
+        const detail = evt.detail || {};
+        clearLoadingButtons(detail.elt);
+        if (detail.successful) {
+          const banner = document.getElementById('connection-lost-banner');
+          if (banner && banner.style.display !== 'none') {
+            banner.style.display = 'none';
+          }
+          // If a dirty-guarded form just saved cleanly, mark it clean and refresh pending-restart banner
+          const elt = detail.elt;
+          const form = elt && (elt.tagName === 'FORM' ? elt : elt.closest && elt.closest('form[data-dirty-guard]'));
+          if (form && form.hasAttribute('data-dirty-guard')) {
+            form.dataset.dirty = 'false';
+            const bar = form.querySelector('.save-bar');
+            if (bar) bar.classList.remove('is-dirty');
+            const statusEl = form.querySelector('[data-save-status]');
+            if (statusEl) statusEl.textContent = 'All changes saved to disk.';
+            const pendingEl = document.getElementById('pending-restart-container');
+            if (pendingEl && window.htmx) {
+              htmx.ajax('GET', '/components/pending-restart', { target: '#pending-restart-container', swap: 'innerHTML' });
+            }
+          }
+        }
+      });
+
+      // Dirty-form tracking & beforeunload guard for explicit-save config forms
+      document.addEventListener('input', function(evt) {
+        const form = evt.target && evt.target.closest && evt.target.closest('form[data-dirty-guard]');
+        if (!form) return;
+        form.dataset.dirty = 'true';
+        const bar = form.querySelector('.save-bar');
+        if (bar) bar.classList.add('is-dirty');
+        const statusEl = form.querySelector('[data-save-status]');
+        if (statusEl) statusEl.textContent = '● Unsaved changes — click Save to write to disk.';
+      });
+
+      window.addEventListener('beforeunload', function(evt) {
+        const dirtyForm = document.querySelector('form[data-dirty-guard][data-dirty="true"]');
+        if (dirtyForm) {
+          evt.preventDefault();
+          evt.returnValue = '';
+        }
+      });
+    })();
 
     // Protocol Mode Switch Modal & Execution Handler
     let targetProtocolToSwitch = null;
+    let isModeSwitching = false;
 
     function openModeSwitchModal(targetProto, label) {
+      if (isModeSwitching) return;
       targetProtocolToSwitch = targetProto;
       const modal = document.getElementById('mode-switch-modal');
       const title = document.getElementById('mode-modal-title');
@@ -341,19 +438,21 @@
         confirmBtn.innerText = `Confirm Switch to ${label}`;
       }
 
-      if (title) title.innerText = `Switch Radio to ${label}`;
+      if (title) title.textContent = `Switch Radio to ${label}`;
       if (desc) desc.innerHTML = `Are you sure you want to transition active radio operation to <strong>${label}</strong>? Current active configuration parameters will be safely saved in your profile.`;
       if (modal) modal.style.display = 'flex';
     }
 
-    function closeModeSwitchModal() {
+    function closeModeSwitchModal(force) {
+      if (isModeSwitching && !force) return;
       const modal = document.getElementById('mode-switch-modal');
       if (modal) modal.style.display = 'none';
       targetProtocolToSwitch = null;
     }
 
     async function executeModeSwitch() {
-      if (!targetProtocolToSwitch) return;
+      if (!targetProtocolToSwitch || isModeSwitching) return;
+      isModeSwitching = true;
       const spinner = document.getElementById('switch-modal-spinner');
       const footer = document.getElementById('mode-modal-footer');
       const confirmBtn = document.getElementById('mode-switch-confirm-btn');
@@ -362,23 +461,42 @@
       if (footer) footer.style.display = 'none';
       if (confirmBtn) confirmBtn.disabled = true;
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+
       try {
         const formData = new FormData();
         formData.append('target', targetProtocolToSwitch);
         const resp = await fetch('/api/protocol/switch', {
           method: 'POST',
-          body: formData
+          body: formData,
+          signal: controller.signal
         });
-        const data = await resp.json();
-        if (data.success) {
+        clearTimeout(timeoutId);
+
+        let data = null;
+        try {
+          data = await resp.json();
+        } catch (_jsonErr) {
+          throw new Error(`Server returned HTTP ${resp.status}`);
+        }
+
+        if (resp.ok && data && data.success) {
+          isModeSwitching = false;
           window.location.href = data.redirect || `/${targetProtocolToSwitch}`;
         } else {
-          alert('Mode switch failed: ' + (data.message || data.error));
-          closeModeSwitchModal();
+          isModeSwitching = false;
+          window.showNexusToast('error', 'Mode switch failed: ' + ((data && (data.message || data.error)) || `HTTP ${resp.status}`));
+          closeModeSwitchModal(true);
         }
       } catch (err) {
-        alert('Network or server error during mode switch: ' + err.message);
-        closeModeSwitchModal();
+        clearTimeout(timeoutId);
+        isModeSwitching = false;
+        const msg = err && err.name === 'AbortError'
+          ? 'Mode switch timed out after 25s. Check DVMHost service status.'
+          : ('Network or server error during mode switch: ' + (err ? err.message : 'Unknown error'));
+        window.showNexusToast('error', msg);
+        closeModeSwitchModal(true);
       }
     }
   </script>

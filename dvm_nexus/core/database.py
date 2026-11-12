@@ -4,6 +4,7 @@ DVM Nexus - SQLite Database Layer for Profiles, Revisions, and Audit Logging
 
 import sqlite3
 import json
+import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -236,6 +237,19 @@ def init_db():
                     rssi_dbm INTEGER DEFAULT NULL
                 )
             """)
+
+            # Migration: flag simulated/demo rows so they are never mistaken for real RF traffic
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(radio_last_heard)").fetchall()]
+            if "simulated" not in cols:
+                conn.execute("ALTER TABLE radio_last_heard ADD COLUMN simulated INTEGER DEFAULT 0")
+                # Retro-flag rows created by earlier versions' demo seeding / "Simulate Call" button
+                conn.execute("""
+                    UPDATE radio_last_heard SET simulated = 1
+                    WHERE (src_id = 3120101 AND src_alias = 'N3XYZ Base')
+                       OR (src_id = 3108842 AND src_alias = 'W4HAM Mobile')
+                       OR (src_id = 1001 AND src_alias = 'Dispatch 1')
+                       OR src_alias LIKE 'Unit %'
+                """)
     finally:
         conn.close()
 
@@ -250,7 +264,8 @@ def record_last_heard(
     slot: Optional[int] = None,
     duration_sec: float = 0.0,
     ber_percent: float = 0.0,
-    rssi_dbm: Optional[int] = None
+    rssi_dbm: Optional[int] = None,
+    simulated: bool = False
 ) -> int:
     """Record a radio call event in the persistent Last Heard table."""
     conn = get_db_connection()
@@ -259,16 +274,17 @@ def record_last_heard(
         with conn:
             cur = conn.execute("""
                 INSERT INTO radio_last_heard (
-                    timestamp, protocol, direction, call_type, src_id, src_alias, dest_id, slot, duration_sec, ber_percent, rssi_dbm
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    timestamp, protocol, direction, call_type, src_id, src_alias, dest_id, slot,
+                    duration_sec, ber_percent, rssi_dbm, simulated
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 now_str, protocol.lower(), direction.lower(), call_type.lower(),
                 int(src_id), str(src_alias or ""), int(dest_id), slot,
-                float(duration_sec), float(ber_percent), rssi_dbm
+                float(duration_sec), float(ber_percent or 0.0), rssi_dbm, 1 if simulated else 0
             ))
             return cur.lastrowid
     except Exception as e:
-        print(f"Failed to record Last Heard call: {e}")
+        logging.getLogger(__name__).error("Failed to record Last Heard call: %s", e)
         return 0
     finally:
         conn.close()
@@ -280,11 +296,23 @@ def get_recent_last_heard(limit: int = 30) -> List[Dict[str, Any]]:
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, timestamp, protocol, direction, call_type, src_id, src_alias, dest_id, slot, duration_sec, ber_percent, rssi_dbm
+            SELECT id, timestamp, protocol, direction, call_type, src_id, src_alias, dest_id, slot,
+                   duration_sec, ber_percent, rssi_dbm, COALESCE(simulated, 0) AS simulated
             FROM radio_last_heard
             ORDER BY id DESC LIMIT ?
         """, (limit,))
         return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def clear_simulated_last_heard() -> int:
+    """Delete all simulated/demo Last Heard rows. Returns number of rows removed."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            cur = conn.execute("DELETE FROM radio_last_heard WHERE COALESCE(simulated, 0) = 1")
+            return cur.rowcount
     finally:
         conn.close()
 
