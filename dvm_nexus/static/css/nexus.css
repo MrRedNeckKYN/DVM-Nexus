@@ -504,50 +504,168 @@ body.drawer-open {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.55rem 1rem;
+  padding: 0.6rem 1.15rem;
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.25;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   text-decoration: none;
-  min-height: 38px;
+  min-height: 40px;
+  white-space: nowrap;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled,
+.btn[disabled],
+.btn.htmx-request {
+  opacity: 0.65;
+  cursor: wait;
+  pointer-events: none;
 }
 
 .btn-primary {
-  background-color: var(--accent-cyan);
-  color: #0b0f19;
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  color: #050810;
+  font-weight: 700;
+  border-color: rgba(34, 211, 238, 0.45);
+  box-shadow: 0 2px 10px rgba(6, 182, 212, 0.2);
 }
 
-.btn-primary:hover {
-  background-color: var(--accent-cyan-hover);
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+  color: #050810;
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.32);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #050810;
+  font-weight: 700;
+  border-color: rgba(52, 211, 153, 0.45);
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
+}
+
+.btn-success:hover:not(:disabled) {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  color: #050810;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #050810 !important;
+  font-weight: 700;
+  border-color: rgba(251, 191, 36, 0.45);
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.22);
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #050810 !important;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.32);
 }
 
 .btn-secondary {
-  background-color: var(--bg-secondary);
+  background-color: #1e293b;
   color: var(--text-main);
-  border-color: var(--border);
+  border-color: #334155;
+  font-weight: 600;
 }
 
-.btn-secondary:hover {
-  background-color: var(--bg-card-hover);
-  border-color: var(--border-light);
+.btn-secondary:hover:not(:disabled) {
+  background-color: #283548;
+  border-color: #475569;
+  color: #ffffff;
 }
 
 .btn-danger {
-  background-color: var(--danger);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: #fff;
+  font-weight: 700;
+  border-color: rgba(248, 113, 113, 0.4);
 }
 
-.btn-danger:hover {
-  background-color: #dc2626;
+.btn-danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+}
+
+.btn-outline-cyan,
+.btn-outline-info {
+  background-color: rgba(6, 182, 212, 0.1);
+  color: #22d3ee;
+  border-color: rgba(6, 182, 212, 0.45);
+  font-weight: 600;
+}
+
+.btn-outline-cyan:hover:not(:disabled),
+.btn-outline-info:hover:not(:disabled) {
+  background-color: rgba(6, 182, 212, 0.22);
+  border-color: #22d3ee;
+  color: #ffffff;
+}
+
+.btn-outline-warning {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.45);
+  font-weight: 600;
+}
+
+.btn-outline-warning:hover:not(:disabled) {
+  background-color: rgba(245, 158, 11, 0.22);
+  border-color: #fbbf24;
+  color: #ffffff;
+}
+
+.btn-outline-red {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.45);
+  font-weight: 600;
+}
+
+.btn-outline-red:hover:not(:disabled) {
+  background-color: rgba(239, 68, 68, 0.22);
+  border-color: #f87171;
+  color: #ffffff;
+}
+
+.btn-block {
+  display: flex;
+  width: 100%;
+}
+
+.btn-group,
+.update-btn-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.update-btn-row form {
+  margin: 0;
+  display: inline-flex;
 }
 
 .btn-sm {
-  padding: 0.3rem 0.65rem;
-  font-size: 0.775rem;
-  min-height: 32px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  min-height: 34px;
+}
+
+.btn-xs {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  min-height: 28px;
 }
 
 /* Forms */

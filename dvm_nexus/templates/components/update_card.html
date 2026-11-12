@@ -1,33 +1,66 @@
 <div class="update-card-content">
+  {% if oob_sync %}
+    <div id="updater-installed-badge" hx-swap-oob="true">
+      {% if updater.check.update_available %}
+        <span class="badge badge-warning" style="font-size: 0.85rem; padding: 6px 12px;">
+          Installed: v{{ updater.repo_info.version }} &rarr; Update: v{{ updater.check.latest_version }}
+        </span>
+      {% else %}
+        <span class="badge badge-primary" style="font-size: 0.85rem; padding: 6px 12px;">
+          Installed: v{{ updater.repo_info.version }} ({{ updater.repo_info.commit_hash }})
+        </span>
+      {% endif %}
+    </div>
+    <div id="updater-stat-version" hx-swap-oob="true" style="font-size: 1.15rem; font-weight: 700; color: var(--accent-cyan); margin-top: 0.2rem;">
+      v{{ updater.repo_info.version }}
+    </div>
+    <div id="updater-stat-latest" hx-swap-oob="true" style="font-size: 1.15rem; font-weight: 700; margin-top: 0.2rem; color: {% if updater.check.update_available %}#10b981{% else %}var(--text-main){% endif %};">
+      v{{ updater.check.latest_version }}
+      {% if updater.check.latest_commit and updater.check.latest_commit != 'unknown' %}
+        <span style="font-size: 0.8rem; font-family: monospace; color: var(--text-muted);">({{ updater.check.latest_commit }})</span>
+      {% endif %}
+    </div>
+    <div id="updater-stat-commit" hx-swap-oob="true" style="font-size: 1.1rem; font-weight: 700; font-family: monospace; color: var(--accent-purple); margin-top: 0.2rem;">
+      {{ updater.repo_info.commit_hash }}
+    </div>
+  {% endif %}
+
   {% if updater.check.update_available %}
-    <div class="alert alert-success mb-3" style="border-left: 4px solid var(--accent-green);">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="alert alert-success mb-3" style="border-left: 4px solid #10b981;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
         <div>
-          <strong style="font-size: 1.05rem;">🎉 Update Available!</strong>
+          <strong style="font-size: 1.05rem;">🎉 New Update Available: v{{ updater.check.latest_version }}</strong>
           <div style="font-size: 0.85rem; margin-top: 0.25rem;">
-            A newer version is ready on the <code>{{ updater.check.channel }}</code> channel.
+            Installed: <code>v{{ updater.check.current_version }} ({{ updater.check.current_commit }})</code>
+            &rarr; Latest on <code>{{ updater.check.channel }}</code>:
+            <strong><code>v{{ updater.check.latest_version }} ({{ updater.check.latest_commit }})</code></strong>
             {% if updater.check.commits_behind > 0 %}
-              <strong>{{ updater.check.commits_behind }}</strong> new commits ahead.
+              &bull; <strong>{{ updater.check.commits_behind }}</strong> new commit{% if updater.check.commits_behind != 1 %}s{% endif %} ready
             {% endif %}
           </div>
         </div>
-        <span class="badge badge-success" style="font-size: 0.9rem; padding: 6px 12px;">
-          {{ updater.check.latest_version or updater.check.latest_commit }}
+        <span class="badge badge-success" style="font-size: 0.9rem; padding: 6px 14px;">
+          v{{ updater.check.current_version }} &rarr; v{{ updater.check.latest_version }}
         </span>
       </div>
     </div>
   {% else %}
-    <div class="alert alert-info mb-3">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="alert alert-info mb-3" style="border-left: 4px solid var(--accent-cyan);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
         <div>
-          <strong>System Status:</strong>
+          <strong>✅ System Status:</strong>
           {% if updater.check and updater.check.last_checked %}
-            Up to date as of {{ (updater.check.last_checked|string)[11:19] }} UTC.
+            Up to date on <strong>v{{ updater.repo_info.version }}</strong> (<code>{{ updater.repo_info.commit_hash }}</code>) &mdash; checked at {{ (updater.check.last_checked|string)[11:19] }} UTC.
           {% else %}
-            Ready to check for upstream updates.
+            Running <strong>v{{ updater.repo_info.version }}</strong> (<code>{{ updater.repo_info.commit_hash }}</code>). Ready to check GitHub for updates.
+          {% endif %}
+          {% if updater.check and updater.check.error %}
+            <div style="font-size: 0.8rem; color: #fde68a; margin-top: 0.25rem;">⚠️ {{ updater.check.error }}</div>
           {% endif %}
         </div>
-        <span class="badge badge-secondary">v{{ updater.repo_info.version }}</span>
+        <span class="badge badge-primary" style="font-size: 0.85rem; padding: 6px 12px;">
+          v{{ updater.repo_info.version }} (Up to Date)
+        </span>
       </div>
     </div>
   {% endif %}
@@ -40,30 +73,52 @@
     <pre style="margin: 0; font-family: monospace; font-size: 0.85rem; color: #a5f3fc; white-space: pre-wrap; max-height: 180px; overflow-y: auto;">{{ updater.check.release_notes }}</pre>
   </div>
 
-  <!-- Action Buttons -->
-  <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+  <!-- 1-Click Action Buttons (Uniform Sizing, No Confirm Popups, Instant Loading Feedback) -->
+  <div class="update-btn-row">
     {% if updater.check.update_available %}
-      <form hx-post="/updates/apply" hx-target="#update-action-area" hx-swap="innerHTML" style="display: inline;">
+      <form hx-post="/updates/apply"
+            hx-target="#update-action-area"
+            hx-swap="innerHTML"
+            hx-disabled-elt="find button"
+            onsubmit="if(window.startUpdaterButtonState) startUpdaterButtonState(this, 'Installing v{{ updater.check.latest_version }}...');">
         <input type="hidden" name="channel" value="{{ updater.check.channel }}">
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Apply update now? DVM Nexus will create a safety snapshot, pull latest code, and restart.')">
-          🚀 Install Update Now (1-Click)
+        <button type="submit" class="btn btn-success">
+          🚀 Install Update v{{ updater.check.latest_version }} Now
+        </button>
+      </form>
+
+      <form hx-post="/updates/check"
+            hx-target="#update-card-container"
+            hx-swap="innerHTML"
+            hx-disabled-elt="find button"
+            onsubmit="if(window.startUpdaterButtonState) startUpdaterButtonState(this, 'Checking GitHub...');">
+        <input type="hidden" name="channel" value="{{ updater.check.channel }}">
+        <button type="submit" class="btn btn-secondary">
+          🔍 Re-Check for Updates
         </button>
       </form>
     {% else %}
-      <!-- Allow re-install or force pull -->
-      <form hx-post="/updates/apply" hx-target="#update-action-area" hx-swap="innerHTML" style="display: inline;">
+      <form hx-post="/updates/check"
+            hx-target="#update-card-container"
+            hx-swap="innerHTML"
+            hx-disabled-elt="find button"
+            onsubmit="if(window.startUpdaterButtonState) startUpdaterButtonState(this, 'Checking GitHub...');">
         <input type="hidden" name="channel" value="{{ updater.check.channel }}">
-        <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Re-sync code and verify dependencies against upstream?')">
-          🔄 Re-Sync / Force Update
+        <button type="submit" class="btn btn-primary">
+          🔍 Check for Updates
+        </button>
+      </form>
+
+      <form hx-post="/updates/apply"
+            hx-target="#update-action-area"
+            hx-swap="innerHTML"
+            hx-disabled-elt="find button"
+            onsubmit="if(window.startUpdaterButtonState) startUpdaterButtonState(this, 'Pulling Latest & Updating...');">
+        <input type="hidden" name="channel" value="{{ updater.check.channel }}">
+        <button type="submit" class="btn btn-secondary">
+          🔄 Pull &amp; Force Update Now
         </button>
       </form>
     {% endif %}
-
-    <form hx-post="/updates/check" hx-target="#update-card-container" hx-swap="innerHTML" style="display: inline;">
-      <input type="hidden" name="channel" value="{{ updater.check.channel }}">
-      <button type="submit" class="btn btn-secondary btn-sm">
-        🔍 Check for Updates
-      </button>
-    </form>
   </div>
 </div>

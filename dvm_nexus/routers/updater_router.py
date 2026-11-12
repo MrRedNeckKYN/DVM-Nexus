@@ -3,6 +3,8 @@ DVM Nexus - System Auto-Updater Router
 Web interface for checking GitHub releases, viewing changelogs, and triggering in-place 1-click updates.
 """
 
+import asyncio
+import os
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from typing import Optional
@@ -16,9 +18,11 @@ router = APIRouter(prefix="/updates", tags=["updates"])
 
 @router.get("", response_class=HTMLResponse)
 async def updates_dashboard(request: Request):
-    """Render the System Updates management page."""
-    status = system_updater.get_status()
-    dvmhost_status = dvmhost_updater.get_status()
+    """Render the System Updates management page (auto-checking GitHub if cache is stale)."""
+    if not os.environ.get("PYTEST_CURRENT_TEST") and system_updater.should_auto_check():
+        await asyncio.to_thread(system_updater.check_for_updates)
+    status = await asyncio.to_thread(system_updater.get_status)
+    dvmhost_status = await asyncio.to_thread(dvmhost_updater.get_status)
     return render_template(
         request,
         "updates.html",
@@ -33,33 +37,33 @@ async def updates_dashboard(request: Request):
 
 @router.post("/check", response_class=HTMLResponse)
 async def check_updates(request: Request, channel: Optional[str] = Form("main")):
-    """Check GitHub repository for newer commits or releases."""
-    check_res = system_updater.check_for_updates(channel=channel)
-    status = system_updater.get_status()
+    """Check GitHub repository for newer commits or releases without blocking the event loop."""
+    await asyncio.to_thread(system_updater.check_for_updates, channel=channel)
+    status = await asyncio.to_thread(system_updater.get_status)
     return render_template(
         request,
         "components/update_card.html",
-        {"updater": status}
+        {"updater": status, "oob_sync": True}
     )
 
 
 @router.post("/apply", response_class=HTMLResponse)
 async def apply_update(request: Request, channel: Optional[str] = Form("main")):
-    """Trigger in-place auto update."""
-    res = system_updater.apply_update(channel=channel)
-    status = system_updater.get_status()
+    """Trigger in-place auto update without blocking the event loop."""
+    res = await asyncio.to_thread(system_updater.apply_update, channel=channel)
+    status = await asyncio.to_thread(system_updater.get_status)
     return render_template(
         request,
         "components/update_progress.html",
-        {"res": res, "updater": status}
+        {"res": res, "updater": status, "oob_sync": True}
     )
 
 
 @router.post("/dvmhost/check", response_class=HTMLResponse)
 async def check_dvmhost_updates(request: Request):
     """Check official DVMProject/dvmhost releases for newer binaries."""
-    check_res = dvmhost_updater.check_for_updates()
-    status = dvmhost_updater.get_status()
+    await asyncio.to_thread(dvmhost_updater.check_for_updates)
+    status = await asyncio.to_thread(dvmhost_updater.get_status)
     return render_template(
         request,
         "components/dvmhost_update_card.html",
@@ -70,8 +74,8 @@ async def check_dvmhost_updates(request: Request):
 @router.post("/dvmhost/apply", response_class=HTMLResponse)
 async def apply_dvmhost_update(request: Request, download_url: Optional[str] = Form(None)):
     """Apply DVMHost binary upgrade with safety snapshot and verification."""
-    res = dvmhost_updater.apply_update(download_url=download_url)
-    status = dvmhost_updater.get_status()
+    res = await asyncio.to_thread(dvmhost_updater.apply_update, download_url=download_url)
+    status = await asyncio.to_thread(dvmhost_updater.get_status)
     return render_template(
         request,
         "components/dvmhost_update_progress.html",
@@ -81,7 +85,7 @@ async def apply_dvmhost_update(request: Request, download_url: Optional[str] = F
 
 @router.get("/components/status", response_class=HTMLResponse)
 async def get_status_partial(request: Request):
-    status = system_updater.get_status()
+    status = await asyncio.to_thread(system_updater.get_status)
     return render_template(
         request,
         "components/update_card.html",
@@ -91,7 +95,7 @@ async def get_status_partial(request: Request):
 
 @router.get("/components/dvmhost-status", response_class=HTMLResponse)
 async def get_dvmhost_status_partial(request: Request):
-    status = dvmhost_updater.get_status()
+    status = await asyncio.to_thread(dvmhost_updater.get_status)
     return render_template(
         request,
         "components/dvmhost_update_card.html",
@@ -101,7 +105,9 @@ async def get_dvmhost_status_partial(request: Request):
 
 @router.get("/api/status", response_class=JSONResponse)
 async def api_status():
+    nexus_status = await asyncio.to_thread(system_updater.get_status)
+    dvm_status = await asyncio.to_thread(dvmhost_updater.get_status)
     return {
-        "nexus": system_updater.get_status(),
-        "dvmhost": dvmhost_updater.get_status()
+        "nexus": nexus_status,
+        "dvmhost": dvm_status
     }

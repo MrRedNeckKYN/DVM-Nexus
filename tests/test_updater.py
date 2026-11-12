@@ -112,3 +112,14 @@ def test_dvmhost_updater_web_routes(client):
     # DVMHost status partial
     status_resp = client.get("/updates/components/dvmhost-status")
     assert status_resp.status_code == 200
+
+
+def test_updater_version_parsing_and_remote_detection():
+    """Verify remote version extraction and semver comparison never report stale installed version."""
+    from dvm_nexus.core.updater import _parse_version_tuple, _extract_version_from_config_text
+
+    assert _parse_version_tuple("1.0.50") > _parse_version_tuple("1.0.49")
+    assert _parse_version_tuple("v1.0.51") > _parse_version_tuple("v1.0.50")
+    assert _extract_version_from_config_text('    app_version: str = "1.0.51"\n') == "1.0.51"
+    assert _extract_version_from_config_text('[![Version](https://img.shields.io/badge/version-1.0.51-cyan.svg)]') == "1.0.51"
+

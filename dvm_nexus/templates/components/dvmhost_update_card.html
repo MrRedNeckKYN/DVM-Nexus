@@ -1,9 +1,9 @@
 <div class="dvmhost-update-card-content">
   {% if dvmhost_updater.check.update_available %}
-    <div class="alert alert-success mb-3" style="border-left: 4px solid var(--accent-green);">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="alert alert-success mb-3" style="border-left: 4px solid #10b981;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
         <div>
-          <strong style="font-size: 1.05rem;">🎉 New DVMHost Release Available!</strong>
+          <strong style="font-size: 1.05rem;">🎉 New DVMHost Release Available: {{ dvmhost_updater.check.latest_tag }}</strong>
           <div style="font-size: 0.85rem; margin-top: 0.25rem;">
             Official upstream release <strong>{{ dvmhost_updater.check.release_name }}</strong> is available for <code>{{ dvmhost_updater.installed_info.target_asset_arch }}</code>.
             {% if dvmhost_updater.check.published_at %}
@@ -17,17 +17,22 @@
       </div>
     </div>
   {% else %}
-    <div class="alert alert-info mb-3">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="alert alert-info mb-3" style="border-left: 4px solid var(--accent-emerald);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
         <div>
           <strong>DVMHost Daemon Status:</strong>
           {% if dvmhost_updater.installed_info.installed %}
-            Binary installed ({{ (dvmhost_updater.installed_info.size_bytes / 1024 / 1024)|round(2) }} MB). Architecture: <code>{{ dvmhost_updater.installed_info.target_asset_arch }}</code>.
+            Binary installed ({{ (dvmhost_updater.installed_info.size_bytes / 1024 / 1024)|round(2) }} MB) &bull; Architecture: <code>{{ dvmhost_updater.installed_info.target_asset_arch }}</code>.
           {% else %}
             No binary currently at <code>/opt/dvm/bin/dvmhost</code>. Ready to install official release.
           {% endif %}
+          {% if dvmhost_updater.check and dvmhost_updater.check.error %}
+            <div style="font-size: 0.8rem; color: #fde68a; margin-top: 0.25rem;">⚠️ {{ dvmhost_updater.check.error }}</div>
+          {% endif %}
         </div>
-        <span class="badge badge-secondary">{{ dvmhost_updater.check.latest_tag or 'Official' }}</span>
+        <span class="badge badge-secondary" style="font-size: 0.85rem; padding: 6px 12px;">
+          {{ dvmhost_updater.check.latest_tag or dvmhost_updater.installed_info.version or 'Official' }}
+        </span>
       </div>
     </div>
   {% endif %}
@@ -46,27 +51,39 @@
     <pre style="margin: 0; font-family: monospace; font-size: 0.85rem; color: #a5f3fc; white-space: pre-wrap; max-height: 160px; overflow-y: auto;">{{ dvmhost_updater.check.release_notes }}</pre>
   </div>
 
-  <!-- Action Buttons -->
-  <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-    {% if dvmhost_updater.check.download_url %}
-      <form hx-post="/updates/dvmhost/apply" hx-target="#dvmhost-action-area" hx-swap="innerHTML" style="display: inline;">
-        <input type="hidden" name="download_url" value="{{ dvmhost_updater.check.download_url }}">
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Upgrade DVMHost binary now? Service will pause briefly, configs will be backed up, and the new binary will be verified.')">
-          🚀 Upgrade DVMHost Daemon (1-Click)
-        </button>
-      </form>
-    {% else %}
-      <form hx-post="/updates/dvmhost/apply" hx-target="#dvmhost-action-area" hx-swap="innerHTML" style="display: inline;">
-        <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Verify and re-validate DVMHost binaries against configuration?')">
-          🔄 Verify DVMHost Installation
-        </button>
-      </form>
-    {% endif %}
-
-    <form hx-post="/updates/dvmhost/check" hx-target="#dvmhost-card-container" hx-swap="innerHTML" style="display: inline;">
-      <button type="submit" class="btn btn-secondary btn-sm">
+  <!-- 1-Click Action Buttons -->
+  <div class="update-btn-row">
+    <form hx-post="/updates/dvmhost/check"
+          hx-target="#dvmhost-card-container"
+          hx-swap="innerHTML"
+          hx-disabled-elt="find button"
+          onsubmit="if(window.startUpdaterButtonState) startUpdaterButtonState(this, 'Checking DVMProject...');">
+      <button type="submit" class="btn btn-primary">
         🔍 Check for DVMHost Updates
       </button>
     </form>
+
+    {% if dvmhost_updater.check.download_url %}
+      <form hx-post="/updates/dvmhost/apply"
+            hx-target="#dvmhost-action-area"
+            hx-swap="innerHTML"
+            hx-disabled-elt="find button"
+            onsubmit="if(window.startUpdaterButtonState) startUpdaterButtonState(this, 'Upgrading DVMHost...');">
+        <input type="hidden" name="download_url" value="{{ dvmhost_updater.check.download_url }}">
+        <button type="submit" class="btn btn-success">
+          🚀 Upgrade DVMHost ({{ dvmhost_updater.check.latest_tag }})
+        </button>
+      </form>
+    {% else %}
+      <form hx-post="/updates/dvmhost/apply"
+            hx-target="#dvmhost-action-area"
+            hx-swap="innerHTML"
+            hx-disabled-elt="find button"
+            onsubmit="if(window.startUpdaterButtonState) startUpdaterButtonState(this, 'Verifying DVMHost...');">
+        <button type="submit" class="btn btn-secondary">
+          🔄 Verify / Upgrade DVMHost Binary
+        </button>
+      </form>
+    {% endif %}
   </div>
 </div>
