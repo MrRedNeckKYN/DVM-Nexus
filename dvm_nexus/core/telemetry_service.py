@@ -126,6 +126,7 @@ class TelemetryService:
         self._proto_cache: Tuple[str, float] = ("DMR", 0.0)
         self._unparsed_count = 0
         self._unparsed_last_warn = 0.0
+        self._last_dvm_pid: Optional[int] = None
 
     # ------------------------------------------------------------------ HUD / feed accessors
     def _active_protocol_cached(self) -> str:
@@ -382,8 +383,11 @@ class TelemetryService:
     def _sync_hardware_status(self):
         """Poll systemd + DVMHost REST /status for hardware buffer and transmitter state."""
         running: Optional[bool]
+        cur_pid: Optional[int] = None
         try:
-            running = bool(service_controller.get_status().get("is_running"))
+            svc_st = service_controller.get_status()
+            running = bool(svc_st.get("is_running"))
+            cur_pid = svc_st.get("main_pid")
         except Exception as exc:
             logger.debug("Service status poll failed: %s", exc)
             running = None
@@ -392,12 +396,18 @@ class TelemetryService:
             self._rf_state["service_running"] = running
 
         if running is False:
+            self._last_dvm_pid = None
+            dvm_client.invalidate_token()
             with self._lock:
                 self._rf_state["rest_ok"] = False
                 self._rf_state["modem_state"] = "Service stopped"
                 if self._rf_state["state"] != "IDLE":
                     self._to_idle_locked()
             return
+
+        if cur_pid is not None and cur_pid != self._last_dvm_pid:
+            self._last_dvm_pid = cur_pid
+            dvm_client.invalidate_token()
 
         try:
             status_res = dvm_client.get_status()

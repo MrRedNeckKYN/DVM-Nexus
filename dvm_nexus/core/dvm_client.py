@@ -7,10 +7,10 @@ import os
 import hashlib
 import json
 import logging
+import socket
 import threading
 import time
-from typing import Any, Dict, Optional
-import requests
+from typing import Any, Dict, Optional, Tuple
 from dvm_nexus.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,73 @@ class DVMHostClient:
         self._password_override = password
         self._lock = threading.Lock()
         self._token: Optional[str] = None
-        self._session = requests.Session()
+
+    def invalidate_token(self) -> None:
+        """Clear cached authentication token (e.g. when dvmhost starts/restarts with a new PID)."""
+        self._token = None
+
+    def _raw_http_request(
+        self,
+        method: str,
+        endpoint: str,
+        headers: Optional[Dict[str, str]] = None,
+        json_body: Optional[Dict[str, Any]] = None,
+        timeout: float = 2.5,
+    ) -> Tuple[int, str]:
+        """
+        Send a single-write HTTP/1.0 request to DVMHost's embedded Asio HTTP server.
+        Why single-write HTTP/1.0:
+          1. DVMHost's ServerConnection.h is non-persistent HTTP/1.0 (m_persistent = false).
+          2. Python's http.client / requests splits headers and body into two separate socket.send()
+             calls; on PUT/POST requests, if DVMHost's async_read_some reads headers before the body
+             arrives (consumed == recvLength), ServerConnection.h enters a broken continuation state
+             that hangs until client timeout and logs 'E: (RESTAPI) ServerConnection::read(), End of file, code = 2'.
+          3. Combining request line + headers + body into a single sock.sendall() guarantees DVMHost
+             receives the complete frame in one read without ever hitting EOF on a second read.
+        """
+        self._sync_credentials_from_config()
+        path = "/" + endpoint.lstrip("/")
+        body_bytes = b""
+        if json_body is not None:
+            body_bytes = json.dumps(json_body, separators=(",", ":")).encode("utf-8")
+
+        req_headers: Dict[str, str] = {
+            "Host": f"{self.host}:{self.port}",
+            "User-Agent": "DVM-Nexus/1.0",
+            "Accept": "*/*",
+            "Connection": "close",
+        }
+        if headers:
+            req_headers.update(headers)
+        if json_body is not None or method.upper() in ("PUT", "POST"):
+            req_headers["Content-Type"] = "application/json"
+            req_headers["Content-Length"] = str(len(body_bytes))
+
+        header_lines = [f"{method.upper()} {path} HTTP/1.0"]
+        for k, v in req_headers.items():
+            header_lines.append(f"{k}: {v}")
+        header_block = ("\r\n".join(header_lines) + "\r\n\r\n").encode("ascii")
+        packet = header_block + body_bytes
+
+        with socket.create_connection((self.host, int(self.port)), timeout=timeout) as sock:
+            sock.settimeout(timeout)
+            sock.sendall(packet)
+            chunks = []
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+
+        raw_resp = b"".join(chunks).decode("utf-8", errors="replace")
+        if not raw_resp:
+            raise ConnectionError("Empty HTTP response from DVMHost REST API")
+
+        head_part, _, body_part = raw_resp.partition("\r\n\r\n")
+        status_line = head_part.splitlines()[0] if head_part else ""
+        parts = status_line.split(" ", 2)
+        status_code = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 500
+        return status_code, body_part
 
     def _sync_credentials_from_config(self):
         """Dynamically sync host, port, and password from active /opt/dvm/config.yml if present."""
@@ -69,16 +135,16 @@ class DVMHostClient:
         self._sync_credentials_from_config()
         hashed = hashlib.sha256(self.password.encode("utf-8")).hexdigest()
         try:
-            resp = self._session.put(
-                f"{self.base_url}/auth",
-                json={"auth": hashed},
-                headers={"Content-Type": "application/json"},
-                timeout=2.0
+            status_code, body_text = self._raw_http_request(
+                method="PUT",
+                endpoint="/auth",
+                json_body={"auth": hashed},
+                timeout=2.0,
             )
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("status") == 200 and "token" in data:
-                    self._token = data["token"]
+            if status_code == 200:
+                data = json.loads(body_text)
+                if isinstance(data, dict) and data.get("status") == 200 and "token" in data:
+                    self._token = str(data["token"])
                     return True
             self._token = None
             return False
@@ -96,34 +162,32 @@ class DVMHostClient:
                     return {"success": False, "error": "Authentication failed or DVMHost offline", "status": 503}
 
             headers = {
-                "X-DVM-Auth-Token": self._token,
-                "Content-Type": "application/json"
+                "X-DVM-Auth-Token": str(self._token),
             }
 
             try:
-                url = f"{self.base_url}{endpoint}"
-                resp = self._session.request(
+                status_code, body_text = self._raw_http_request(
                     method=method.upper(),
-                    url=url,
+                    endpoint=endpoint,
                     headers=headers,
-                    json=data,
-                    timeout=3.0
+                    json_body=data,
+                    timeout=3.0,
                 )
 
                 # DVMHost returns JSON with an internal status code
                 try:
-                    payload = resp.json()
+                    payload = json.loads(body_text)
                 except Exception:
-                    payload = {"raw": resp.text}
+                    payload = {"raw": body_text}
 
                 # Check for 401 unauthorized or invalid token
                 has_token_err = False
-                if resp.status_code == 401:
+                if status_code == 401:
                     has_token_err = True
                 elif isinstance(payload, dict):
-                    status_code = payload.get("status")
+                    p_status = payload.get("status")
                     msg = str(payload.get("message", "")).lower()
-                    if status_code in (401, 403) or "illegal authentication token" in msg or "invalid token" in msg or "expired" in msg:
+                    if p_status in (401, 403) or "illegal authentication token" in msg or "invalid token" in msg or "expired" in msg:
                         has_token_err = True
 
                 if has_token_err:
@@ -131,36 +195,36 @@ class DVMHostClient:
                         logger.debug("Stale or illegal DVMHost token detected; re-authenticating...")
                         self._token = None
                         if self.authenticate():
-                            headers["X-DVM-Auth-Token"] = self._token
-                            retry_resp = self._session.request(
+                            headers["X-DVM-Auth-Token"] = str(self._token)
+                            retry_code, retry_body = self._raw_http_request(
                                 method=method.upper(),
-                                url=url,
+                                endpoint=endpoint,
                                 headers=headers,
-                                json=data,
-                                timeout=3.0
+                                json_body=data,
+                                timeout=3.0,
                             )
                             try:
-                                retry_payload = retry_resp.json()
+                                retry_payload = json.loads(retry_body)
                             except Exception:
-                                retry_payload = {"raw": retry_resp.text}
+                                retry_payload = {"raw": retry_body}
                             return {
-                                "success": retry_resp.status_code in (200, 201) and (
+                                "success": retry_code in (200, 201) and (
                                     not isinstance(retry_payload, dict) or retry_payload.get("status") in (None, 200, 201)
                                 ),
-                                "status_code": retry_resp.status_code,
+                                "status_code": retry_code,
                                 "data": retry_payload
                             }
                     return {"success": False, "error": "Unauthorized / Stale Token (401)", "status": 401}
 
                 return {
-                    "success": resp.status_code in (200, 201),
-                    "status_code": resp.status_code,
+                    "success": status_code in (200, 201),
+                    "status_code": status_code,
                     "data": payload
                 }
-            except requests.exceptions.ConnectionError:
-                return {"success": False, "error": "Connection refused (DVMHost REST API not running)", "status": 503}
-            except requests.exceptions.Timeout:
+            except socket.timeout:
                 return {"success": False, "error": "Request timed out", "status": 504}
+            except (ConnectionError, OSError):
+                return {"success": False, "error": "Connection refused (DVMHost REST API not running)", "status": 503}
             except Exception as e:
                 return {"success": False, "error": str(e), "status": 500}
 

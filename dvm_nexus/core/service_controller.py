@@ -196,10 +196,19 @@ class ServiceController:
         except Exception:
             logger.exception("Preflight: systemd unit self-heal failed")
 
+    @staticmethod
+    def _invalidate_rest_token() -> None:
+        try:
+            from dvm_nexus.core.dvm_client import dvm_client
+            dvm_client.invalidate_token()
+        except Exception:
+            pass
+
     def start(self) -> Dict[str, Any]:
         """Start the dvmhost service."""
         self._cached_status = None
         self._status_timestamp = 0.0
+        self._invalidate_rest_token()
         self.preflight_safety_check()
         log_audit("SERVICE", "START", f"Requesting start of {self.service_name}")
         if not self.has_systemctl:
@@ -227,6 +236,7 @@ class ServiceController:
         """Stop the dvmhost service."""
         self._cached_status = None
         self._status_timestamp = 0.0
+        self._invalidate_rest_token()
         log_audit("SERVICE", "STOP", f"Requesting stop of {self.service_name}")
         if not self.has_systemctl:
             self._dev_simulated_running = False
@@ -245,6 +255,7 @@ class ServiceController:
         """Restart the dvmhost service."""
         self._cached_status = None
         self._status_timestamp = 0.0
+        self._invalidate_rest_token()
         self.preflight_safety_check()
         log_audit("SERVICE", "RESTART", f"Requesting restart of {self.service_name}")
         if not self.has_systemctl:
