@@ -63,14 +63,48 @@
 <!-- Main DMR Configuration Form -->
 <form id="dmr-config-form" hx-post="/dmr/save" hx-trigger="submit" hx-target="#toast-container" hx-swap="beforeend" data-dirty-guard>
 
-  <!-- Section 1: Radio Frequencies & Station Identity -->
+  {% set dmr_cc_on = (dmr.control and dmr.control.enable) %}
+  {% set dmr_cc_ded = (dmr.control and dmr.control.dedicated) %}
+  {% set dmr_tscc_mode = 'dedicated' if (duplex and dmr_cc_on and dmr_cc_ded) else ('non_dedicated' if (duplex and dmr_cc_on) else 'disabled') %}
+  {% set dmr_arch_preset = 'simplex' if not duplex else ('tscc_dedicated' if dmr_tscc_mode == 'dedicated' else ('tscc_nondedicated' if dmr_tscc_mode == 'non_dedicated' else 'duplex_conv')) %}
+
+  <!-- Section 1: Radio Frequencies, Duplex Mode & Station Identity -->
   <div class="card" style="border-left:4px solid var(--accent-cyan);">
     <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div>
-        <div class="card-title">📻 Radio Frequencies, Duplex Mode &amp; Station Identity</div>
-        <span style="font-size:0.85rem; color:var(--text-dim);">Operating Frequencies, Repeater Offset &amp; Duplex / Simplex Mode (DVMHost <code>system.duplex</code>)</span>
+        <div class="card-title">📻 Step 1: Choose DMR Operating Mode &amp; Frequencies</div>
+        <span style="font-size:0.85rem; color:var(--text-dim);">Select Simplex or Full Duplex below &mdash; menu options automatically adapt to match <code>dvmhost</code> rules</span>
       </div>
-      <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Saved when you press Save</span>
+      <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <span class="badge badge-cyan" style="font-family:var(--font-mono);">IDEN Ch ID {{ sys.channelId if sys.channelId is defined else 2 }} &bull; Ch No ${{ sys.channelNo or '7E3' }}</span>
+        <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Saved when you press Save</span>
+      </div>
+    </div>
+
+    <!-- Guided 4-Card DMR Architecture Selector -->
+    <div style="margin-bottom:1.15rem;">
+      <label class="form-label" style="margin-bottom:0.5rem; display:block;">⚡ Quick DMR Architecture Mode (Click to Configure Automatically):</label>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:0.65rem;">
+        <button type="button" id="dmr-preset-simplex" onclick="selectDmrArchitecture('simplex')" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:2px solid {% if dmr_arch_preset == 'simplex' %}var(--accent-cyan){% else %}var(--border-color){% endif %}; background:{% if dmr_arch_preset == 'simplex' %}rgba(6, 182, 212, 0.14){% else %}rgba(15, 23, 42, 0.5){% endif %}; color:var(--text-main); cursor:pointer; transition:all 0.15s;">
+          <div style="font-weight:700; font-size:0.86rem; color:var(--text-bright); margin-bottom:0.2rem;">1. Simplex Direct / Hotspot</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Single frequency (<code>TX = RX</code>). No repeater offset, no TSCC control channel.</div>
+        </button>
+
+        <button type="button" id="dmr-preset-duplex_conv" onclick="selectDmrArchitecture('duplex_conv')" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:2px solid {% if dmr_arch_preset == 'duplex_conv' %}var(--accent-cyan){% else %}var(--border-color){% endif %}; background:{% if dmr_arch_preset == 'duplex_conv' %}rgba(6, 182, 212, 0.14){% else %}rgba(15, 23, 42, 0.5){% endif %}; color:var(--text-main); cursor:pointer; transition:all 0.15s;">
+          <div style="font-weight:700; font-size:0.86rem; color:var(--text-bright); margin-bottom:0.2rem;">2. Full Duplex (Conventional)</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Split TX/RX repeater. Both <strong>Slot 1 &amp; Slot 2</strong> carry standard DMR voice calls.</div>
+        </button>
+
+        <button type="button" id="dmr-preset-tscc_nondedicated" onclick="selectDmrArchitecture('tscc_nondedicated')" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:2px solid {% if dmr_arch_preset == 'tscc_nondedicated' %}var(--accent-emerald){% else %}var(--border-color){% endif %}; background:{% if dmr_arch_preset == 'tscc_nondedicated' %}rgba(16, 185, 129, 0.14){% else %}rgba(15, 23, 42, 0.5){% endif %}; color:var(--text-main); cursor:pointer; transition:all 0.15s;">
+          <div style="font-weight:700; font-size:0.86rem; color:var(--text-bright); margin-bottom:0.2rem;">3. Full Duplex + Non-Dedicated TSCC</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Periodic idle TSCC control bursts + 2-slot voice on a single Duplex Hat.</div>
+        </button>
+
+        <button type="button" id="dmr-preset-tscc_dedicated" onclick="selectDmrArchitecture('tscc_dedicated')" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:2px solid {% if dmr_arch_preset == 'tscc_dedicated' %}var(--accent-emerald){% else %}var(--border-color){% endif %}; background:{% if dmr_arch_preset == 'tscc_dedicated' %}rgba(16, 185, 129, 0.14){% else %}rgba(15, 23, 42, 0.5){% endif %}; color:var(--text-main); cursor:pointer; transition:all 0.15s;">
+          <div style="font-weight:700; font-size:0.86rem; color:var(--text-bright); margin-bottom:0.2rem;">4. Full Duplex + Dedicated 24/7 TSCC</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Continuous 24/7 TSCC Control on 1 Slot + Trunked Voice on the other Slot.</div>
+        </button>
+      </div>
     </div>
 
     <div class="form-row">
@@ -112,6 +146,8 @@
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(-5.0)">-5.0 MHz (UHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(0.6)">+0.6 MHz (2m VHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(-0.6)">-0.6 MHz (2m VHF)</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(30.0)">+30 MHz (700)</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(-45.0)">-45 MHz (800)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="swapDmrTxRx()" title="Swap TX and RX frequencies">⇄ Swap TX/RX</button>
       </div>
       <div id="dmr-codeplug-summary" style="font-size:0.8rem; font-family:var(--font-mono); color:var(--text-main);"></div>
@@ -119,7 +155,7 @@
 
     <!-- Simplex Mode Notice Banner (Visible ONLY in Simplex) -->
     <div id="dmr-simplex-notice" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.7rem 1rem; margin-bottom:1rem; background:rgba(148, 163, 184, 0.08); border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-muted);">
-      ℹ️ <strong>Simplex Mode Active (<code>system.duplex: false</code>):</strong> DVMHost uses a single frequency for both TX and RX (<code>simplexSameFrequency: true</code>). Repeater RX split frequencies, Timeslot Control Channel (TSCC), and Roaming Beacons only apply to Full Duplex repeaters and are hidden automatically.
+      ℹ️ <strong>Simplex Mode Active (<code>system.duplex: false</code>):</strong> DVMHost uses a single frequency for both TX and RX (<code>simplexSameFrequency: true</code>). Repeater RX split frequencies, TX Hang timer, Timeslot Control Channel (TSCC), and Roaming Beacons are prohibited in Simplex mode by <code>dvmhost</code> and are hidden automatically.
     </div>
 
     <div class="form-row">
@@ -146,14 +182,11 @@
   </div>
 
   <!-- Section 1B: DMR Control Channel (TSCC) & Beacons (Visible ONLY in Full Duplex) -->
-  {% set dmr_cc_on = (dmr.control and dmr.control.enable) %}
-  {% set dmr_cc_ded = (dmr.control and dmr.control.dedicated) %}
-  {% set dmr_tscc_mode = 'dedicated' if (dmr_cc_on and dmr_cc_ded) else ('non_dedicated' if dmr_cc_on else 'disabled') %}
   <div class="card" id="dmr-control-channel-card" style="border-left:4px solid var(--accent-emerald); {% if not duplex %}display:none;{% endif %}">
     <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div>
-        <div class="card-title">🗼 DMR Control Channel (TSCC) &amp; Roaming Beacons</div>
-        <span style="font-size:0.85rem; color:var(--text-dim);">DVMHost <code>protocols.dmr.control</code> &amp; <code>protocols.dmr.beacons</code> (Full Duplex Only)</span>
+        <div class="card-title">🗼 Step 2: DMR Control Channel (TSCC) &amp; Timeslot Architecture</div>
+        <span style="font-size:0.85rem; color:var(--text-dim);">DVMHost <code>protocols.dmr.control</code> &amp; <code>protocols.dmr.beacons</code> &mdash; Options below adapt automatically to your TSCC mode</span>
       </div>
       <span class="badge badge-cyan" id="dmr-tscc-badge">Full Duplex Repeater Feature</span>
     </div>
@@ -161,13 +194,25 @@
     <input type="hidden" name="tscc_enable" id="dmr-tscc-enable-hidden" value="{{ 'true' if dmr_cc_on else 'false' }}">
     <input type="hidden" name="tscc_dedicated" id="dmr-tscc-dedicated-hidden" value="{{ 'true' if dmr_cc_ded else 'false' }}">
 
+    <!-- Live Visual 2-Slot TDMA Allocation Map -->
+    <div id="dmr-tdma-slot-map" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0.75rem; margin-bottom:1.1rem; padding:0.75rem 1rem; background:rgba(15, 23, 42, 0.55); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
+      <div id="dmr-slot1-card" style="padding:0.6rem 0.85rem; border-radius:var(--radius-sm); border-left:3px solid var(--accent-cyan); background:rgba(6, 182, 212, 0.08);">
+        <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-dim); font-weight:700;">TDMA Timeslot 1</div>
+        <div id="dmr-slot1-role" style="font-size:0.9rem; font-weight:700; color:var(--text-bright); margin-top:0.15rem;">🎙️ Conventional Voice Channel</div>
+      </div>
+      <div id="dmr-slot2-card" style="padding:0.6rem 0.85rem; border-radius:var(--radius-sm); border-left:3px solid var(--accent-cyan); background:rgba(6, 182, 212, 0.08);">
+        <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-dim); font-weight:700;">TDMA Timeslot 2</div>
+        <div id="dmr-slot2-role" style="font-size:0.9rem; font-weight:700; color:var(--text-bright); margin-top:0.15rem;">🎙️ Conventional Voice Channel</div>
+      </div>
+    </div>
+
     <div class="form-row">
-      <div class="form-group" style="flex:2; min-width:260px;">
+      <div class="form-group" style="flex:2; min-width:280px;">
         <label class="form-label">DMR Control Channel Operating Mode</label>
         <select name="tscc_mode" id="dmr-tscc-mode-select" class="form-control" onchange="syncDmrTsccMode()">
           <option value="disabled" {% if dmr_tscc_mode == 'disabled' %}selected{% endif %}>1. Conventional 2-Slot Repeater (No Control Channel — Standard DMR)</option>
-          <option value="non_dedicated" {% if dmr_tscc_mode == 'non_dedicated' %}selected{% endif %}>2. Non-Dedicated TSCC (Shared Control Channel + 2-Slot Voice)</option>
-          <option value="dedicated" {% if dmr_tscc_mode == 'dedicated' %}selected{% endif %}>3. Dedicated TSCC (Continuous Control Channel on 1 Slot + Voice on Other Slot)</option>
+          <option value="non_dedicated" {% if dmr_tscc_mode == 'non_dedicated' %}selected{% endif %}>2. Non-Dedicated TSCC (Periodic Control Channel Bursts + 2-Slot Voice)</option>
+          <option value="dedicated" {% if dmr_tscc_mode == 'dedicated' %}selected{% endif %}>3. Dedicated 24/7 TSCC (Continuous Control on 1 Slot + Voice on Other Slot)</option>
         </select>
         <small class="form-hint" id="dmr-tscc-mode-desc"></small>
       </div>
@@ -175,42 +220,122 @@
       <div class="form-group" id="dmr-tscc-slot-group" {% if dmr_tscc_mode == 'disabled' %}style="display:none;"{% endif %}>
         <label class="form-label">TSCC Control Timeslot (<code>control.slot</code>)</label>
         <select name="tscc_slot" id="dmr-tscc-slot-select" class="form-control" onchange="syncDmrTsccMode()">
-          <option value="1" {% if not dmr.control or dmr.control.slot == 1 %}selected{% endif %}>Slot 1 (Control) &rarr; Slot 2 carries Voice</option>
-          <option value="2" {% if dmr.control and dmr.control.slot == 2 %}selected{% endif %}>Slot 2 (Control) &rarr; Slot 1 carries Voice</option>
+          <option value="1" {% if not dmr.control or dmr.control.slot == 1 %}selected{% endif %}>Slot 1 = TSCC Control &bull; Slot 2 = Voice Traffic</option>
+          <option value="2" {% if dmr.control and dmr.control.slot == 2 %}selected{% endif %}>Slot 2 = TSCC Control &bull; Slot 1 = Voice Traffic</option>
         </select>
-        <small class="form-hint">DMR TDMA slot that transmits TSCC control bursts.</small>
+        <small class="form-hint">Select which TDMA slot transmits TSCC control signaling.</small>
       </div>
 
       <div class="form-group" id="dmr-tscc-grant-check-group" {% if dmr_tscc_mode == 'disabled' %}style="display:none;"{% endif %}>
-        <label class="form-label">Grant Source ID Check</label>
+        <label class="form-label">Grant Source ID Check (<code>disableGrantSourceIdCheck</code>)</label>
         <select name="disable_grant_src_check" class="form-control">
           <option value="false" {% if not dmr.control or not dmr.control.disableGrantSourceIdCheck %}selected{% endif %}>Enforce Source RID Check (Default)</option>
-          <option value="true" {% if dmr.control and dmr.control.disableGrantSourceIdCheck %}selected{% endif %}>Disable Grant Source ID Check</option>
+          <option value="true" {% if dmr.control and dmr.control.disableGrantSourceIdCheck %}selected{% endif %}>Disable Grant Source ID Check (Permissive)</option>
         </select>
-        <small class="form-hint">DVMHost <code>control.disableGrantSourceIdCheck</code>.</small>
+        <small class="form-hint">Validates subscriber Radio ID before granting a voice channel.</small>
       </div>
     </div>
 
-    <div class="form-row" id="dmr-beacon-row">
-      <div class="form-group" id="dmr-beacon-enable-group" {% if dmr_tscc_mode == 'dedicated' %}style="display:none;"{% endif %}>
-        <label class="form-label">Roaming / TSCC Beacons (<code>beacons.enable</code>)</label>
+    <!-- Beacon & Non-Dedicated Periodic Burst Row (Hidden in Dedicated 24/7 TSCC Mode) -->
+    <div class="form-row" id="dmr-beacon-row" {% if dmr_tscc_mode == 'dedicated' %}style="display:none;"{% endif %}>
+      <div class="form-group" id="dmr-beacon-enable-group" {% if dmr_tscc_mode == 'non_dedicated' %}style="display:none;"{% endif %}>
+        <label class="form-label">Idle Roaming Beacons (<code>beacons.enable</code>)</label>
         <select name="beacon_enable" id="dmr-beacon-enable-select" class="form-control" onchange="syncDmrTsccMode()">
-          <option value="false" {% if not dmr.beacons or not dmr.beacons.enable %}selected{% endif %}>Disabled</option>
-          <option value="true" {% if dmr.beacons and dmr.beacons.enable %}selected{% endif %}>Enabled (Periodic Beacon Bursts)</option>
+          <option value="false" {% if not dmr.beacons or not dmr.beacons.enable %}selected{% endif %}>Disabled (Only Transmit on Voice Calls)</option>
+          <option value="true" {% if dmr.beacons and dmr.beacons.enable %}selected{% endif %}>Enabled (Transmit Periodic Idle Roaming Beacons)</option>
         </select>
-        <small class="form-hint">Transmits periodic beacon bursts for subscriber roaming.</small>
+        <small class="form-hint">Optional periodic beacon bursts for subscriber roaming on conventional repeaters.</small>
       </div>
 
       <div class="form-group" id="dmr-beacon-interval-group">
-        <label class="form-label">Beacon Interval (seconds)</label>
+        <label class="form-label" id="dmr-beacon-interval-label">{% if dmr_tscc_mode == 'non_dedicated' %}TSCC Broadcast Interval (seconds){% else %}Beacon Interval (seconds){% endif %}</label>
         <input type="number" name="beacon_interval" class="form-control" min="5" max="3600" value="{{ dmr.beacons.interval if dmr.beacons else 60 }}">
-        <small class="form-hint">Time between roaming beacon bursts (default 60s).</small>
+        <small class="form-hint" id="dmr-beacon-interval-hint">{% if dmr_tscc_mode == 'non_dedicated' %}DVMHost <code>beacons.interval</code>: Time between non-dedicated TSCC broadcasts (default 60s).{% else %}Time between roaming beacon bursts (default 60s).{% endif %}</small>
       </div>
 
       <div class="form-group" id="dmr-beacon-duration-group">
-        <label class="form-label">Beacon Burst Duration (seconds)</label>
+        <label class="form-label" id="dmr-beacon-duration-label">{% if dmr_tscc_mode == 'non_dedicated' %}TSCC Burst Duration (seconds){% else %}Beacon Burst Duration (seconds){% endif %}</label>
         <input type="number" name="beacon_duration" class="form-control" min="1" max="30" value="{{ dmr.beacons.duration if dmr.beacons else 3 }}">
-        <small class="form-hint">Duration of each beacon transmission (default 3s).</small>
+        <small class="form-hint" id="dmr-beacon-duration-hint">{% if dmr_tscc_mode == 'non_dedicated' %}DVMHost <code>beacons.duration</code>: Length of each periodic TSCC burst (default 3s).{% else %}Duration of each beacon transmission (default 3s).{% endif %}</small>
+      </div>
+    </div>
+
+    <!-- Dedicated 24/7 TSCC Architecture Notice (Visible ONLY in Dedicated TSCC Mode) -->
+    <div id="dmr-tscc-dedicated-notice" {% if dmr_tscc_mode != 'dedicated' %}style="display:none;"{% endif %} style="padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.35); border-radius:var(--radius-sm); font-size:0.82rem; color:#a7f3d0;">
+      🗼 <strong>DVMHost Dedicated DMR TSCC Architecture (<code>control.dedicated: true</code>):</strong> Because DMR is 2-slot TDMA, DVMHost keys your Duplex Hat continuously (`START_DMR_DUPLEX_IDLE`) and transmits continuous Tier III TSCC Aloha/Control frames on your selected <strong>Control Slot</strong> while automatically granting and routing voice calls on the <strong>other TDMA Slot</strong> (`Channel ID {{ sys.channelId if sys.channelId is defined else 2 }} / Channel No ${{ sys.channelNo or '7E3' }}`). Periodic beacon intervals are hidden because the TSCC carrier is continuous 24/7.
+    </div>
+
+    <!-- TSCC Trunking, Affiliation & Aloha Options (Visible ONLY when TSCC is Non-Dedicated or Dedicated) -->
+    <div id="dmr-tscc-trunking-box" style="{% if dmr_tscc_mode == 'disabled' %}display:none;{% endif %} padding:0.9rem 1rem; background:rgba(15, 23, 42, 0.45); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
+      <div style="font-size:0.82rem; font-weight:700; color:var(--accent-emerald); margin-bottom:0.65rem; text-transform:uppercase; letter-spacing:0.5px;">
+        ⚙️ TSCC Trunking Affiliation, Registration &amp; Aloha Parameters (DVMHost <code>dmr::Control</code>)
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Talkgroup Affiliation Check (<code>ignoreAffiliationCheck</code>)</label>
+          <select name="ignore_affiliation_check" class="form-control">
+            <option value="true" {% if dmr.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations (Pass All Talkgroups — Recommended)</option>
+            <option value="false" {% if not dmr.ignoreAffiliationCheck %}selected{% endif %}>Require Radio Affiliation Before Granting Talkgroup</option>
+          </select>
+          <small class="form-hint">If set to Require, radios must affiliate to a TGID via TSCC before hearing traffic.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Unit Registration Check (<code>verifyReg</code>)</label>
+          <select name="verify_reg" class="form-control">
+            <option value="false" {% if not dmr.verifyReg %}selected{% endif %}>Disabled (Allow Unregistered Subscribers)</option>
+            <option value="true" {% if dmr.verifyReg %}selected{% endif %}>Enabled (Require Unit Registration via TSCC)</option>
+          </select>
+          <small class="form-hint">Verifies subscriber unit registration during TSCC operations.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Authoritative Site Controller (<code>authoritative</code>)</label>
+          <select name="authoritative" class="form-control">
+            <option value="true" {% if sys.authoritative is not defined or sys.authoritative %}selected{% endif %}>True (Authoritative Master — Grants Channels)</option>
+            <option value="false" {% if sys.authoritative is defined and not sys.authoritative %}selected{% endif %}>False (Subordinate Voice Channel)</option>
+          </select>
+          <small class="form-hint">Keep True for standalone hotspots and repeaters.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">TSCC Site Supervisor (<code>supervisor</code>)</label>
+          <select name="supervisor" class="form-control">
+            <option value="false" {% if not sys.supervisor %}selected{% endif %}>Disabled (Standard)</option>
+            <option value="true" {% if sys.supervisor %}selected{% endif %}>Enabled (Site Controller Supervisor Mode)</option>
+          </select>
+          <small class="form-hint">DVMHost <code>system.config.supervisor</code> for TSCCTGID supervision.</small>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:0;">
+        <div class="form-group">
+          <label class="form-label">TSCC Aloha Random Access Wait (<code>nRandWait</code>)</label>
+          <input type="number" name="n_rand_wait" class="form-control" min="1" max="15" value="{{ dmr.nRandWait or 8 }}">
+          <small class="form-hint">Subscriber random wait delay (1&ndash;15, default 8).</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">TSCC Aloha Backoff (<code>backOff</code>)</label>
+          <input type="number" name="back_off" class="form-control" min="1" max="15" value="{{ dmr.backOff or 1 }}">
+          <small class="form-hint">Random backoff in DMR TDMA frames (1&ndash;15, default 1).</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Legacy Group Registration (<code>legacyGroupReg</code>)</label>
+          <select name="legacy_group_reg" class="form-control">
+            <option value="false" {% if not dmr.legacyGroupReg %}selected{% endif %}>Disabled</option>
+            <option value="true" {% if dmr.legacyGroupReg %}selected{% endif %}>Enabled (Fallback for Legacy Radios)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Log Verbose CSBK / TSCC Frames (<code>dumpCsbkData</code>)</label>
+          <select name="dump_csbk_data" class="form-control">
+            <option value="false" {% if not dmr.dumpCsbkData %}selected{% endif %}>Disabled (Clean Logs)</option>
+            <option value="true" {% if dmr.dumpCsbkData %}selected{% endif %}>Enabled (Dump CSBK / TSCC Bursts to Log)</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>
@@ -218,8 +343,8 @@
   <!-- Section 2: DMR Protocol Identity & Routing -->
   <div class="card">
     <div class="card-header">
-      <div class="card-title">⚙️ DMR Identity &amp; Channel Routing</div>
-      <span style="font-size:0.85rem; color:var(--text-dim);">Core DMR Parameters (Color Code, Network ID, Timeslots)</span>
+      <div class="card-title">⚙️ Step 3: DMR Identity &amp; Channel Routing</div>
+      <span style="font-size:0.85rem; color:var(--text-dim);">Core DMR Parameters (Color Code, Network ID, Site ID &amp; Timers)</span>
     </div>
 
     <div class="form-row">
@@ -236,18 +361,20 @@
 
       <div class="form-group">
         <label class="form-label">Color Code (0 - 15)</label>
-        <input type="number" name="color_code" class="form-control font-mono" min="0" max="15" value="{{ sys.colorCode if sys.colorCode is defined else 1 }}" required>
+        <input type="number" name="color_code" id="dmr-color-code-input" class="form-control font-mono" min="0" max="15" value="{{ sys.colorCode if sys.colorCode is defined else 1 }}" oninput="updateDmrCodeplugSummary()" required>
         <small class="form-hint">Must match handheld radio codeplug color code.</small>
       </div>
 
       <div class="form-group">
-        <label class="form-label">DMR Network ID (Peer ID)</label>
+        <label class="form-label">DMR Network ID (<code>dmrNetId</code>)</label>
         <input type="number" name="dmr_net_id" class="form-control font-mono" value="{{ sys.dmrNetId or 1 }}" required>
+        <small class="form-hint">DMR Site Network Identity (default 1).</small>
       </div>
 
       <div class="form-group">
         <label class="form-label">Site ID (1 - 255)</label>
         <input type="number" name="site_id" class="form-control" value="{{ sys.siteId or 1 }}" required>
+        <small class="form-hint">DMR Site Number broadcast in CACH / Aloha.</small>
       </div>
     </div>
 
@@ -261,13 +388,13 @@
       <div class="form-group">
         <label class="form-label">Call Hang Time (seconds)</label>
         <input type="number" name="call_hang" class="form-control" value="{{ dmr.callHang or 5 }}">
-        <small class="form-hint">Time to hold channel after unkeying.</small>
+        <small class="form-hint">Time to reserve active talkgroup after a voice call ends.</small>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">TX Hang Time (seconds)</label>
+      <div class="form-group" id="dmr-tx-hang-group" {% if not duplex %}style="display:none;"{% endif %}>
+        <label class="form-label">Repeater TX Hang Time (seconds)</label>
         <input type="number" name="tx_hang" class="form-control" value="{{ dmr.txHang or 8 }}">
-        <small class="form-hint">Time carrier persists after voice transmission.</small>
+        <small class="form-hint">Full Duplex only: Time repeater carrier stays keyed after voice ends.</small>
       </div>
     </div>
   </div>
@@ -459,36 +586,18 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">Verify Unit Registration</label>
-            <select name="verify_reg" class="form-control">
-              <option value="false" {% if not dmr.verifyReg %}selected{% endif %}>Disabled</option>
-              <option value="true" {% if dmr.verifyReg %}selected{% endif %}>Enabled</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Ignore Affiliation Check</label>
-            <select name="ignore_affiliation_check" class="form-control">
-              <option value="false" {% if not dmr.ignoreAffiliationCheck %}selected{% endif %}>Enforce Affiliations</option>
-              <option value="true" {% if dmr.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Legacy Group Registration Fallback</label>
-            <select name="legacy_group_reg" class="form-control">
-              <option value="false" {% if not dmr.legacyGroupReg %}selected{% endif %}>Disabled</option>
-              <option value="true" {% if dmr.legacyGroupReg %}selected{% endif %}>Enabled</option>
-            </select>
-          </div>
-
-          <div class="form-group">
             <label class="form-label">Conventional Net Grant Demand</label>
             <select name="conv_net_grant_demand" class="form-control">
               <option value="false" {% if not dmr.convNetGrantDemand %}selected{% endif %}>Disabled</option>
               <option value="true" {% if dmr.convNetGrantDemand %}selected{% endif %}>Enabled</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Disable Network Channel Grants</label>
+            <select name="disable_network_grant" class="form-control">
+              <option value="false" {% if not dmr.disableNetworkGrant %}selected{% endif %}>Allow Network Grants (Default)</option>
+              <option value="true" {% if dmr.disableNetworkGrant %}selected{% endif %}>Disable Network Grants (RF-Only Steering)</option>
             </select>
           </div>
         </div>
@@ -549,6 +658,46 @@
   </div>
 </div>
 
+<!-- IDEN Frequency Bandplan Table (Used by DVMHost for both DMR & P25 Channel Mapping) -->
+<div class="card" style="margin-top: 1.5rem;">
+  <div class="card-header">
+    <div>
+      <div class="card-title">📊 IDEN Frequency Bandplan Table</div>
+      <span style="font-size:0.75rem; color:var(--text-dim);">iden_table.dat &mdash; Maps DVMHost <code>channelId</code> ({{ sys.channelId if sys.channelId is defined else 2 }}) &amp; hex <code>channelNo</code> (<code>${{ sys.channelNo or '7E3' }}</code>) to RF TX/RX frequencies</span>
+    </div>
+  </div>
+
+  <form hx-post="/p25/iden/save" hx-target="#dmr-iden-container" hx-swap="innerHTML" class="form-row" style="align-items:flex-end; margin-bottom:1.25rem; background:var(--bg-input); padding:1rem; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label">Channel ID (0-15)</label>
+      <input type="number" name="channel_id" class="form-control font-mono" min="0" max="15" placeholder="e.g. 2" required>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label">Base Frequency (Hz)</label>
+      <input type="number" name="base_freq_hz" class="form-control font-mono" placeholder="e.g. 450000000" required>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label">Spacing (kHz)</label>
+      <input type="number" step="0.01" name="spacing_khz" class="form-control font-mono" value="6.25" required>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label">Input Offset (MHz)</label>
+      <input type="number" step="0.001" name="offset_mhz" class="form-control font-mono" value="5.000" required>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label">Bandwidth (kHz)</label>
+      <input type="number" step="0.1" name="bandwidth_khz" class="form-control font-mono" value="12.5" required>
+    </div>
+    <div>
+      <button type="submit" class="btn btn-primary">+ Save Bandplan</button>
+    </div>
+  </form>
+
+  <div id="dmr-iden-container">
+    {% include "components/p25_iden_table.html" %}
+  </div>
+</div>
+
 <!-- DMR Text Messaging & Meshtastic Gateway -->
 <div class="card" style="margin-top: 1.5rem;">
   <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
@@ -596,8 +745,53 @@ function defaultSplitForFreq(txMhz) {
   return 5.0;
 }
 
+function highlightDmrPresetButtons() {
+  const isDuplex = document.getElementById('dmr-duplex-select')?.value === 'true';
+  const tsccMode = document.getElementById('dmr-tscc-mode-select')?.value || 'disabled';
+  const activeKey = !isDuplex
+    ? 'simplex'
+    : (tsccMode === 'dedicated' ? 'tscc_dedicated' : (tsccMode === 'non_dedicated' ? 'tscc_nondedicated' : 'duplex_conv'));
+
+  const presets = ['simplex', 'duplex_conv', 'tscc_nondedicated', 'tscc_dedicated'];
+  presets.forEach(key => {
+    const btn = document.getElementById('dmr-preset-' + key);
+    if (!btn) return;
+    const isSelected = (key === activeKey);
+    const isTscc = key.startsWith('tscc_');
+    btn.style.borderColor = isSelected ? (isTscc ? 'var(--accent-emerald)' : 'var(--accent-cyan)') : 'var(--border-color)';
+    btn.style.background = isSelected
+      ? (isTscc ? 'rgba(16, 185, 129, 0.14)' : 'rgba(6, 182, 212, 0.14)')
+      : 'rgba(15, 23, 42, 0.5)';
+  });
+}
+
+function selectDmrArchitecture(presetKey) {
+  const duplexSel = document.getElementById('dmr-duplex-select');
+  const tsccSel = document.getElementById('dmr-tscc-mode-select');
+  if (!duplexSel || !tsccSel) return;
+
+  if (presetKey === 'simplex') {
+    duplexSel.value = 'false';
+    tsccSel.value = 'disabled';
+  } else if (presetKey === 'duplex_conv') {
+    duplexSel.value = 'true';
+    tsccSel.value = 'disabled';
+  } else if (presetKey === 'tscc_nondedicated') {
+    duplexSel.value = 'true';
+    tsccSel.value = 'non_dedicated';
+  } else if (presetKey === 'tscc_dedicated') {
+    duplexSel.value = 'true';
+    tsccSel.value = 'dedicated';
+  }
+  syncDmrDuplexMode();
+  syncDmrTsccMode();
+  duplexSel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function updateDmrCodeplugSummary() {
   const isDuplex = document.getElementById('dmr-duplex-select')?.value === 'true';
+  const tsccMode = document.getElementById('dmr-tscc-mode-select')?.value || 'disabled';
+  const ccVal = document.getElementById('dmr-color-code-input')?.value || '1';
   const txInput = document.getElementById('dmr-tx-freq-input');
   const rxInput = document.getElementById('dmr-rx-freq-input');
   const summaryEl = document.getElementById('dmr-codeplug-summary');
@@ -608,9 +802,12 @@ function updateDmrCodeplugSummary() {
   const split = rx - tx;
   const splitSign = split >= 0 ? '+' : '';
   if (isDuplex) {
-    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug:</strong> Radio RX = <strong>${tx.toFixed(5)}</strong> MHz &bull; Radio TX = <strong>${rx.toFixed(5)}</strong> MHz (${splitSign}${split.toFixed(3)} MHz)`;
+    const modeTag = tsccMode === 'dedicated'
+      ? 'Tier III Trunked TSCC'
+      : (tsccMode === 'non_dedicated' ? 'Shared TSCC + Repeater' : '2-Slot Repeater');
+    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug (${modeTag}, CC ${ccVal}):</strong> Radio RX = <strong>${tx.toFixed(5)}</strong> MHz &bull; Radio TX = <strong>${rx.toFixed(5)}</strong> MHz (${splitSign}${split.toFixed(3)} MHz)`;
   } else {
-    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug:</strong> Simplex RX/TX = <strong>${tx.toFixed(5)}</strong> MHz`;
+    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug (Simplex, CC ${ccVal}):</strong> RX/TX = <strong>${tx.toFixed(5)}</strong> MHz`;
   }
 }
 
@@ -661,11 +858,13 @@ function syncDmrDuplexMode() {
   const presetsBar = document.getElementById('dmr-offset-presets-bar');
   const simplexNotice = document.getElementById('dmr-simplex-notice');
   const ccCard = document.getElementById('dmr-control-channel-card');
+  const txHangGrp = document.getElementById('dmr-tx-hang-group');
 
   if (rxGroup) rxGroup.style.display = isDuplex ? 'block' : 'none';
   if (presetsBar) presetsBar.style.display = isDuplex ? 'flex' : 'none';
   if (simplexNotice) simplexNotice.style.display = isDuplex ? 'none' : 'block';
   if (ccCard) ccCard.style.display = isDuplex ? 'block' : 'none';
+  if (txHangGrp) txHangGrp.style.display = isDuplex ? 'block' : 'none';
 
   if (txLabel) {
     txLabel.textContent = isDuplex ? 'Hotspot TX / Repeater Output (MHz)' : 'Simplex Operating Frequency (MHz)';
@@ -695,6 +894,7 @@ function syncDmrDuplexMode() {
       }
     }
   }
+  highlightDmrPresetButtons();
   updateDmrCodeplugSummary();
 }
 
@@ -703,10 +903,21 @@ function syncDmrTsccMode() {
   const slotGrp = document.getElementById('dmr-tscc-slot-group');
   const slotSel = document.getElementById('dmr-tscc-slot-select');
   const grantGrp = document.getElementById('dmr-tscc-grant-check-group');
+  const beaconRow = document.getElementById('dmr-beacon-row');
   const beaconEnableGrp = document.getElementById('dmr-beacon-enable-group');
   const beaconEnableSel = document.getElementById('dmr-beacon-enable-select');
   const beaconIntervalGrp = document.getElementById('dmr-beacon-interval-group');
   const beaconDurationGrp = document.getElementById('dmr-beacon-duration-group');
+  const beaconIntervalLbl = document.getElementById('dmr-beacon-interval-label');
+  const beaconDurationLbl = document.getElementById('dmr-beacon-duration-label');
+  const beaconIntervalHint = document.getElementById('dmr-beacon-interval-hint');
+  const beaconDurationHint = document.getElementById('dmr-beacon-duration-hint');
+  const dedicatedNotice = document.getElementById('dmr-tscc-dedicated-notice');
+  const trunkingBox = document.getElementById('dmr-tscc-trunking-box');
+  const slot1Role = document.getElementById('dmr-slot1-role');
+  const slot2Role = document.getElementById('dmr-slot2-role');
+  const slot1Card = document.getElementById('dmr-slot1-card');
+  const slot2Card = document.getElementById('dmr-slot2-card');
   const descEl = document.getElementById('dmr-tscc-mode-desc');
   const badgeEl = document.getElementById('dmr-tscc-badge');
   const hiddenEn = document.getElementById('dmr-tscc-enable-hidden');
@@ -722,35 +933,77 @@ function syncDmrTsccMode() {
     if (hiddenDed) hiddenDed.value = 'false';
     if (slotGrp) slotGrp.style.display = 'none';
     if (grantGrp) grantGrp.style.display = 'none';
+    if (dedicatedNotice) dedicatedNotice.style.display = 'none';
+    if (trunkingBox) trunkingBox.style.display = 'none';
+    if (beaconRow) beaconRow.style.display = 'flex';
     if (beaconEnableGrp) beaconEnableGrp.style.display = 'block';
     const bOn = beaconEnableSel && beaconEnableSel.value === 'true';
     if (beaconIntervalGrp) beaconIntervalGrp.style.display = bOn ? 'block' : 'none';
     if (beaconDurationGrp) beaconDurationGrp.style.display = bOn ? 'block' : 'none';
-    if (descEl) descEl.innerHTML = 'Standard conventional 2-slot DMR repeater. Both Slot 1 and Slot 2 carry voice calls on demand.';
+    if (beaconIntervalLbl) beaconIntervalLbl.textContent = 'Beacon Interval (seconds)';
+    if (beaconDurationLbl) beaconDurationLbl.textContent = 'Beacon Burst Duration (seconds)';
+    if (beaconIntervalHint) beaconIntervalHint.innerHTML = 'Time between roaming beacon bursts (default 60s).';
+    if (beaconDurationHint) beaconDurationHint.innerHTML = 'Duration of each beacon transmission (default 3s).';
+    if (slot1Role) slot1Role.innerHTML = '🎙️ Conventional Voice Traffic';
+    if (slot2Role) slot2Role.innerHTML = '🎙️ Conventional Voice Traffic';
+    if (slot1Card) slot1Card.style.borderLeftColor = 'var(--accent-cyan)';
+    if (slot2Card) slot2Card.style.borderLeftColor = 'var(--accent-cyan)';
+    if (descEl) descEl.innerHTML = 'Standard conventional 2-slot DMR repeater. Both Slot 1 and Slot 2 carry voice calls on demand (TSCC trunking options hidden).';
     if (badgeEl) badgeEl.textContent = 'Conventional 2-Slot Voice';
   } else if (mode === 'non_dedicated') {
     if (hiddenEn) hiddenEn.value = 'true';
     if (hiddenDed) hiddenDed.value = 'false';
     if (slotGrp) slotGrp.style.display = 'block';
     if (grantGrp) grantGrp.style.display = 'block';
-    if (beaconEnableGrp) beaconEnableGrp.style.display = 'block';
-    const bOn = beaconEnableSel && beaconEnableSel.value === 'true';
-    if (beaconIntervalGrp) beaconIntervalGrp.style.display = bOn ? 'block' : 'none';
-    if (beaconDurationGrp) beaconDurationGrp.style.display = bOn ? 'block' : 'none';
-    if (descEl) descEl.innerHTML = `Non-Dedicated TSCC: DVMHost broadcasts control channel signaling on <strong>Slot ${slot}</strong> when idle while allowing voice calls across the repeater.`;
+    if (dedicatedNotice) dedicatedNotice.style.display = 'none';
+    if (trunkingBox) trunkingBox.style.display = 'block';
+    if (beaconRow) beaconRow.style.display = 'flex';
+    if (beaconEnableGrp) beaconEnableGrp.style.display = 'none';
+    if (beaconEnableSel) beaconEnableSel.value = 'true';
+    if (beaconIntervalGrp) beaconIntervalGrp.style.display = 'block';
+    if (beaconDurationGrp) beaconDurationGrp.style.display = 'block';
+    if (beaconIntervalLbl) beaconIntervalLbl.textContent = 'TSCC Broadcast Interval (seconds)';
+    if (beaconDurationLbl) beaconDurationLbl.textContent = 'TSCC Burst Duration (seconds)';
+    if (beaconIntervalHint) beaconIntervalHint.innerHTML = 'DVMHost <code>beacons.interval</code>: Time between non-dedicated TSCC broadcasts (default 60s).';
+    if (beaconDurationHint) beaconDurationHint.innerHTML = 'DVMHost <code>beacons.duration</code>: Length of each periodic TSCC burst (default 3s).';
+    if (slot === '1') {
+      if (slot1Role) slot1Role.innerHTML = '🗼 Periodic TSCC Control + 🎙️ Voice';
+      if (slot2Role) slot2Role.innerHTML = '🎙️ Voice Traffic Channel';
+      if (slot1Card) slot1Card.style.borderLeftColor = 'var(--accent-emerald)';
+      if (slot2Card) slot2Card.style.borderLeftColor = 'var(--accent-cyan)';
+    } else {
+      if (slot1Role) slot1Role.innerHTML = '🎙️ Voice Traffic Channel';
+      if (slot2Role) slot2Role.innerHTML = '🗼 Periodic TSCC Control + 🎙️ Voice';
+      if (slot1Card) slot1Card.style.borderLeftColor = 'var(--accent-cyan)';
+      if (slot2Card) slot2Card.style.borderLeftColor = 'var(--accent-emerald)';
+    }
+    if (descEl) descEl.innerHTML = `Non-Dedicated TSCC: DVMHost broadcasts periodic TSCC control bursts on <strong>Slot ${slot}</strong> when idle while allowing voice calls on both slots.`;
     if (badgeEl) badgeEl.textContent = `Non-Dedicated TSCC (Slot ${slot})`;
   } else if (mode === 'dedicated') {
     if (hiddenEn) hiddenEn.value = 'true';
     if (hiddenDed) hiddenDed.value = 'true';
     if (slotGrp) slotGrp.style.display = 'block';
     if (grantGrp) grantGrp.style.display = 'block';
-    if (beaconEnableGrp) beaconEnableGrp.style.display = 'none';
+    if (dedicatedNotice) dedicatedNotice.style.display = 'block';
+    if (trunkingBox) trunkingBox.style.display = 'block';
+    if (beaconRow) beaconRow.style.display = 'none';
     if (beaconEnableSel) beaconEnableSel.value = 'true';
-    if (beaconIntervalGrp) beaconIntervalGrp.style.display = 'none';
-    if (beaconDurationGrp) beaconDurationGrp.style.display = 'block';
-    if (descEl) descEl.innerHTML = `Dedicated TSCC: <strong>Slot ${slot}</strong> transmits continuous TSCC control data while <strong>Slot ${voiceSlot}</strong> carries voice traffic on this Duplex Hat.`;
+    if (slot === '1') {
+      if (slot1Role) slot1Role.innerHTML = '🗼 Dedicated 24/7 TSCC Control Channel';
+      if (slot2Role) slot2Role.innerHTML = '🎙️ Trunked Voice Traffic Channel';
+      if (slot1Card) slot1Card.style.borderLeftColor = 'var(--accent-emerald)';
+      if (slot2Card) slot2Card.style.borderLeftColor = 'var(--accent-cyan)';
+    } else {
+      if (slot1Role) slot1Role.innerHTML = '🎙️ Trunked Voice Traffic Channel';
+      if (slot2Role) slot2Role.innerHTML = '🗼 Dedicated 24/7 TSCC Control Channel';
+      if (slot1Card) slot1Card.style.borderLeftColor = 'var(--accent-cyan)';
+      if (slot2Card) slot2Card.style.borderLeftColor = 'var(--accent-emerald)';
+    }
+    if (descEl) descEl.innerHTML = `Dedicated 24/7 TSCC: <strong>Slot ${slot}</strong> transmits continuous TSCC control data while <strong>Slot ${voiceSlot}</strong> carries trunked voice traffic on this Duplex Hat.`;
     if (badgeEl) badgeEl.textContent = `Dedicated TSCC (Slot ${slot} CC / Slot ${voiceSlot} Voice)`;
   }
+  highlightDmrPresetButtons();
+  updateDmrCodeplugSummary();
 }
 
 function syncDmrCwId() {
@@ -770,7 +1023,7 @@ function syncDmrNetMode() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  updateDmrCodeplugSummary();
+  syncDmrDuplexMode();
   syncDmrTsccMode();
   syncDmrCwId();
   syncDmrNetMode();

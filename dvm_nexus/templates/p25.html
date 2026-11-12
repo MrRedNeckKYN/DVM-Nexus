@@ -58,13 +58,60 @@
 <form id="p25-config-form" hx-post="/p25/save" hx-trigger="submit" hx-target="#toast-container" hx-swap="beforeend" data-dirty-guard>
 
   <!-- Section 1: Radio Frequencies & Station Identity -->
+  {% set p25_cc_on = (p25.control and p25.control.enable) %}
+  {% set p25_cc_ded = (p25.control and p25.control.dedicated) %}
+  {% set p25_cc_mode = 'dedicated' if (p25_cc_on and p25_cc_ded) else ('non_dedicated' if p25_cc_on else 'disabled') %}
+  {% set p25_arch_mode = 'simplex' if not duplex else ('duplex_dedicated' if p25_cc_mode == 'dedicated' else ('duplex_nondedicated' if p25_cc_mode == 'non_dedicated' else 'duplex_conv')) %}
   <div class="card" style="border-left:4px solid var(--accent-indigo);">
     <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div>
         <div class="card-title">📻 Radio Frequencies, Duplex Mode &amp; Station Identity</div>
         <span style="font-size:0.85rem; color:var(--text-dim);">Operating Frequencies, Repeater Offset &amp; Duplex / Simplex Mode (DVMHost <code>system.duplex</code>)</span>
       </div>
-      <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Saved when you press Save</span>
+      <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <span class="badge badge-indigo" title="Auto-computed IDEN Channel ID &amp; Hex Channel Number for P25 TSBK">
+          IDEN Ch ID {{ sys.channelId if sys.channelId is defined else 2 }} &bull; Ch No ${{ sys.channelNo or '7E3' }}
+        </span>
+        <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Saved when you press Save</span>
+      </div>
+    </div>
+
+    <!-- Guided 1-Click P25 Architecture Selector -->
+    <div style="margin-bottom:1.1rem;">
+      <label class="form-label" style="margin-bottom:0.45rem; display:block;">⚡ Quick P25 Operating Architecture (Auto-Shows / Hides Relevant DVMHost Menus)</label>
+      <div id="p25-arch-cards" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(215px, 1fr)); gap:0.65rem;">
+        <button type="button" data-arch="simplex" onclick="selectP25Architecture('simplex')" class="arch-mode-card" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s ease; background:{% if p25_arch_mode == 'simplex' %}rgba(99, 102, 241, 0.16){% else %}rgba(15, 23, 42, 0.55){% endif %}; border:1px solid {% if p25_arch_mode == 'simplex' %}rgba(99, 102, 241, 0.75){% else %}var(--border-color){% endif %}; color:var(--text-main);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+            <strong style="font-size:0.86rem; color:var(--text-bright);">1. Simplex Direct / Hotspot</strong>
+            <span class="badge badge-muted" style="font-size:0.68rem;">1 Freq</span>
+          </div>
+          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Single frequency (<code>duplex: false</code>). Hides RX split &amp; TSBK Control Channel menus.</div>
+        </button>
+
+        <button type="button" data-arch="duplex_conv" onclick="selectP25Architecture('duplex_conv')" class="arch-mode-card" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s ease; background:{% if p25_arch_mode == 'duplex_conv' %}rgba(99, 102, 241, 0.16){% else %}rgba(15, 23, 42, 0.55){% endif %}; border:1px solid {% if p25_arch_mode == 'duplex_conv' %}rgba(99, 102, 241, 0.75){% else %}var(--border-color){% endif %}; color:var(--text-main);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+            <strong style="font-size:0.86rem; color:var(--text-bright);">2. Full Duplex (Conventional)</strong>
+            <span class="badge badge-indigo" style="font-size:0.68rem;">Voice Only</span>
+          </div>
+          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Standard split TX/RX repeater. Direct voice calls using NAC verification (no TSBK CC).</div>
+        </button>
+
+        <button type="button" data-arch="duplex_nondedicated" onclick="selectP25Architecture('duplex_nondedicated')" class="arch-mode-card" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s ease; background:{% if p25_arch_mode == 'duplex_nondedicated' %}rgba(16, 185, 129, 0.15){% else %}rgba(15, 23, 42, 0.55){% endif %}; border:1px solid {% if p25_arch_mode == 'duplex_nondedicated' %}rgba(16, 185, 129, 0.75){% else %}var(--border-color){% endif %}; color:var(--text-main);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+            <strong style="font-size:0.86rem; color:var(--text-bright);">3. Full Duplex + Non-Dedicated CC</strong>
+            <span class="badge badge-success" style="font-size:0.68rem;">Combined CC+Voice</span>
+          </div>
+          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Periodic TSBK bursts when idle + P25 voice calls on a single Duplex Hat.</div>
+        </button>
+
+        <button type="button" data-arch="duplex_dedicated" onclick="selectP25Architecture('duplex_dedicated')" class="arch-mode-card" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s ease; background:{% if p25_arch_mode == 'duplex_dedicated' %}rgba(245, 158, 11, 0.15){% else %}rgba(15, 23, 42, 0.55){% endif %}; border:1px solid {% if p25_arch_mode == 'duplex_dedicated' %}rgba(245, 158, 11, 0.75){% else %}var(--border-color){% endif %}; color:var(--text-main);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+            <strong style="font-size:0.86rem; color:var(--text-bright);">4. Full Duplex + Dedicated 24/7 CC</strong>
+            <span class="badge badge-warning" style="font-size:0.68rem;">24/7 TSBK</span>
+          </div>
+          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Continuous 24/7 P25 TSBK trunking Control Channel broadcast.</div>
+        </button>
+      </div>
     </div>
 
     <div class="form-row">
@@ -231,8 +278,64 @@
           <small class="form-hint">Used when this Dedicated CC coordinates separate Voice Channel nodes.</small>
         </div>
       </div>
-      <div style="padding:0.75rem 1rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.82rem; color:#fde68a;">
+      <div style="padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.82rem; color:#fde68a;">
         ⚠️ <strong>DVMHost Dedicated P25 Control Channel Note:</strong> Because P25 Phase 1 is FDMA (single channel per carrier), enabling <strong>Dedicated CC (`control.dedicated: true`)</strong> keys your transmitter <strong>100% continuously</strong> broadcasting TSBK trunking data. A dedicated P25 CC requires a second DVMHost Voice Channel (`voiceChNo`) radio to carry voice calls. If you are using a <strong>single Raspberry Pi + MMDVM Duplex Hat</strong> and want both TSBK Control Channel features AND voice calls, select <strong>2. Non-Dedicated Control Channel (Combined CC + Voice)</strong> above.
+      </div>
+    </div>
+
+    <!-- TSBK Trunking Registration & Affiliation Controls (Visible ONLY when CC is Non-Dedicated or Dedicated) -->
+    <div id="p25-tsbk-trunking-box" style="{% if p25_cc_mode == 'disabled' %}display:none;{% else %}display:block;{% endif %} padding:0.9rem 1rem; background:rgba(15, 23, 42, 0.55); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
+      <div style="font-size:0.82rem; font-weight:700; color:#a5b4fc; margin-bottom:0.65rem;">
+        🔐 P25 TSBK Trunking Affiliation &amp; Registration Policies (<code>p25::Control</code>)
+      </div>
+      <div class="form-row" style="margin-bottom:0;">
+        <div class="form-group">
+          <label class="form-label">Verify Unit Registration (<code>verifyReg</code>)</label>
+          <select name="verify_reg" class="form-control">
+            <option value="false" {% if not p25.verifyReg %}selected{% endif %}>Disabled (Allow Unregistered Radios)</option>
+            <option value="true" {% if p25.verifyReg %}selected{% endif %}>Enabled (Require U_REG_REQ First)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Verify Group Affiliation (<code>verifyAff</code>)</label>
+          <select name="verify_aff" class="form-control">
+            <option value="false" {% if not p25.verifyAff %}selected{% endif %}>Disabled</option>
+            <option value="true" {% if p25.verifyAff %}selected{% endif %}>Enabled (Require GRP_AFF_REQ)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Affiliation Check (<code>ignoreAffiliationCheck</code>)</label>
+          <select name="ignore_affiliation_check" class="form-control">
+            <option value="false" {% if not p25.ignoreAffiliationCheck %}selected{% endif %}>Enforce Affiliations</option>
+            <option value="true" {% if p25.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations (Route All Calls)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Demand Reg on Refused Aff (<code>demandUnitRegForRefusedAff</code>)</label>
+          <select name="demand_unit_reg_for_refused_aff" class="form-control">
+            <option value="true" {% if p25.demandUnitRegForRefusedAff is not defined or p25.demandUnitRegForRefusedAff %}selected{% endif %}>Enabled</option>
+            <option value="false" {% if p25.demandUnitRegForRefusedAff is defined and not p25.demandUnitRegForRefusedAff %}selected{% endif %}>Disabled</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Legacy Group Grant (<code>legacyGroupGrnt</code>)</label>
+          <select name="legacy_group_grnt" class="form-control">
+            <option value="true" {% if p25.legacyGroupGrnt is not defined or p25.legacyGroupGrnt %}selected{% endif %}>Enabled</option>
+            <option value="false" {% if p25.legacyGroupGrnt is defined and not p25.legacyGroupGrnt %}selected{% endif %}>Disabled</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Legacy Group Reg (<code>legacyGroupReg</code>)</label>
+          <select name="legacy_group_reg" class="form-control">
+            <option value="false" {% if not p25.legacyGroupReg %}selected{% endif %}>Disabled</option>
+            <option value="true" {% if p25.legacyGroupReg %}selected{% endif %}>Enabled</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>
@@ -503,62 +606,10 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">Verify Unit Registration</label>
-            <select name="verify_reg" class="form-control">
-              <option value="false" {% if not p25.verifyReg %}selected{% endif %}>Disabled</option>
-              <option value="true" {% if p25.verifyReg %}selected{% endif %}>Enabled</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Verify Group Affiliation</label>
-            <select name="verify_aff" class="form-control">
-              <option value="false" {% if not p25.verifyAff %}selected{% endif %}>Disabled</option>
-              <option value="true" {% if p25.verifyAff %}selected{% endif %}>Enabled</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Ignore Affiliation Check</label>
-            <select name="ignore_affiliation_check" class="form-control">
-              <option value="false" {% if not p25.ignoreAffiliationCheck %}selected{% endif %}>Enforce Affiliations</option>
-              <option value="true" {% if p25.ignoreAffiliationCheck %}selected{% endif %}>Ignore Affiliations</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Legacy Group Grant Fallback</label>
-            <select name="legacy_group_grnt" class="form-control">
-              <option value="true" {% if p25.legacyGroupGrnt is not defined or p25.legacyGroupGrnt %}selected{% endif %}>Enabled</option>
-              <option value="false" {% if p25.legacyGroupGrnt is defined and not p25.legacyGroupGrnt %}selected{% endif %}>Disabled</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Legacy Group Registration Fallback</label>
-            <select name="legacy_group_reg" class="form-control">
-              <option value="false" {% if not p25.legacyGroupReg %}selected{% endif %}>Disabled</option>
-              <option value="true" {% if p25.legacyGroupReg %}selected{% endif %}>Enabled</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
             <label class="form-label">Conventional Net Grant Demand</label>
             <select name="conv_net_grant_demand" class="form-control">
               <option value="false" {% if not p25.convNetGrantDemand %}selected{% endif %}>Disabled</option>
               <option value="true" {% if p25.convNetGrantDemand %}selected{% endif %}>Enabled</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Demand Reg for Refused Affiliation</label>
-            <select name="demand_unit_reg_for_refused_aff" class="form-control">
-              <option value="true" {% if p25.demandUnitRegForRefusedAff is not defined or p25.demandUnitRegForRefusedAff %}selected{% endif %}>Enabled</option>
-              <option value="false" {% if p25.demandUnitRegForRefusedAff is defined and not p25.demandUnitRegForRefusedAff %}selected{% endif %}>Disabled</option>
             </select>
           </div>
         </div>
@@ -763,6 +814,58 @@ function swapP25TxRx() {
   updateP25CodeplugSummary();
 }
 
+function updateP25ArchCardHighlight() {
+  const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
+  const ccMode = document.getElementById('p25-cc-mode-select')?.value || 'disabled';
+  const activeArch = !isDuplex
+    ? 'simplex'
+    : (ccMode === 'dedicated' ? 'duplex_dedicated' : (ccMode === 'non_dedicated' ? 'duplex_nondedicated' : 'duplex_conv'));
+
+  const cards = document.querySelectorAll('#p25-arch-cards .arch-mode-card');
+  cards.forEach(card => {
+    const arch = card.getAttribute('data-arch');
+    if (arch === activeArch) {
+      if (arch === 'duplex_nondedicated') {
+        card.style.background = 'rgba(16, 185, 129, 0.15)';
+        card.style.borderColor = 'rgba(16, 185, 129, 0.75)';
+      } else if (arch === 'duplex_dedicated') {
+        card.style.background = 'rgba(245, 158, 11, 0.15)';
+        card.style.borderColor = 'rgba(245, 158, 11, 0.75)';
+      } else {
+        card.style.background = 'rgba(99, 102, 241, 0.16)';
+        card.style.borderColor = 'rgba(99, 102, 241, 0.75)';
+      }
+    } else {
+      card.style.background = 'rgba(15, 23, 42, 0.55)';
+      card.style.borderColor = 'var(--border-color)';
+    }
+  });
+}
+
+function selectP25Architecture(arch) {
+  const duplexSel = document.getElementById('p25-duplex-select');
+  const ccSel = document.getElementById('p25-cc-mode-select');
+  if (!duplexSel || !ccSel) return;
+
+  if (arch === 'simplex') {
+    duplexSel.value = 'false';
+    ccSel.value = 'disabled';
+  } else if (arch === 'duplex_conv') {
+    duplexSel.value = 'true';
+    ccSel.value = 'disabled';
+  } else if (arch === 'duplex_nondedicated') {
+    duplexSel.value = 'true';
+    ccSel.value = 'non_dedicated';
+  } else if (arch === 'duplex_dedicated') {
+    duplexSel.value = 'true';
+    ccSel.value = 'dedicated';
+  }
+
+  syncDuplexMode();
+  syncP25CcMode();
+  duplexSel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function syncDuplexMode() {
   const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
   const rxGroup = document.getElementById('p25-rx-freq-group');
@@ -809,6 +912,7 @@ function syncDuplexMode() {
     }
   }
   updateP25CodeplugSummary();
+  updateP25ArchCardHighlight();
 }
 
 function syncP25CcMode() {
@@ -820,6 +924,7 @@ function syncP25CcMode() {
   const intervalGrp = document.getElementById('p25-cc-interval-group');
   const durationGrp = document.getElementById('p25-cc-duration-group');
   const dedBox = document.getElementById('p25-cc-dedicated-box');
+  const trunkBox = document.getElementById('p25-tsbk-trunking-box');
   const descEl = document.getElementById('p25-cc-mode-desc');
   const badgeEl = document.getElementById('p25-cc-badge');
   const hiddenEn = document.getElementById('p25-cc-enable-hidden');
@@ -835,6 +940,7 @@ function syncP25CcMode() {
     if (grantGrp) grantGrp.style.display = 'none';
     if (nonDedRow) nonDedRow.style.display = 'none';
     if (dedBox) dedBox.style.display = 'none';
+    if (trunkBox) trunkBox.style.display = 'none';
     if (descEl) descEl.innerHTML = 'Conventional P25 Phase 1 repeater. Radios transmit and receive directly on programmed talkgroups using NAC verification.';
     if (badgeEl) badgeEl.textContent = 'Conventional P25 Voice';
   } else if (mode === 'non_dedicated') {
@@ -844,6 +950,7 @@ function syncP25CcMode() {
     if (grantGrp) grantGrp.style.display = 'block';
     if (nonDedRow) nonDedRow.style.display = 'flex';
     if (dedBox) dedBox.style.display = 'none';
+    if (trunkBox) trunkBox.style.display = 'block';
     const bOn = !bcastSel || bcastSel.value === 'true';
     if (intervalGrp) intervalGrp.style.display = bOn ? 'block' : 'none';
     if (durationGrp) durationGrp.style.display = bOn ? 'block' : 'none';
@@ -856,9 +963,11 @@ function syncP25CcMode() {
     if (grantGrp) grantGrp.style.display = 'block';
     if (nonDedRow) nonDedRow.style.display = 'none';
     if (dedBox) dedBox.style.display = 'block';
+    if (trunkBox) trunkBox.style.display = 'block';
     if (descEl) descEl.innerHTML = '<strong>Dedicated 24/7 Control Channel:</strong> DVMHost transmits continuous TSBK control data on this frequency pair.';
     if (badgeEl) badgeEl.textContent = 'Dedicated 24/7 TSBK Control Channel';
   }
+  updateP25ArchCardHighlight();
 }
 
 function syncP25CwId() {

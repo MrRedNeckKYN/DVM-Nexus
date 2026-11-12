@@ -299,9 +299,16 @@ def test_duplex_simplex_and_control_channel_rules(client):
         "tx_freq": 439.0,
         "rx_freq": 439.0,
         "color_code": 1,
+        "authoritative": "false",
+        "supervisor": "true",
         "tscc_mode": "dedicated",
         "tscc_slot": 1,
         "disable_grant_src_check": "true",
+        "n_rand_wait": 5,
+        "back_off": 4,
+        "dump_csbk_data": "true",
+        "disable_unit_reg_timeout": "true",
+        "disable_network_grant": "true",
         "beacon_enable": "true",
         "beacon_interval": 60,
         "beacon_duration": 3,
@@ -310,11 +317,47 @@ def test_duplex_simplex_and_control_channel_rules(client):
     cfg = dvm_config_manager.load_config_dict()
     assert cfg["system"]["duplex"] is True
     assert cfg["system"]["simplexSameFrequency"] is False
+    assert cfg["system"]["config"]["authoritative"] is False
+    assert cfg["protocols"]["dmr"]["supervisor"] is True
     assert cfg["protocols"]["dmr"]["control"]["enable"] is True
     assert cfg["protocols"]["dmr"]["control"]["dedicated"] is True
     assert cfg["protocols"]["dmr"]["control"]["slot"] == 1
     assert cfg["protocols"]["dmr"]["control"]["disableGrantSourceIdCheck"] is True
+    assert cfg["protocols"]["dmr"]["nRandWait"] == 5
+    assert cfg["protocols"]["dmr"]["backOff"] == 4
+    assert cfg["protocols"]["dmr"]["dumpCsbkData"] is True
+    assert cfg["protocols"]["dmr"]["disableUnitRegTimeout"] is True
+    assert cfg["protocols"]["dmr"]["disableNetworkGrant"] is True
     assert cfg["protocols"]["dmr"]["beacons"]["enable"] is True
+
+    # 1B. DMR Non-Dedicated TSCC automatically forces beacons.enable = True (DVMHost Host.cpp:426)
+    resp_dmr_nonded = client.post("/dmr/save", data={
+        "enable": "true",
+        "duplex": "true",
+        "tx_freq": 439.0,
+        "rx_freq": 444.0,
+        "color_code": 1,
+        "tscc_mode": "non_dedicated",
+        "tscc_slot": 1,
+        "beacon_enable": "false",
+    })
+    assert resp_dmr_nonded.status_code == 200
+    cfg = dvm_config_manager.load_config_dict()
+    assert cfg["protocols"]["dmr"]["control"]["enable"] is True
+    assert cfg["protocols"]["dmr"]["control"]["dedicated"] is False
+    assert cfg["protocols"]["dmr"]["beacons"]["enable"] is True
+
+    # Verify /dmr and /p25 render the 4-Card Guided Architecture Selector & IDEN Table
+    dmr_page = client.get("/dmr")
+    assert dmr_page.status_code == 200
+    assert "selectDmrArchitecture" in dmr_page.text
+    assert "dmr-tdma-slot-map" in dmr_page.text
+    assert "dmr-iden-container" in dmr_page.text
+
+    p25_page = client.get("/p25")
+    assert p25_page.status_code == 200
+    assert "selectP25Architecture" in p25_page.text
+    assert "p25-tsbk-trunking-box" in p25_page.text
 
     # 2. DMR Simplex forces TSCC and Beacons off and sets simplexSameFrequency=True
     resp_dmr_sim = client.post("/dmr/save", data={

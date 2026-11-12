@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional
 
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+from dvm_nexus.config_engine.iden_calculator import read_iden_table_file
 from dvm_nexus.config_engine.network_validator import (
     validate_dmr_settings, validate_frequencies, validate_int_range, validate_port,
 )
@@ -36,6 +37,7 @@ async def dmr_page(request: Request):
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "p25")
 
+    iden_entries = read_iden_table_file(dvm_config_manager.iden_path)
     tx_freq_mhz, iden_rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
     rx_freq_mhz = iden_rx_freq_mhz if duplex else tx_freq_mhz
     talkgroups = dvm_config_manager.load_talkgroup_rules()
@@ -57,6 +59,7 @@ async def dmr_page(request: Request):
             "cw": cw_conf,
             "identity": identity,
             "duplex": duplex,
+            "iden_entries": iden_entries,
             "tx_freq_mhz": tx_freq_mhz,
             "rx_freq_mhz": rx_freq_mhz,
             "duplex_rx_freq_mhz": iden_rx_freq_mhz,
@@ -82,6 +85,8 @@ async def dmr_save(
     color_code: int = Form(1),
     dmr_net_id: int = Form(1),
     site_id: int = Form(1),
+    authoritative: bool = Form(True),
+    supervisor: bool = Form(False),
     default_net_idle_tg: int = Form(0),
     call_hang: int = Form(5),
     tx_hang: int = Form(8),
@@ -106,6 +111,11 @@ async def dmr_save(
     tscc_slot: int = Form(1),
     tscc_dedicated: bool = Form(False),
     disable_grant_src_check: bool = Form(False),
+    n_rand_wait: int = Form(8),
+    back_off: int = Form(1),
+    dump_csbk_data: bool = Form(False),
+    disable_unit_reg_timeout: bool = Form(False),
+    disable_network_grant: bool = Form(False),
     repeat_data_packet: bool = Form(True),
     dump_ta_data: bool = Form(True),
     embedded_lc_only: bool = Form(False),
@@ -142,6 +152,8 @@ async def dmr_save(
         elif mode_val == "non_dedicated":
             tscc_enable = True
             tscc_dedicated = False
+            # DVMHost Host.cpp:426 forcibly enables beacons when TSCC is enabled in non-dedicated mode
+            beacon_enable = True
         else:
             tscc_enable = False
             tscc_dedicated = False
@@ -219,6 +231,12 @@ async def dmr_save(
         c["protocols"]["dmr"]["ignoreAffiliationCheck"] = ignore_affiliation_check
         c["protocols"]["dmr"]["legacyGroupReg"] = legacy_group_reg
         c["protocols"]["dmr"]["convNetGrantDemand"] = conv_net_grant_demand
+        c["protocols"]["dmr"]["nRandWait"] = max(1, min(15, int(n_rand_wait)))
+        c["protocols"]["dmr"]["backOff"] = max(1, min(15, int(back_off)))
+        c["protocols"]["dmr"]["dumpCsbkData"] = dump_csbk_data
+        c["protocols"]["dmr"]["disableUnitRegTimeout"] = disable_unit_reg_timeout
+        c["protocols"]["dmr"]["disableNetworkGrant"] = disable_network_grant
+        c["protocols"]["dmr"]["supervisor"] = supervisor
 
         c["protocols"]["dmr"].setdefault("beacons", {})
         c["protocols"]["dmr"]["beacons"]["enable"] = beacon_enable
@@ -235,6 +253,8 @@ async def dmr_save(
         c["system"]["config"]["colorCode"] = color_code
         c["system"]["config"]["dmrNetId"] = dmr_net_id
         c["system"]["config"]["siteId"] = site_id
+        c["system"]["config"]["authoritative"] = authoritative
+        c["system"]["config"]["supervisor"] = supervisor
         c["system"]["config"]["defaultNetIdleTalkgroup"] = default_net_idle_tg
 
         c.setdefault("system", {}).setdefault("modem", {})
