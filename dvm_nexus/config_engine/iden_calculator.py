@@ -3,7 +3,7 @@ DVM Nexus - IDEN Bandplan and Frequency Calculator
 Based on official DVMProject / dvmcfggen algorithms by Bryan Biedenkapp (N2PLL).
 """
 
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 from pathlib import Path
 from pydantic import BaseModel, Field
 
@@ -12,12 +12,31 @@ MAX_FREQ_GAP = 30000000  # 30 MHz max offset
 HZ_MHZ = 1000000.0
 
 
+def default_band_split_mhz(freq_hz: int) -> float:
+    """
+    Return a standard non-zero nominal repeater offset (in MHz) for a given frequency band.
+    DVMHost (src/host/Host.Config.cpp:182) rejects iden_table.dat entries with txOffsetMhz == 0.0
+    even when running in Simplex mode (where simplexSameFrequency: true overrides m_rxFrequency = m_txFrequency).
+    """
+    if 400_000_000 <= freq_hz <= 480_000_000:
+        return 5.0
+    if 136_000_000 <= freq_hz <= 174_000_000:
+        return 0.6
+    if 800_000_000 <= freq_hz <= 870_000_000:
+        return -45.0
+    if 760_000_000 <= freq_hz <= 780_000_000:
+        return 30.0
+    if 900_000_000 <= freq_hz <= 950_000_000:
+        return -39.0
+    return 5.0
+
+
 class IdenEntry(BaseModel):
     """Represents a row in iden_table.dat."""
     channel_id: int = Field(..., ge=0, le=15, description="Channel ID (0-15)")
     base_freq_hz: int = Field(..., description="Base frequency in Hz")
-    spacing_khz: float = Field(default=6.25, description="Channel spacing in kHz (typically 6.25 or 12.5)")
-    offset_mhz: float = Field(default=0.0, description="TX to RX input offset in MHz")
+    spacing_khz: float = Field(default=12.5, description="Channel spacing in kHz (typically 12.5 or 6.25)")
+    offset_mhz: float = Field(default=5.0, description="TX to RX input offset in MHz")
     bandwidth_khz: float = Field(default=12.5, description="Bandwidth in kHz")
 
     @property
@@ -25,7 +44,19 @@ class IdenEntry(BaseModel):
         return self.base_freq_hz / HZ_MHZ
 
     def to_csv_line(self) -> str:
-        return f"{self.channel_id},{self.base_freq_hz},{self.spacing_khz:.2f},{self.offset_mhz:.3f},{self.bandwidth_khz:.1f},"
+        # Preserve up to 6 decimal places for offset_mhz (1 Hz resolution) so DVMHost's
+        # ::atof(parsed[3]) * 1000000.0 never truncates fractional kHz offsets (e.g. 6.25 / 12.5 kHz).
+        off_str = f"{self.offset_mhz:.6f}".rstrip("0")
+        if off_str.endswith("."):
+            off_str += "000"
+        elif len(off_str.split(".")[1]) < 3:
+            off_str = f"{self.offset_mhz:.3f}"
+        space_str = f"{self.spacing_khz:.4f}".rstrip("0")
+        if space_str.endswith("."):
+            space_str += "00"
+        elif len(space_str.split(".")[1]) < 2:
+            space_str = f"{self.spacing_khz:.2f}"
+        return f"{self.channel_id},{self.base_freq_hz},{space_str},{off_str},{self.bandwidth_khz:.1f},"
 
 
 BAND_PRESETS = {
@@ -127,75 +158,137 @@ def calculate_channel_number(freq_hz: int, base_freq_hz: int, spacing_khz: float
     return channel_no, actual_freq
 
 
-def calculate_frequency_from_channel(channel_no: int, base_freq_hz: int, spacing_khz: float, offset_mhz: float = 0.0) -> Tuple[int, int]:
+def calculate_frequency_from_channel(
+    channel_no: int,
+    base_freq_hz: int,
+    spacing_khz: float,
+    offset_mhz: float = 0.0,
+    duplex: bool = True,
+    simplex_same_freq: bool = False,
+) -> Tuple[int, int]:
     """
-    Calculate TX and RX frequencies from channel number and IDEN entry.
+    Calculate TX and RX frequencies from channel number and IDEN entry using
+    DVMHost's exact Host.Config.cpp:187-200 integer formula:
+      calcSpace = (uint32_t)(chSpaceKhz / 0.125)
+      m_txFrequency = baseFrequency + ((calcSpace * 125) * channelNo)
+      m_rxFrequency = m_txFrequency + (int32_t)(txOffsetMhz * 1000000.0)
+      if (!duplex && simplexSameFreq) m_rxFrequency = m_txFrequency
     Returns: (tx_freq_hz, rx_freq_hz)
     """
-    spacing_hz = int(spacing_khz * 1000.0)
-    tx_freq_hz = base_freq_hz + (channel_no * spacing_hz)
-    rx_freq_hz = tx_freq_hz + int(offset_mhz * HZ_MHZ)
+    calc_space = int(float(spacing_khz) / 0.125)
+    spacing_hz = calc_space * 125
+    tx_freq_hz = int(base_freq_hz) + (int(channel_no) * spacing_hz)
+    if not duplex and simplex_same_freq:
+        rx_freq_hz = tx_freq_hz
+    else:
+        rx_freq_hz = tx_freq_hz + int(round(float(offset_mhz) * HZ_MHZ))
     return tx_freq_hz, rx_freq_hz
+
+
+def auto_calculate_single_iden_entry(
+    rx_freq_mhz: float,
+    tx_freq_mhz: float,
+    spacing_khz: float = 12.5,
+    bandwidth_khz: float = 12.5,
+    duplex: bool = True,
+    channel_id: int = 1,
+) -> Tuple[IdenEntry, Dict[str, Any]]:
+    """
+    Automatically calculate a deterministic iden_table.dat entry using channelId=1 and channelNo=1
+    so the user never has to manually calculate or edit iden_table.dat, channelId, or channelNo.
+
+    Math (matching DVMHost Host.Config.cpp:187-200):
+      - spacing_hz = int(spacing_khz / 0.125) * 125  (default 12,500 Hz for 12.5 kHz)
+      - tx_freq_hz = round(tx_freq_mhz * 1_000_000)
+      - rx_freq_hz = round(rx_freq_mhz * 1_000_000) (or tx_freq_hz when duplex=False)
+      - base_freq_hz = tx_freq_hz - spacing_hz
+        (In simplex, rx_freq_hz == tx_freq_hz so base_freq_hz == rx_freq_hz - spacing_hz;
+         in duplex, base_freq_hz + (1 * spacing_hz) lands on exact tx_freq_hz and
+         m_txFrequency + tx_offset_hz lands on exact rx_freq_hz.)
+    """
+    if spacing_khz <= 0:
+        spacing_khz = 12.5
+    calc_space = max(1, int(round(float(spacing_khz) / 0.125)))
+    effective_spacing_khz = calc_space * 0.125
+    spacing_hz = calc_space * 125
+
+    tx_freq_hz = int(round(float(tx_freq_mhz) * 1_000_000.0))
+    rx_freq_hz = int(round(float(rx_freq_mhz) * 1_000_000.0)) if duplex else tx_freq_hz
+
+    channel_no = 1
+    base_freq_hz = tx_freq_hz - (channel_no * spacing_hz)
+    tx_offset_hz = rx_freq_hz - tx_freq_hz
+    actual_offset_mhz = tx_offset_hz / HZ_MHZ
+
+    # DVMHost (Host.Config.cpp:182) refuses to start if entry.txOffsetMhz() == 0 in iden_table.dat.
+    # When RX == TX (Simplex), store a non-zero band split in iden_table.dat while config.yml sets
+    # duplex: false and simplexSameFrequency: true so DVMHost sets m_rxFrequency = m_txFrequency.
+    iden_offset_mhz = actual_offset_mhz if abs(actual_offset_mhz) >= 0.000001 else default_band_split_mhz(tx_freq_hz)
+
+    entry = IdenEntry(
+        channel_id=channel_id,
+        base_freq_hz=base_freq_hz,
+        spacing_khz=effective_spacing_khz,
+        offset_mhz=iden_offset_mhz,
+        bandwidth_khz=bandwidth_khz,
+    )
+
+    calc_tx_hz, calc_rx_hz = calculate_frequency_from_channel(
+        channel_no=channel_no,
+        base_freq_hz=entry.base_freq_hz,
+        spacing_khz=entry.spacing_khz,
+        offset_mhz=entry.offset_mhz,
+        duplex=duplex,
+        simplex_same_freq=not duplex or (tx_offset_hz == 0),
+    )
+
+    meta = {
+        "channel_id": channel_id,
+        "channel_no": channel_no,
+        "channel_no_hex": "1",
+        "base_freq_hz": base_freq_hz,
+        "spacing_khz": effective_spacing_khz,
+        "spacing_hz": spacing_hz,
+        "bandwidth_khz": bandwidth_khz,
+        "tx_freq_hz": calc_tx_hz,
+        "rx_freq_hz": calc_rx_hz,
+        "tx_freq_mhz": round(calc_tx_hz / HZ_MHZ, 6),
+        "rx_freq_mhz": round(calc_rx_hz / HZ_MHZ, 6),
+        "tx_offset_hz": calc_rx_hz - calc_tx_hz,
+        "tx_offset_mhz": round((calc_rx_hz - calc_tx_hz) / HZ_MHZ, 6),
+        "iden_offset_mhz": round(iden_offset_mhz, 6),
+    }
+    return entry, meta
 
 
 def find_or_create_iden_entry(
     entries: List[IdenEntry],
     tx_freq_hz: int,
     rx_freq_hz: int,
-    spacing_khz: float = 6.25,
+    spacing_khz: float = 12.5,
     bandwidth_khz: float = 12.5
 ) -> Tuple[IdenEntry, int]:
     """
-    Find matching IDEN entry or create a new one that can accommodate tx_freq and rx_freq.
-    Returns: (IdenEntry, channel_number)
+    Auto-calculate Channel ID 1 with Channel No 1 so BaseFrequency + (1 * ChannelSpacing)
+    lands on the exact requested TX/RX frequencies in Hz. Updates `entries` in-place.
+    Returns: (IdenEntry, channel_number=1)
     """
-    offset_mhz = (rx_freq_hz - tx_freq_hz) / HZ_MHZ
-
-    # DVMHost requires a non-zero TX offset in iden_table.dat.
-    # If in simplex mode or offset is 0, default to standard band repeater splits.
-    if abs(offset_mhz) < 0.0001:
-        if 400000000 <= tx_freq_hz <= 480000000:
-            offset_mhz = 5.0
-        elif 136000000 <= tx_freq_hz <= 174000000:
-            offset_mhz = 0.6
-        elif 800000000 <= tx_freq_hz <= 870000000:
-            offset_mhz = -45.0
-        elif 760000000 <= tx_freq_hz <= 780000000:
-            offset_mhz = 30.0
-        elif 900000000 <= tx_freq_hz <= 950000000:
-            offset_mhz = -39.0
-        else:
-            offset_mhz = 5.0
-
-    # Check existing entries
-    for entry in entries:
-        if abs(entry.offset_mhz - offset_mhz) < 0.001 and abs(entry.spacing_khz - spacing_khz) < 0.001:
-            diff = tx_freq_hz - entry.base_freq_hz
-            if 0 <= diff <= MAX_FREQ_GAP:
-                channel_no, _ = calculate_channel_number(tx_freq_hz, entry.base_freq_hz, spacing_khz)
-                return entry, channel_no
-
-    # Create new entry
-    used_ids = {e.channel_id for e in entries}
-    next_id = 0
-    while next_id in used_ids and next_id <= 15:
-        next_id += 1
-
-    if next_id > 15:
-        # Re-use entry 0 or closest if table full
-        next_id = 0
-
-    # Align base frequency to a round 10 MHz boundary below tx_freq
-    base_freq_hz = (tx_freq_hz // 10000000) * 10000000
-    if base_freq_hz == tx_freq_hz:
-        base_freq_hz -= 5000000
-    new_entry = IdenEntry(
-        channel_id=next_id,
-        base_freq_hz=base_freq_hz,
+    duplex = abs(rx_freq_hz - tx_freq_hz) > 0
+    entry, _ = auto_calculate_single_iden_entry(
+        rx_freq_mhz=rx_freq_hz / HZ_MHZ,
+        tx_freq_mhz=tx_freq_hz / HZ_MHZ,
         spacing_khz=spacing_khz,
-        offset_mhz=offset_mhz,
-        bandwidth_khz=bandwidth_khz
+        bandwidth_khz=bandwidth_khz,
+        duplex=duplex,
+        channel_id=1,
     )
-    entries.append(new_entry)
-    channel_no, _ = calculate_channel_number(tx_freq_hz, base_freq_hz, spacing_khz)
-    return new_entry, channel_no
+    # Replace or insert Channel ID 1 in entries list
+    replaced = False
+    for idx, existing in enumerate(entries):
+        if existing.channel_id == 1:
+            entries[idx] = entry
+            replaced = True
+            break
+    if not replaced:
+        entries.append(entry)
+    return entry, 1

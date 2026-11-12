@@ -448,23 +448,70 @@ def test_dvmhost_error_4_wacn_and_hex_channel_no_guard(client):
     assert format_channel_no(2019) == "7E3"
     assert parse_channel_no("7E3") == 2019
 
-    # Save DMR at 462.61875 MHz TX / 467.61875 MHz RX (Channel ID 2, Channel No 2019 = 0x7E3)
+    # Save DMR at 462.61875 MHz TX / 467.61875 MHz RX (Auto-calculated Channel ID 1, Channel No '1')
     resp = client.post("/dmr/save", data={
         "enable": "true",
         "duplex": "true",
         "tx_freq": 462.61875,
         "rx_freq": 467.61875,
-        "color_code": 1,
+        "spacing_khz": 12.5,
+        "color_code": 3,
+        "allow_unknown_rids": "true",
     })
     assert resp.status_code == 200
     cfg = dvm_config_manager.load_config_dict()
     assert cfg["system"]["config"]["netId"] == "BB800"
-    assert cfg["system"]["config"]["channelNo"] == "7E3"
-    assert cfg["system"]["config"]["voiceChNo"][0]["channelNo"] == "7E3"
+    assert cfg["system"]["config"]["channelId"] == 1
+    assert cfg["system"]["config"]["channelNo"] == "1"
+    assert cfg["system"]["config"]["voiceChNo"][0]["channelId"] == 1
+    assert cfg["system"]["config"]["voiceChNo"][0]["channelNo"] == "1"
+    assert cfg["system"]["config"]["colorCode"] == 3
+    assert cfg["protocols"]["dmr"]["colorCode"] == 3
+    assert cfg["system"]["radio_id"]["acl"] is False
+    assert cfg["system"]["radio_id"]["allowUnknown"] is True
+
+    rf_v = dvm_config_manager.get_rf_verification(cfg)
+    assert rf_v["tx_freq_hz"] == 462618750
+    assert rf_v["rx_freq_hz"] == 467618750
+    assert rf_v["base_freq_hz"] == 462618750 - 12500
+    assert rf_v["spacing_hz"] == 12500
 
     tx_mhz, rx_mhz = dvm_config_manager.get_tuned_frequencies()
-    assert abs(tx_mhz - 462.61875) < 0.0001
-    assert abs(rx_mhz - 467.61875) < 0.0001
+    assert abs(tx_mhz - 462.61875) < 0.000001
+    assert abs(rx_mhz - 467.61875) < 0.000001
+
+    # Also verify P25 Simplex auto-calculation with 0x293 NAC normalization and exact Hz match
+    resp_p25 = client.post("/p25/save", data={
+        "enable": "true",
+        "duplex": "false",
+        "rxFrequencyMHz": 446.03125,
+        "txFrequencyMHz": 446.03125,
+        "channelSpacingKHz": 12.5,
+        "nac": "0x293",
+        "wacn": "BB800",
+        "sys_id": "0x001",
+        "rx_tuning": -150,
+        "tx_tuning": 100,
+        "allow_unknown_rids": "true",
+    })
+    assert resp_p25.status_code == 200
+    cfg_p25 = dvm_config_manager.load_config_dict()
+    assert cfg_p25["system"]["duplex"] is False
+    assert cfg_p25["system"]["simplexSameFrequency"] is True
+    assert cfg_p25["system"]["config"]["channelId"] == 1
+    assert cfg_p25["system"]["config"]["channelNo"] == "1"
+    assert cfg_p25["system"]["config"]["nac"] == "293"
+    assert cfg_p25["protocols"]["p25"]["nac"] == "293"
+    assert cfg_p25["system"]["config"]["sysId"] == "001"
+    assert cfg_p25["system"]["radio_id"]["acl"] is False
+    assert cfg_p25["system"]["radio_id"]["allowUnknown"] is True
+
+    rf_p25 = dvm_config_manager.get_rf_verification(cfg_p25)
+    assert rf_p25["rx_freq_hz"] == 446031250
+    assert rf_p25["tx_freq_hz"] == 446031250
+    assert rf_p25["base_freq_hz"] == 446031250 - 12500
+    assert rf_p25["effective_rx_hz"] == 446031250 - 150
+    assert rf_p25["effective_tx_hz"] == 446031250 + 100
 
 
 

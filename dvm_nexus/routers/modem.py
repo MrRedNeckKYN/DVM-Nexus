@@ -146,12 +146,16 @@ async def modem_save(
     conf["system"]["modem"]["hotspot"]["p25PostBWAdj"] = p25_post_bw
 
     dvm_config_manager.save_config_dict(conf, summary=f"Update Modem parameters (Port {uart_port})")
+    from dvm_nexus.core.service_controller import service_controller
+    from dvm_nexus.core.diagnostics import diagnostics_engine
+    await asyncio.to_thread(service_controller.restart)
+    diagnostics_engine.invalidate_cache()
     log_audit("MODEM", "SAVE_CONFIG", f"Updated modem params: Port={uart_port}, Duplex={duplex}, GainMode={adf_gain_mode}")
 
     return render_template(
         request,
         "components/toast_saved.html",
-        {"type": "success", "message": "Modem settings saved. Restart the radio to apply.", "config_rev": dvm_config_manager.get_config_revision()}
+        {"type": "success", "message": "Modem settings saved to active config & service reloaded.", "config_rev": dvm_config_manager.get_config_revision()}
     )
 
 

@@ -3,6 +3,7 @@ DVM Nexus - DMR Management Router
 Handles DMR parameters, talkgroup rules, Radio ID ACLs, and live over-the-air commands.
 """
 
+import asyncio
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -16,6 +17,7 @@ from dvm_nexus.config_engine.network_validator import (
 )
 from dvm_nexus.core.dvm_client import dvm_client
 from dvm_nexus.core.service_controller import service_controller
+from dvm_nexus.core.diagnostics import diagnostics_engine
 from dvm_nexus.core.database import log_audit
 
 router = APIRouter()
@@ -32,7 +34,12 @@ async def dmr_page(request: Request):
     net_conf = conf.get("network", {})
     cw_conf = conf.get("system", {}).get("cwId") or conf.get("cwId", {})
     identity = conf.get("system", {}).get("identity", "NEXUS")
-    duplex = conf.get("system", {}).get("duplex", True)
+    duplex = bool(conf.get("system", {}).get("duplex", False))
+
+    radio_id_conf = conf.get("system", {}).get("radio_id", {})
+    allow_unknown_rids = not bool(radio_id_conf.get("acl", False))
+    tg_id_conf = conf.get("system", {}).get("talkgroup_id", {})
+    allow_all_tgs = not bool(tg_id_conf.get("acl", False))
 
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "p25")
@@ -40,6 +47,8 @@ async def dmr_page(request: Request):
     iden_entries = read_iden_table_file(dvm_config_manager.iden_path)
     tx_freq_mhz, iden_rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
     rx_freq_mhz = iden_rx_freq_mhz if duplex else tx_freq_mhz
+    rf_verify = dvm_config_manager.get_rf_verification(conf)
+    modem_diag = diagnostics_engine.get_modem_firmware_summary(conf)
     talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
 
@@ -59,10 +68,15 @@ async def dmr_page(request: Request):
             "cw": cw_conf,
             "identity": identity,
             "duplex": duplex,
+            "allow_unknown_rids": allow_unknown_rids,
+            "allow_all_tgs": allow_all_tgs,
             "iden_entries": iden_entries,
             "tx_freq_mhz": tx_freq_mhz,
             "rx_freq_mhz": rx_freq_mhz,
             "duplex_rx_freq_mhz": iden_rx_freq_mhz,
+            "spacing_khz": rf_verify.get("spacing_khz", 12.5),
+            "rf_verify": rf_verify,
+            "modem_diag": modem_diag,
             "talkgroups": talkgroups,
             "rids": rids,
             "config_rev": dvm_config_manager.get_config_revision(),
@@ -76,12 +90,18 @@ async def dmr_save(
     enable: bool = Form(True),
     # Core Station & Frequency
     callsign: str = Form("NEXUS"),
-    duplex: bool = Form(True),
-    tx_freq_mhz: float = Form(462.61875),
-    rx_freq_mhz: float = Form(467.61875),
+    duplex: bool = Form(False),
+    tx_freq_mhz: Optional[float] = Form(None),
+    rx_freq_mhz: Optional[float] = Form(None),
+    tx_freq: Optional[float] = Form(None),
+    rx_freq: Optional[float] = Form(None),
+    txFrequencyMHz: Optional[float] = Form(None),
+    rxFrequencyMHz: Optional[float] = Form(None),
+    spacing_khz: float = Form(12.5),
+    channelSpacingKHz: Optional[float] = Form(None),
     cw_id_enable: bool = Form(True),
     cw_id_time: int = Form(15),
-    # DMR Protocol
+    # DMR Protocol & ACLs
     color_code: int = Form(1),
     dmr_net_id: int = Form(1),
     site_id: int = Form(1),
@@ -90,6 +110,8 @@ async def dmr_save(
     default_net_idle_tg: int = Form(0),
     call_hang: int = Form(5),
     tx_hang: int = Form(8),
+    allow_unknown_rids: bool = Form(True),
+    allow_all_tgs: bool = Form(True),
     # Master Network Linking
     net_enable: bool = Form(False),
     net_id: int = Form(100000),
@@ -134,13 +156,29 @@ async def dmr_save(
     tx_level: int = Form(50),
     config_rev: str = Form(""),
 ):
-    """Save comprehensive DMR parameters safely, preserving profile settings without breaking standby mode."""
+    """Save comprehensive DMR parameters safely, auto-calculating iden_table.dat and restarting dvmhost."""
     if config_rev and config_rev != dvm_config_manager.get_config_revision():
         return render_template(
             request,
             "components/toast.html",
             {"type": "error", "message": "Not saved: config.yml changed since this page was loaded (another tab/user, auto-repair or a restore). Reload the page to see the latest values, then re-apply your edit."}
         )
+
+    # Resolve flexible frequency & spacing form parameter names
+    eff_spacing_khz = float(channelSpacingKHz if channelSpacingKHz is not None else spacing_khz)
+    resolved_rx = rxFrequencyMHz if rxFrequencyMHz is not None else (rx_freq_mhz if rx_freq_mhz is not None else rx_freq)
+    resolved_tx = txFrequencyMHz if txFrequencyMHz is not None else (tx_freq_mhz if tx_freq_mhz is not None else tx_freq)
+
+    if resolved_rx is None and resolved_tx is None:
+        resolved_tx = 462.61875
+        resolved_rx = 462.61875 if not duplex else 467.61875
+    elif resolved_rx is None:
+        resolved_rx = resolved_tx
+    elif resolved_tx is None:
+        resolved_tx = resolved_rx
+
+    tx_freq_mhz = float(resolved_tx)
+    rx_freq_mhz = float(resolved_rx)
 
     # Resolve unified tscc_mode selector if provided
     if tscc_mode is not None:
@@ -158,24 +196,34 @@ async def dmr_save(
             tscc_enable = False
             tscc_dedicated = False
 
+    split_notice = ""
     # DVMHost requirement: Control Channel (TSCC) and Roaming Beacons require Full Duplex
     if not duplex:
-        rx_freq_mhz = tx_freq_mhz
+        # In Simplex mode, RX and TX frequencies are identical
+        if rxFrequencyMHz is not None or rx_freq_mhz is not None:
+            tx_freq_mhz = rx_freq_mhz
+        else:
+            rx_freq_mhz = tx_freq_mhz
         tscc_enable = False
         tscc_dedicated = False
         beacon_enable = False
-    elif abs(tx_freq_mhz - rx_freq_mhz) < 0.0001:
-        # In Full Duplex, ensure RX has a valid split if user left TX == RX
-        if 400.0 <= tx_freq_mhz <= 480.0:
-            rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
-        elif 136.0 <= tx_freq_mhz <= 174.0:
-            rx_freq_mhz = round(tx_freq_mhz + 0.6, 6)
-        elif 800.0 <= tx_freq_mhz <= 870.0:
-            rx_freq_mhz = round(tx_freq_mhz - 45.0, 6)
-        elif 760.0 <= tx_freq_mhz <= 780.0:
-            rx_freq_mhz = round(tx_freq_mhz + 30.0, 6)
-        else:
-            rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
+        verify_reg = False
+    else:
+        if not tscc_enable:
+            verify_reg = False
+        if abs(tx_freq_mhz - rx_freq_mhz) < 0.0001:
+            # DVMHost Host.Config.cpp:182 rejects 0.0 MHz offset when duplex: true
+            if 400.0 <= tx_freq_mhz <= 480.0:
+                rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
+            elif 136.0 <= tx_freq_mhz <= 174.0:
+                rx_freq_mhz = round(tx_freq_mhz + 0.6, 6)
+            elif 800.0 <= tx_freq_mhz <= 870.0:
+                rx_freq_mhz = round(tx_freq_mhz - 45.0, 6)
+            elif 760.0 <= tx_freq_mhz <= 780.0:
+                rx_freq_mhz = round(tx_freq_mhz + 30.0, 6)
+            else:
+                rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
+            split_notice = f" (Full Duplex requires split RX/TX; set RX to {rx_freq_mhz:.6f} MHz — select Simplex for same-frequency hats)"
 
     errors = validate_dmr_settings({"colorCode": color_code, "dmrNetId": dmr_net_id, "siteId": site_id})
     errors += validate_frequencies(tx_freq_mhz, rx_freq_mhz)
@@ -193,15 +241,19 @@ async def dmr_save(
             {"type": "error", "message": "Not saved - " + "; ".join(errors)}
         )
 
-    active_proto = dvm_config_manager.get_active_protocol()
-    is_standby = (active_proto == "p25")
-
     def apply_dmr_fields(c: Dict[str, Any]):
         c.setdefault("system", {})
         c["system"]["identity"] = callsign.strip() or "NEXUS"
         c["system"]["duplex"] = duplex
         c["system"]["simplexSameFrequency"] = not duplex
         c["system"]["fixedMode"] = True
+
+        # Subscriber ID & Talkgroup ACLs (allowUnknown: true prevents silent rejection of unlisted radios)
+        c["system"].setdefault("radio_id", {})
+        c["system"]["radio_id"]["acl"] = not allow_unknown_rids
+        c["system"]["radio_id"]["allowUnknown"] = allow_unknown_rids
+        c["system"].setdefault("talkgroup_id", {})
+        c["system"]["talkgroup_id"]["acl"] = not allow_all_tgs
 
         for cw_target in (c.setdefault("cwId", {}), c["system"].setdefault("cwId", {})):
             cw_target["enable"] = cw_id_enable
@@ -219,6 +271,7 @@ async def dmr_save(
         c["network"]["jitter"] = jitter
 
         c.setdefault("protocols", {}).setdefault("dmr", {})
+        c["protocols"]["dmr"]["colorCode"] = int(color_code)
         c["protocols"]["dmr"]["callHang"] = call_hang
         c["protocols"]["dmr"]["txHang"] = tx_hang
         c["protocols"]["dmr"]["silenceThreshold"] = silence_threshold
@@ -250,7 +303,7 @@ async def dmr_save(
         c["protocols"]["dmr"]["control"]["disableGrantSourceIdCheck"] = disable_grant_src_check
 
         c.setdefault("system", {}).setdefault("config", {})
-        c["system"]["config"]["colorCode"] = color_code
+        c["system"]["config"]["colorCode"] = int(color_code)
         c["system"]["config"]["dmrNetId"] = dmr_net_id
         c["system"]["config"]["siteId"] = site_id
         c["system"]["config"]["authoritative"] = authoritative
@@ -268,8 +321,8 @@ async def dmr_save(
         c["system"]["modem"]["hotspot"]["adfGainMode"] = adf_gain_mode
         c["system"]["modem"]["hotspot"]["afcEnable"] = afc_enable
 
-        # Update frequencies & IDEN table
-        dvm_config_manager.set_tuned_frequencies(tx_freq_mhz, rx_freq_mhz, c)
+        # Auto-calculate iden_table.dat (Channel ID 1, Channel No 1)
+        dvm_config_manager.set_tuned_frequencies(tx_freq_mhz, rx_freq_mhz, c, spacing_khz=eff_spacing_khz)
 
     conf = dvm_config_manager.load_config_dict()
     apply_dmr_fields(conf)
@@ -279,15 +332,28 @@ async def dmr_save(
     conf["protocols"].setdefault("dmr", {})["enable"] = True
     conf["protocols"].setdefault("p25", {})["enable"] = False
 
-    dvm_config_manager.save_config_dict(conf, summary=f"Update active DMR settings (Color Code {color_code}, TX {tx_freq_mhz} MHz)")
+    dvm_config_manager.save_config_dict(conf, summary=f"Update active DMR settings (Color Code {color_code}, RX {rx_freq_mhz} / TX {tx_freq_mhz} MHz)")
 
     # Persist directly into DMR profile backup so settings are preserved if switching
     from dvm_nexus.config_engine.profile_manager import profile_manager
     profile_manager.sync_protocol_settings("dmr", apply_dmr_fields)
 
-    log_audit("DMR", "SAVE_CONFIG", f"Updated active DMR parameters: CC={color_code}, NetID={dmr_net_id}, TX={tx_freq_mhz} MHz, RX={rx_freq_mhz} MHz")
+    # Cleanly restart dvmhost (and dvmfne if active) so new YAML/DAT settings take effect immediately
+    await asyncio.to_thread(service_controller.restart)
+    diagnostics_engine.invalidate_cache()
 
-    msg = f"✓ DMR settings saved to active config (TX: {tx_freq_mhz} MHz, CC: {color_code}). Restart the radio to apply."
+    rf_v = dvm_config_manager.get_rf_verification(conf)
+    log_audit(
+        "DMR",
+        "SAVE_CONFIG",
+        f"Updated DMR: CC={color_code}, Duplex={duplex}, RX={rf_v['rx_freq_hz']} Hz, TX={rf_v['tx_freq_hz']} Hz, Base={rf_v['base_freq_hz']} Hz"
+    )
+
+    msg = (
+        f"✓ DMR settings saved to active config & service reloaded — "
+        f"RX: {rf_v['rx_freq_hz']:,} Hz | TX: {rf_v['tx_freq_hz']:,} Hz "
+        f"(ChId 1 / ChNo 1, CC {color_code}){split_notice}"
+    )
 
     return render_template(
         request,

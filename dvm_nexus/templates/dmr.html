@@ -81,39 +81,88 @@
   <div class="card" style="border-left:4px solid var(--accent-cyan);">
     <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div>
-        <div class="card-title">📻 Step 1: Choose DMR Operating Mode &amp; Frequencies</div>
-        <span style="font-size:0.85rem; color:var(--text-dim);">Select Simplex or Full Duplex below &mdash; menu options automatically adapt to match <code>dvmhost</code> rules</span>
+        <div class="card-title">📻 Step 1: Choose DMR Operating Mode, RF Frequencies &amp; Crystal Calibration</div>
+        <span style="font-size:0.85rem; color:var(--text-dim);">Automatic <code>iden_table.dat</code> calculation (<code>Channel ID 1 &bull; Channel No 1</code>) &mdash; no manual bandplan math required</span>
       </div>
       <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-        <span class="badge badge-cyan" style="font-family:var(--font-mono);">IDEN Ch ID {{ sys.channelId if sys.channelId is defined else 2 }} &bull; Ch No ${{ sys.channelNo or '7E3' }}</span>
-        <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Saved when you press Save</span>
+        <span class="badge badge-cyan" style="font-family:var(--font-mono);">Auto IDEN: Ch ID 1 &bull; Ch No $1</span>
+        <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Auto-Reloads DVMHost on Save</span>
       </div>
     </div>
 
+    <!-- Hardware Firmware & Serial Port Verification Banner -->
+    {% if modem_diag %}
+    <div style="padding:0.7rem 0.95rem; margin-bottom:1rem; border-radius:var(--radius-sm); background:{% if modem_diag.warnings %}rgba(245, 158, 11, 0.12){% else %}rgba(16, 185, 129, 0.08){% endif %}; border:1px solid {% if modem_diag.warnings %}rgba(245, 158, 11, 0.45){% else %}rgba(16, 185, 129, 0.3){% endif %}; font-size:0.8rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <div>
+          <strong>🔌 Modem Hardware &amp; Serial Check:</strong>
+          <code>protocol: {{ modem_diag.protocol_mode }}</code> &bull;
+          <code>{{ modem_diag.uart_port }} @ {{ modem_diag.uart_speed }} bps</code> &bull;
+          <span style="color:var(--text-bright);">{{ modem_diag.firmware_string }}</span>
+        </div>
+        {% if modem_diag.is_single_hat_firmware %}
+          <span class="badge badge-warning">1-Antenna Simplex Hat ([MMDVM_HS_Hat])</span>
+        {% elif modem_diag.is_dual_hat_firmware %}
+          <span class="badge badge-success">2-Antenna Duplex Hat ([Dual_Hat])</span>
+        {% endif %}
+      </div>
+      {% if modem_diag.warnings %}
+        <ul style="margin:0.45rem 0 0 1.1rem; padding:0; color:#fde68a;">
+          {% for w in modem_diag.warnings %}
+            <li>{{ w }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Guided 4-Card DMR Architecture Selector -->
     <div style="margin-bottom:1.15rem;">
-      <label class="form-label" style="margin-bottom:0.5rem; display:block;">⚡ Quick DMR Architecture Mode (Click to Configure Automatically):</label>
+      <label class="form-label" style="margin-bottom:0.5rem; display:block;">⚡ Quick DMR Architecture Mode (Select 1-Antenna Simplex vs. 2-Antenna Duplex Hat):</label>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:0.65rem;">
         <button type="button" id="dmr-preset-simplex" onclick="selectDmrArchitecture('simplex')" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:2px solid {% if dmr_arch_preset == 'simplex' %}var(--accent-cyan){% else %}var(--border-color){% endif %}; background:{% if dmr_arch_preset == 'simplex' %}rgba(6, 182, 212, 0.14){% else %}rgba(15, 23, 42, 0.5){% endif %}; color:var(--text-main); cursor:pointer; transition:all 0.15s;">
-          <div style="font-weight:700; font-size:0.86rem; color:var(--text-bright); margin-bottom:0.2rem;">1. Simplex Direct / Hotspot</div>
-          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Single frequency (<code>TX = RX</code>). No repeater offset, no TSCC control channel.</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
+            <span style="font-weight:700; font-size:0.86rem; color:var(--text-bright);">1. Simplex Conventional (1-Ant Hat)</span>
+            <span class="badge badge-cyan" style="font-size:0.65rem;">1-Ant Hat</span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;"><code>duplex: false</code>, <code>control.enable: false</code>, <code>RX = TX</code>. Set radio CPS to <strong>Simplex / DCDM</strong>.</div>
         </button>
 
         <button type="button" id="dmr-preset-duplex_conv" onclick="selectDmrArchitecture('duplex_conv')" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:2px solid {% if dmr_arch_preset == 'duplex_conv' %}var(--accent-cyan){% else %}var(--border-color){% endif %}; background:{% if dmr_arch_preset == 'duplex_conv' %}rgba(6, 182, 212, 0.14){% else %}rgba(15, 23, 42, 0.5){% endif %}; color:var(--text-main); cursor:pointer; transition:all 0.15s;">
-          <div style="font-weight:700; font-size:0.86rem; color:var(--text-bright); margin-bottom:0.2rem;">2. Full Duplex (Conventional)</div>
-          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Split TX/RX repeater. Both <strong>Slot 1 &amp; Slot 2</strong> carry standard DMR voice calls.</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
+            <span style="font-weight:700; font-size:0.86rem; color:var(--text-bright);">2. Full Duplex (Conventional)</span>
+            <span class="badge badge-muted" style="font-size:0.65rem;">2-Ant Dual Hat</span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Requires 2-antenna Duplex Hat (<code>duplex: true</code>, split RX/TX). Both <strong>Slot 1 &amp; Slot 2</strong> active.</div>
         </button>
 
         <button type="button" id="dmr-preset-tscc_nondedicated" onclick="selectDmrArchitecture('tscc_nondedicated')" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:2px solid {% if dmr_arch_preset == 'tscc_nondedicated' %}var(--accent-emerald){% else %}var(--border-color){% endif %}; background:{% if dmr_arch_preset == 'tscc_nondedicated' %}rgba(16, 185, 129, 0.14){% else %}rgba(15, 23, 42, 0.5){% endif %}; color:var(--text-main); cursor:pointer; transition:all 0.15s;">
-          <div style="font-weight:700; font-size:0.86rem; color:var(--text-bright); margin-bottom:0.2rem;">3. Full Duplex + Non-Dedicated TSCC</div>
-          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Periodic idle TSCC control bursts + 2-slot voice on a single Duplex Hat.</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
+            <span style="font-weight:700; font-size:0.86rem; color:var(--text-bright);">3. Full Duplex + Non-Dedicated TSCC</span>
+            <span class="badge badge-muted" style="font-size:0.65rem;">2-Ant Dual Hat</span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Periodic idle TSCC control bursts + 2-slot voice on a 2-antenna Duplex Hat.</div>
         </button>
 
         <button type="button" id="dmr-preset-tscc_dedicated" onclick="selectDmrArchitecture('tscc_dedicated')" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:2px solid {% if dmr_arch_preset == 'tscc_dedicated' %}var(--accent-emerald){% else %}var(--border-color){% endif %}; background:{% if dmr_arch_preset == 'tscc_dedicated' %}rgba(16, 185, 129, 0.14){% else %}rgba(15, 23, 42, 0.5){% endif %}; color:var(--text-main); cursor:pointer; transition:all 0.15s;">
-          <div style="font-weight:700; font-size:0.86rem; color:var(--text-bright); margin-bottom:0.2rem;">4. Full Duplex + Dedicated 24/7 TSCC</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
+            <span style="font-weight:700; font-size:0.86rem; color:var(--text-bright);">4. Full Duplex + Dedicated 24/7 TSCC</span>
+            <span class="badge badge-muted" style="font-size:0.65rem;">2-Ant Dual Hat</span>
+          </div>
           <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.35;">Continuous 24/7 TSCC Control on 1 Slot + Trunked Voice on the other Slot.</div>
         </button>
       </div>
+    </div>
+
+    <!-- DMR Simplex vs Duplex Hardware Requirement Warning -->
+    <div id="dmr-simplex-notice" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(6, 182, 212, 0.08); border:1px solid rgba(6, 182, 212, 0.35); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-main);">
+      ℹ️ <strong>1-Antenna Simplex Hat Mode (<code>duplex: false</code>, <code>control.enable: false</code>, <code>RX = TX</code>):</strong>
+      DMR on a 1-antenna simplex hat (<code>[MMDVM_HS_Hat]</code>) requires <code>duplex: false</code> and your handheld radio CPS channel configured in <strong>Simplex / DCDM (Dual Capacity Direct Mode) / Talkaround</strong> mode on the exact same RX &amp; TX frequency. Dual-slot DMR repeater mode requires a 2-antenna duplex hat (<code>duplex: true</code>).
+    </div>
+
+    <div id="dmr-duplex-hat-warn" style="{% if not duplex %}display:none;{% else %}display:block;{% endif %} padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.82rem; color:#fde68a;">
+      ⚠️ <strong>2-Antenna Duplex Hat Required for <code>duplex: true</code>:</strong>
+      Dual-slot DMR repeater mode and TSCC Control Channels require a <strong>2-antenna Dual MMDVM Hat</strong> with split RX/TX frequencies. If you have a <strong>1-antenna Simplex MMDVM Hat</strong> (<code>[MMDVM_HS_Hat]</code>), select <strong>1. Simplex Conventional</strong> above so your radio can link!
     </div>
 
     <div class="form-row">
@@ -126,45 +175,102 @@
       <div class="form-group">
         <label class="form-label">RF Operating Mode (<code>system.duplex</code>)</label>
         <select name="duplex" id="dmr-duplex-select" class="form-control" onchange="syncDmrDuplexMode()">
-          <option value="false" {% if not duplex %}selected{% endif %}>Simplex (Single Frequency - Direct Talkaround)</option>
-          <option value="true" {% if duplex %}selected{% endif %}>Full Duplex (Repeater Split TX/RX + Control Channel Support)</option>
+          <option value="false" {% if not duplex %}selected{% endif %}>Simplex Conventional (1-Antenna Hat — RX = TX, DCDM)</option>
+          <option value="true" {% if duplex %}selected{% endif %}>Full Duplex Repeater (2-Antenna Hat — Split RX/TX)</option>
         </select>
         <small class="form-hint" id="dmr-duplex-hint">
-          {% if duplex %}Full Duplex active: Simultaneous TX &amp; RX with 2-slot TDMA and TSCC support.{% else %}Simplex active: Single frequency direct mode (Control Channel &amp; RX split hidden).{% endif %}
+          {% if duplex %}Full Duplex active: Simultaneous TX &amp; RX (requires 2-antenna hat).{% else %}Simplex active: Single frequency direct mode (1-antenna hat).{% endif %}
         </small>
       </div>
 
       <div class="form-group">
-        <label class="form-label" id="dmr-tx-freq-label">{% if duplex %}Hotspot TX / Repeater Output (MHz){% else %}Simplex Operating Frequency (MHz){% endif %}</label>
-        <input type="number" step="0.000001" id="dmr-tx-freq-input" name="tx_freq_mhz" class="form-control font-mono" value="{{ tx_freq_mhz or 462.61875 }}" oninput="onDmrFreqInput()" required>
-        <small class="form-hint" id="dmr-tx-freq-hint">{% if duplex %}Repeater output frequency &mdash; program this as <strong>RX</strong> in your handheld radio.{% else %}Single frequency used for both transmit and receive.{% endif %}</small>
+        <label class="form-label" id="dmr-rx-freq-label">MMDVM Hat RX Frequency (<code>rxFrequencyMHz</code>)</label>
+        <input type="number" step="0.000001" id="dmr-rx-freq-input" name="rx_freq_mhz" data-last-duplex-rx="{{ duplex_rx_freq_mhz or 467.61875 }}" class="form-control font-mono" value="{{ '%.6f'|format(rx_freq_mhz or 462.61875) }}" oninput="onDmrFreqInput('rx')" required>
+        <small class="form-hint" id="dmr-rx-freq-hint">Frequency the MMDVM hat <strong>receives</strong> on (your handheld radio <strong>TX</strong> frequency).</small>
       </div>
 
-      <div class="form-group" id="dmr-rx-freq-group" {% if not duplex %}style="display:none;"{% endif %}>
-        <label class="form-label">Hotspot RX / Repeater Input (MHz)</label>
-        <input type="number" step="0.000001" id="dmr-rx-freq-input" name="rx_freq_mhz" data-last-duplex-rx="{{ duplex_rx_freq_mhz or 467.61875 }}" class="form-control font-mono" value="{{ rx_freq_mhz or 467.61875 }}" oninput="onDmrFreqInput()" required>
-        <small class="form-hint">Repeater input frequency &mdash; program this as <strong>TX</strong> in your handheld radio.</small>
+      <div class="form-group" id="dmr-tx-freq-group">
+        <label class="form-label" id="dmr-tx-freq-label">MMDVM Hat TX Frequency (<code>txFrequencyMHz</code>)</label>
+        <input type="number" step="0.000001" id="dmr-tx-freq-input" name="tx_freq_mhz" class="form-control font-mono" value="{{ '%.6f'|format(tx_freq_mhz or 462.61875) }}" oninput="onDmrFreqInput('tx')" {% if not duplex %}readonly style="opacity:0.8;"{% endif %} required>
+        <small class="form-hint" id="dmr-tx-freq-hint">{% if duplex %}Frequency the MMDVM hat <strong>transmits</strong> on (your handheld radio <strong>RX</strong> frequency).{% else %}Locked equal to RX Frequency for Simplex operation.{% endif %}</small>
+      </div>
+
+      <div class="form-group" style="max-width:170px;">
+        <label class="form-label">Channel Spacing (kHz)</label>
+        <select name="spacing_khz" id="dmr-spacing-input" class="form-control font-mono" onchange="updateDmrCodeplugSummary()">
+          <option value="12.5" {% if (spacing_khz or 12.5) == 12.5 %}selected{% endif %}>12.5 kHz (Default)</option>
+          <option value="6.25" {% if spacing_khz == 6.25 %}selected{% endif %}>6.25 kHz</option>
+          <option value="25.0" {% if spacing_khz == 25.0 %}selected{% endif %}>25.0 kHz</option>
+        </select>
+        <small class="form-hint"><code>channelSpacingKHz</code></small>
       </div>
     </div>
 
     <!-- Quick Repeater Offset Helper Bar (Visible ONLY in Full Duplex) -->
     <div id="dmr-offset-presets-bar" style="{% if not duplex %}display:none;{% else %}display:flex;{% endif %} align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem; padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(6, 182, 212, 0.07); border:1px solid rgba(6, 182, 212, 0.25); border-radius:var(--radius-sm);">
       <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-        <span style="font-size:0.8rem; font-weight:600; color:var(--accent-cyan);">⚡ Quick Repeater Split (RX = TX + Offset):</span>
+        <span style="font-size:0.8rem; font-weight:600; color:var(--accent-cyan);">⚡ Quick Repeater Split (Hat RX = Hat TX + Offset):</span>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(5.0)">+5.0 MHz (UHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(-5.0)">-5.0 MHz (UHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(0.6)">+0.6 MHz (2m VHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(-0.6)">-0.6 MHz (2m VHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(30.0)">+30 MHz (700)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyDmrOffset(-45.0)">-45 MHz (800)</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="swapDmrTxRx()" title="Swap TX and RX frequencies">⇄ Swap TX/RX</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="swapDmrTxRx()" title="Swap TX and RX frequencies">⇄ Swap RX/TX</button>
       </div>
-      <div id="dmr-codeplug-summary" style="font-size:0.8rem; font-family:var(--font-mono); color:var(--text-main);"></div>
     </div>
 
-    <!-- Simplex Mode Notice Banner (Visible ONLY in Simplex) -->
-    <div id="dmr-simplex-notice" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.7rem 1rem; margin-bottom:1rem; background:rgba(148, 163, 184, 0.08); border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-muted);">
-      ℹ️ <strong>Simplex Mode Active (<code>system.duplex: false</code>):</strong> DVMHost uses a single frequency for both TX and RX (<code>simplexSameFrequency: true</code>). Repeater RX split frequencies, TX Hang timer, Timeslot Control Channel (TSCC), and Roaming Beacons are prohibited in Simplex mode by <code>dvmhost</code> and are hidden automatically.
+    <!-- RF Frequency Calibration (rxOffset / txOffset in Hz) Directly Accessible -->
+    <div style="padding:0.85rem 1rem; margin-bottom:1rem; background:rgba(15, 23, 42, 0.55); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.65rem;">
+        <div style="font-size:0.84rem; font-weight:700; color:var(--accent-cyan);">
+          🎯 RF Crystal Frequency Calibration (<code>rxOffset</code> / <code>txOffset</code> in Hz)
+        </div>
+        <span style="font-size:0.76rem; color:var(--text-dim);">Tune out MMDVM hat TCXO crystal drift in 50 Hz steps if radios have high BER or fail frame sync</span>
+      </div>
+      <div class="form-row" style="margin-bottom:0;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">RX Frequency Calibration Offset (Hz) (<code>rxTuning</code>)</label>
+          <div style="display:flex; gap:0.35rem; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="stepDmrTuning('dmr-rx-tuning-input', -50)">-50</button>
+            <input type="number" step="50" min="-2000" max="2000" id="dmr-rx-tuning-input" name="rx_tuning" class="form-control font-mono" value="{{ hotspot.rxTuning or 0 }}" oninput="updateDmrCodeplugSummary()">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="stepDmrTuning('dmr-rx-tuning-input', 50)">+50</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="resetDmrTuning('dmr-rx-tuning-input')">0</button>
+          </div>
+          <small class="form-hint">Range: <code>-500</code> to <code>+500 Hz</code> in <code>50 Hz</code> steps.</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">TX Frequency Calibration Offset (Hz) (<code>txTuning</code>)</label>
+          <div style="display:flex; gap:0.35rem; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="stepDmrTuning('dmr-tx-tuning-input', -50)">-50</button>
+            <input type="number" step="50" min="-2000" max="2000" id="dmr-tx-tuning-input" name="tx_tuning" class="form-control font-mono" value="{{ hotspot.txTuning or 0 }}" oninput="updateDmrCodeplugSummary()">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="stepDmrTuning('dmr-tx-tuning-input', 50)">+50</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="resetDmrTuning('dmr-tx-tuning-input')">0</button>
+          </div>
+          <small class="form-hint">Range: <code>-500</code> to <code>+500 Hz</code> in <code>50 Hz</code> steps.</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Modulation Output Level (%)</label>
+          <input type="number" name="tx_level" class="form-control font-mono" min="0" max="100" value="{{ modem.txLevel or 50 }}">
+          <small class="form-hint">ADF7021 TX modulation level (default 50%).</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Exact Calculated RX/TX Frequency Verification Box (Hz) -->
+    <div id="dmr-iden-container" style="padding:0.85rem 1rem; margin-bottom:1rem; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.35); border-radius:var(--radius-sm);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.45rem;">
+        <strong style="font-size:0.83rem; color:#6ee7b7;">✅ Exact Calculated DVMHost Frequency Verification (Down to 1 Hz)</strong>
+        <span style="font-size:0.75rem; font-family:var(--font-mono); color:var(--text-dim);" id="dmr-iden-formula-badge">
+          iden_table.dat: ChId=1, ChNo=1, Base={{ '{:,}'.format(rf_verify.base_freq_hz) if rf_verify else '462,606,250' }} Hz, Spacing={{ rf_verify.spacing_khz if rf_verify else 12.5 }} kHz
+        </span>
+      </div>
+      <div id="dmr-codeplug-summary" style="font-size:0.84rem; font-family:var(--font-mono); color:var(--text-bright); line-height:1.5;">
+        Hat RX (Radio TX): <strong>{{ '{:,}'.format(rf_verify.rx_freq_hz) if rf_verify else '462,618,750' }} Hz</strong> &bull;
+        Hat TX (Radio RX): <strong>{{ '{:,}'.format(rf_verify.tx_freq_hz) if rf_verify else '462,618,750' }} Hz</strong>
+      </div>
     </div>
 
     <div class="form-row">
@@ -180,12 +286,6 @@
         <label class="form-label">CW ID Interval (Minutes)</label>
         <input type="number" name="cw_id_time" class="form-control" value="{{ cw.time or 15 }}">
         <small class="form-hint">FCC standard is 10 to 15 minutes.</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Modulation Output Level (%)</label>
-        <input type="number" name="tx_level" class="form-control" min="0" max="100" value="{{ modem.txLevel or 50 }}">
-        <small class="form-hint">Air interface transmit modulation power (default 50%).</small>
       </div>
     </div>
   </div>
@@ -389,6 +489,24 @@
 
     <div class="form-row">
       <div class="form-group">
+        <label class="form-label">Unlisted Radio ID Policy (<code>radio_id.acl</code>)</label>
+        <select name="allow_unknown_rids" class="form-control">
+          <option value="true" {% if allow_unknown_rids is not defined or allow_unknown_rids %}selected{% endif %}>Allow All Radio IDs (allowUnknown: true / acl: false — Recommended)</option>
+          <option value="false" {% if allow_unknown_rids is defined and not allow_unknown_rids %}selected{% endif %}>Strict RID ACL Only (Reject Unlisted Radio IDs)</option>
+        </select>
+        <small class="form-hint">Keep on Allow All so DVMHost never silently rejects unlisted DMR radios.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Talkgroup ACL Policy (<code>talkgroup_id.acl</code>)</label>
+        <select name="allow_all_tgs" class="form-control">
+          <option value="true" {% if allow_all_tgs is not defined or allow_all_tgs %}selected{% endif %}>Allow All Talkgroups (acl: false — Recommended)</option>
+          <option value="false" {% if allow_all_tgs is defined and not allow_all_tgs %}selected{% endif %}>Strict Talkgroup Rules Only (acl: true)</option>
+        </select>
+        <small class="form-hint">Allows any talkgroup to pass without requiring a strict ACL rule match.</small>
+      </div>
+
+      <div class="form-group">
         <label class="form-label">Default Idle Network TGID</label>
         <input type="number" name="default_net_idle_tg" class="form-control" value="{{ sys.defaultNetIdleTalkgroup if sys.defaultNetIdleTalkgroup is defined else 0 }}">
         <small class="form-hint">0 enables promiscuous / first-come-first-serve network routing.</small>
@@ -494,18 +612,6 @@
         </div>
 
         <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
-            <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
-            <small class="form-hint">Fine frequency calibration for transmit (usually 0 to ±500 Hz).</small>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
-            <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
-            <small class="form-hint">Fine frequency calibration for receive (usually 0 to ±500 Hz).</small>
-          </div>
-
           <div class="form-group">
             <label class="form-label">ADF7021 LNA Gain Mode</label>
             <select name="adf_gain_mode" class="form-control">
@@ -667,46 +773,6 @@
   </div>
 </div>
 
-<!-- IDEN Frequency Bandplan Table (Used by DVMHost for both DMR & P25 Channel Mapping) -->
-<div class="card" style="margin-top: 1.5rem;">
-  <div class="card-header">
-    <div>
-      <div class="card-title">📊 IDEN Frequency Bandplan Table</div>
-      <span style="font-size:0.75rem; color:var(--text-dim);">iden_table.dat &mdash; Maps DVMHost <code>channelId</code> ({{ sys.channelId if sys.channelId is defined else 2 }}) &amp; hex <code>channelNo</code> (<code>${{ sys.channelNo or '7E3' }}</code>) to RF TX/RX frequencies</span>
-    </div>
-  </div>
-
-  <form hx-post="/p25/iden/save" hx-target="#dmr-iden-container" hx-swap="innerHTML" class="form-row" style="align-items:flex-end; margin-bottom:1.25rem; background:var(--bg-input); padding:1rem; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
-    <div class="form-group" style="margin-bottom:0;">
-      <label class="form-label">Channel ID (0-15)</label>
-      <input type="number" name="channel_id" class="form-control font-mono" min="0" max="15" placeholder="e.g. 2" required>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label class="form-label">Base Frequency (Hz)</label>
-      <input type="number" name="base_freq_hz" class="form-control font-mono" placeholder="e.g. 450000000" required>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label class="form-label">Spacing (kHz)</label>
-      <input type="number" step="0.01" name="spacing_khz" class="form-control font-mono" value="6.25" required>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label class="form-label">Input Offset (MHz)</label>
-      <input type="number" step="0.001" name="offset_mhz" class="form-control font-mono" value="5.000" required>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label class="form-label">Bandwidth (kHz)</label>
-      <input type="number" step="0.1" name="bandwidth_khz" class="form-control font-mono" value="12.5" required>
-    </div>
-    <div>
-      <button type="submit" class="btn btn-primary">+ Save Bandplan</button>
-    </div>
-  </form>
-
-  <div id="dmr-iden-container">
-    {% include "components/p25_iden_table.html" %}
-  </div>
-</div>
-
 <!-- DMR Text Messaging & Meshtastic Gateway -->
 <div class="card" style="margin-top: 1.5rem;">
   <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
@@ -797,35 +863,77 @@ function selectDmrArchitecture(presetKey) {
   duplexSel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+function stepDmrTuning(inputId, deltaHz) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const cur = parseInt(el.value || '0', 10) || 0;
+  el.value = Math.max(-2000, Math.min(2000, cur + deltaHz));
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  updateDmrCodeplugSummary();
+}
+
+function resetDmrTuning(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = 0;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  updateDmrCodeplugSummary();
+}
+
 function updateDmrCodeplugSummary() {
   const isDuplex = document.getElementById('dmr-duplex-select')?.value === 'true';
   const tsccMode = document.getElementById('dmr-tscc-mode-select')?.value || 'disabled';
   const ccVal = document.getElementById('dmr-color-code-input')?.value || '1';
   const txInput = document.getElementById('dmr-tx-freq-input');
   const rxInput = document.getElementById('dmr-rx-freq-input');
+  const spacingSel = document.getElementById('dmr-spacing-input');
+  const rxTuningInput = document.getElementById('dmr-rx-tuning-input');
+  const txTuningInput = document.getElementById('dmr-tx-tuning-input');
   const summaryEl = document.getElementById('dmr-codeplug-summary');
+  const badgeEl = document.getElementById('dmr-iden-formula-badge');
   if (!summaryEl || !txInput || !rxInput) return;
 
-  const tx = parseFloat(txInput.value) || 0;
-  const rx = isDuplex ? (parseFloat(rxInput.value) || tx) : tx;
-  const split = rx - tx;
-  const splitSign = split >= 0 ? '+' : '';
-  if (isDuplex) {
-    const modeTag = tsccMode === 'dedicated'
-      ? 'Tier III Trunked TSCC'
-      : (tsccMode === 'non_dedicated' ? 'Shared TSCC + Repeater' : '2-Slot Repeater');
-    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug (${modeTag}, CC ${ccVal}):</strong> Radio RX = <strong>${tx.toFixed(5)}</strong> MHz &bull; Radio TX = <strong>${rx.toFixed(5)}</strong> MHz (${splitSign}${split.toFixed(3)} MHz)`;
-  } else {
-    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug (Simplex, CC ${ccVal}):</strong> RX/TX = <strong>${tx.toFixed(5)}</strong> MHz`;
+  const rxMhz = parseFloat(rxInput.value) || 0;
+  const txMhz = isDuplex ? (parseFloat(txInput.value) || rxMhz) : rxMhz;
+  const spacingKhz = parseFloat(spacingSel?.value || '12.5') || 12.5;
+  const rxTuningHz = parseInt(rxTuningInput?.value || '0', 10) || 0;
+  const txTuningHz = parseInt(txTuningInput?.value || '0', 10) || 0;
+
+  const rxHz = Math.round(rxMhz * 1000000);
+  const txHz = Math.round(txMhz * 1000000);
+  const spacingHz = Math.round(spacingKhz * 1000);
+  const baseHz = txHz - spacingHz;
+  const effRxHz = rxHz + rxTuningHz;
+  const effTxHz = txHz + txTuningHz;
+  const offsetMhz = isDuplex ? ((rxHz - txHz) / 1000000).toFixed(6) : '+5.000000 (Simplex bypass)';
+
+  if (badgeEl) {
+    badgeEl.textContent = `iden_table.dat: ChId=1, ChNo=1, Base=${baseHz.toLocaleString()} Hz, Spacing=${spacingKhz} kHz (${spacingHz.toLocaleString()} Hz), Offset=${offsetMhz}`;
   }
+
+  const modeTag = !isDuplex
+    ? 'Simplex / DCDM (1-Ant Hat)'
+    : (tsccMode === 'dedicated' ? 'Dedicated TSCC (2-Ant Hat)' : (tsccMode === 'non_dedicated' ? 'Non-Dedicated TSCC (2-Ant Hat)' : '2-Slot Repeater (2-Ant Hat)'));
+
+  const rxToneStr = rxTuningHz !== 0 ? ` (Calibrated: ${effRxHz.toLocaleString()} Hz)` : '';
+  const txToneStr = txTuningHz !== 0 ? ` (Calibrated: ${effTxHz.toLocaleString()} Hz)` : '';
+
+  summaryEl.innerHTML =
+    `📻 <strong>${modeTag} &bull; Color Code ${ccVal}:</strong> ` +
+    `Hat RX (Radio TX) = <strong>${rxHz.toLocaleString()} Hz</strong> (${rxMhz.toFixed(6)} MHz)${rxToneStr} &bull; ` +
+    `Hat TX (Radio RX) = <strong>${txHz.toLocaleString()} Hz</strong> (${txMhz.toFixed(6)} MHz)${txToneStr}`;
 }
 
-function onDmrFreqInput() {
+function onDmrFreqInput(sourceField) {
   const isDuplex = document.getElementById('dmr-duplex-select')?.value === 'true';
   const txInput = document.getElementById('dmr-tx-freq-input');
   const rxInput = document.getElementById('dmr-rx-freq-input');
   if (!isDuplex && txInput && rxInput) {
-    rxInput.value = txInput.value;
+    if (sourceField === 'tx') {
+      rxInput.value = txInput.value;
+    } else {
+      txInput.value = rxInput.value;
+    }
   } else if (isDuplex && rxInput) {
     rxInput.dataset.lastDuplexRx = rxInput.value;
   }
@@ -838,7 +946,7 @@ function applyDmrOffset(offsetMhz) {
   if (!txInput || !rxInput) return;
   const tx = parseFloat(txInput.value);
   if (isNaN(tx)) return;
-  rxInput.value = (tx + offsetMhz).toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
+  rxInput.value = (tx + offsetMhz).toFixed(6);
   rxInput.dataset.lastDuplexRx = rxInput.value;
   rxInput.dispatchEvent(new Event('input', { bubbles: true }));
   updateDmrCodeplugSummary();
@@ -858,22 +966,21 @@ function swapDmrTxRx() {
 
 function syncDmrDuplexMode() {
   const isDuplex = document.getElementById('dmr-duplex-select')?.value === 'true';
-  const rxGroup = document.getElementById('dmr-rx-freq-group');
   const rxInput = document.getElementById('dmr-rx-freq-input');
   const txInput = document.getElementById('dmr-tx-freq-input');
-  const txLabel = document.getElementById('dmr-tx-freq-label');
   const txHint = document.getElementById('dmr-tx-freq-hint');
   const duplexHint = document.getElementById('dmr-duplex-hint');
   const presetsBar = document.getElementById('dmr-offset-presets-bar');
   const simplexNotice = document.getElementById('dmr-simplex-notice');
+  const duplexWarn = document.getElementById('dmr-duplex-hat-warn');
   const ccCard = document.getElementById('dmr-control-channel-card');
   const txHangGrp = document.getElementById('dmr-tx-hang-group');
   const otaWarn = document.getElementById('dmr-ota-simplex-warn');
   const otaBadge = document.getElementById('dmr-ota-mode-badge');
 
-  if (rxGroup) rxGroup.style.display = isDuplex ? 'block' : 'none';
   if (presetsBar) presetsBar.style.display = isDuplex ? 'flex' : 'none';
   if (simplexNotice) simplexNotice.style.display = isDuplex ? 'none' : 'block';
+  if (duplexWarn) duplexWarn.style.display = isDuplex ? 'block' : 'none';
   if (ccCard) ccCard.style.display = isDuplex ? 'block' : 'none';
   if (txHangGrp) txHangGrp.style.display = isDuplex ? 'block' : 'none';
   if (otaWarn) otaWarn.style.display = isDuplex ? 'none' : 'block';
@@ -882,18 +989,24 @@ function syncDmrDuplexMode() {
     otaBadge.textContent = isDuplex ? 'REST API Direct (Full Duplex RF Ready)' : '⚠️ Requires Full Duplex to TX RF';
   }
 
-  if (txLabel) {
-    txLabel.textContent = isDuplex ? 'Hotspot TX / Repeater Output (MHz)' : 'Simplex Operating Frequency (MHz)';
+  if (txInput) {
+    if (!isDuplex) {
+      txInput.setAttribute('readonly', 'readonly');
+      txInput.style.opacity = '0.8';
+    } else {
+      txInput.removeAttribute('readonly');
+      txInput.style.opacity = '1';
+    }
   }
   if (txHint) {
     txHint.innerHTML = isDuplex
-      ? 'Repeater output frequency &mdash; program this as <strong>RX</strong> in your handheld radio.'
-      : 'Single frequency used for both transmit and receive.';
+      ? 'Frequency the MMDVM hat <strong>transmits</strong> on (your handheld radio <strong>RX</strong> frequency).'
+      : 'Locked equal to RX Frequency for Simplex operation.';
   }
   if (duplexHint) {
     duplexHint.textContent = isDuplex
-      ? 'Full Duplex active: Simultaneous TX & RX with 2-slot TDMA and TSCC support.'
-      : 'Simplex active: Single frequency direct mode (Control Channel & RX split hidden).';
+      ? 'Full Duplex active: Simultaneous TX & RX (requires 2-antenna hat).'
+      : 'Simplex active: Single frequency direct mode (1-antenna hat).';
   }
 
   if (txInput && rxInput) {
@@ -904,9 +1017,9 @@ function syncDmrDuplexMode() {
       const txVal = parseFloat(txInput.value) || 462.61875;
       const savedRx = parseFloat(rxInput.dataset.lastDuplexRx || rxInput.value);
       if (!isNaN(savedRx) && Math.abs(savedRx - txVal) >= 0.0001) {
-        rxInput.value = savedRx;
+        rxInput.value = savedRx.toFixed(6);
       } else {
-        rxInput.value = (txVal + defaultSplitForFreq(txVal)).toFixed(5);
+        rxInput.value = (txVal + defaultSplitForFreq(txVal)).toFixed(6);
       }
     }
   }

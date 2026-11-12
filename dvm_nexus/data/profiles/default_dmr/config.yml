@@ -5,8 +5,8 @@ log:
   displayLevel: 1
   fileLevel: 1
   useSyslog: true
-  filePath: /opt/dvm
-  activityFilePath: /opt/dvm
+  filePath: C:\Users\Administrator\Documents\DVM Nexus\dvm_nexus\data\active
+  activityFilePath: C:\Users\Administrator\Documents\DVM Nexus\dvm_nexus\data\active
   fileRoot: DVM
 network:
   enable: false
@@ -70,6 +70,8 @@ protocols:
     queueSize: 31
     verbose: true
     debug: false
+    supervisor: false
+    colorCode: 3
   p25:
     enable: false
     tduPreambleCount: 6
@@ -119,6 +121,10 @@ protocols:
     queueSize: 12
     verbose: true
     debug: false
+    nac: '293'
+    sysId: '001'
+    wacn: BB800
+    netId: BB800
   nxdn:
     enable: false
     control:
@@ -161,8 +167,8 @@ system:
   config:
     authoritative: true
     supervisor: false
-    channelId: 2
-    channelNo: 7E3
+    channelId: 1
+    channelNo: '1'
     controlCh:
       rpcAddress: 127.0.0.1
       rpcPort: 0
@@ -170,14 +176,14 @@ system:
       notifyEnable: true
       presence: 120
     voiceChNo:
-      - channelId: 2
-        channelNo: 7E3
+      - channelId: 1
+        channelNo: '1'
         rpcAddress: 127.0.0.1
         rpcPort: 0
         rpcPassword: ULTRA-VERY-SECURE-DEFAULT
     secure:
       key: 000102030405060708090A0B0C0D0E0F
-    colorCode: 1
+    colorCode: 3
     nac: '293'
     ran: 1
     pSuperGroup: FFFE
@@ -266,6 +272,7 @@ system:
     file: rid_acl.dat
     time: 2
     acl: false
+    allowUnknown: true
   talkgroup_id:
     file: talkgroup_rules.yml
     time: 2

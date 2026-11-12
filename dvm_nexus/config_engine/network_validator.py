@@ -51,19 +51,20 @@ def validate_p25_settings(data: Dict[str, Any]) -> List[str]:
     # NAC (12-bit hex/dec)
     nac = str(data.get("nac", "")).strip()
     if nac:
-        # Check if hex string (e.g. "293" or "0x293")
+        clean_nac = nac[2:] if nac.lower().startswith("0x") else (nac[1:] if nac.startswith("$") else nac)
         try:
-            val = int(nac, 16) if not nac.isdigit() else int(nac)
+            val = int(clean_nac, 16)
             if not (1 <= val <= 0xFFF):
                 errors.append(f"P25 NAC must be a 12-bit value between 0x001 and 0xFFF (got {nac})")
         except ValueError:
-            errors.append(f"Invalid NAC '{nac}': must be valid hex or decimal")
+            errors.append(f"Invalid NAC '{nac}': must be valid hex or decimal (e.g. 293 or 0x293)")
 
     # WACN (20-bit hex string)
     wacn = str(data.get("netId", "")).strip().upper()
     if wacn:
+        clean_wacn = wacn[2:] if wacn.startswith("0X") else (wacn[1:] if wacn.startswith("$") else wacn)
         try:
-            val = int(wacn, 16)
+            val = int(clean_wacn, 16)
             if not (1 <= val <= 0xFFFFF):
                 errors.append(f"P25 WACN must be a 20-bit hex value between 00001 and FFFFF (got {wacn})")
             elif (val >> 8) == 0xBEE:
@@ -77,8 +78,9 @@ def validate_p25_settings(data: Dict[str, Any]) -> List[str]:
     # System ID (12-bit hex)
     sys_id = str(data.get("sysId", "")).strip().upper()
     if sys_id:
+        clean_sys = sys_id[2:] if sys_id.startswith("0X") else (sys_id[1:] if sys_id.startswith("$") else sys_id)
         try:
-            val = int(sys_id, 16)
+            val = int(clean_sys, 16)
             if not (1 <= val <= 0xFFF):
                 errors.append(f"P25 System ID must be a 12-bit hex value (got {sys_id})")
         except ValueError:

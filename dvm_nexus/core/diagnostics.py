@@ -30,6 +30,138 @@ class DiagnosticsEngine:
         self._simulated_cleared = False
         self._cached_report: Optional[Dict[str, Any]] = None
         self._cached_report_time: float = 0.0
+        self._cached_modem_summary: Optional[Dict[str, Any]] = None
+        self._cached_modem_summary_time: float = 0.0
+
+    def get_modem_firmware_summary(self, cfg_dict: Optional[Dict[str, Any]] = None, force: bool = False) -> Dict[str, Any]:
+        """
+        Inspect config.yml and recent dvmhost startup logs to verify:
+        - modem.protocol.type == 'uart', mode == 'air', port == '/dev/ttyAMA0', speed == 115200
+        - DVMProject firmware (dvmfirmware-hs: 'Digital Voice Modem') vs stock MMDVM_HS firmware
+        - 1-antenna [MMDVM_HS_Hat] vs 2-antenna [MMDVM_HS_Dual_Hat] duplex mismatch
+        - /dev/ttyAMA0 lock by Bluetooth (hciuart) or serial-getty@ttyAMA0
+        """
+        now = time.time()
+        if not force and self._cached_modem_summary is not None and (now - self._cached_modem_summary_time < 4.0):
+            return dict(self._cached_modem_summary)
+
+        if cfg_dict is None:
+            try:
+                cfg_dict = dvm_config_manager.load_config_dict()
+            except Exception:
+                cfg_dict = {}
+
+        sys_blk = cfg_dict.get("system", {}) if isinstance(cfg_dict, dict) else {}
+        config_duplex = bool(sys_blk.get("duplex", False))
+        modem_blk = sys_blk.get("modem", {}) if isinstance(sys_blk, dict) else {}
+        proto_blk = modem_blk.get("protocol", {}) if isinstance(modem_blk, dict) else {}
+        uart_blk = proto_blk.get("uart", {}) if isinstance(proto_blk, dict) else {}
+
+        protocol_type = str(proto_blk.get("type", "uart")).strip()
+        protocol_mode = str(proto_blk.get("mode", "air")).strip()
+        uart_port = str(uart_blk.get("port", "/dev/ttyAMA0")).strip()
+        try:
+            uart_speed = int(uart_blk.get("speed", 115200))
+        except (ValueError, TypeError):
+            uart_speed = 115200
+
+        # Inspect recent journalctl logs for (MODEM) lines
+        log_data = self.get_service_logs("dvmhost", lines=120, filter_level="all")
+        raw_lines = [e.get("raw", "") for e in log_data.get("entries", [])]
+
+        firmware_string = ""
+        modem_ready_mode = ""
+        is_dvm_firmware: Optional[bool] = None
+        is_single_hat_firmware = False
+        is_dual_hat_firmware = False
+        uart_timeout_in_logs = False
+
+        for line in raw_lines:
+            if "(MODEM)" in line or "MMDVM" in line:
+                if "Digital Voice Modem" in line:
+                    is_dvm_firmware = True
+                    parts = line.split("(MODEM)", 1)
+                    firmware_string = parts[1].strip() if len(parts) > 1 else line.strip()
+                    if "[MMDVM_HS_Hat]" in firmware_string and "Dual" not in firmware_string:
+                        is_single_hat_firmware = True
+                    elif "Dual" in firmware_string:
+                        is_dual_hat_firmware = True
+                elif ("MMDVM_HS" in line or "ZUMspot" in line) and "Digital Voice Modem" not in line:
+                    if is_dvm_firmware is None:
+                        is_dvm_firmware = False
+                        parts = line.split("(MODEM)", 1)
+                        firmware_string = parts[1].strip() if len(parts) > 1 else line.strip()
+                if "Modem Ready" in line:
+                    m = re.search(r"Modem Ready \[([^\]]+)\]", line)
+                    if m:
+                        modem_ready_mode = m.group(1)
+                if "Unable to read the firmware version" in line or "Cannot open device" in line or "Unable to open the modem" in line:
+                    uart_timeout_in_logs = True
+
+        serial_getty_active = False
+        bt_uart_active = False
+        if os.name != "nt":
+            try:
+                g_chk = subprocess.run(["systemctl", "is-active", "serial-getty@ttyAMA0.service"], capture_output=True, text=True, timeout=1.0)
+                serial_getty_active = (g_chk.stdout.strip() == "active")
+            except Exception:
+                pass
+            try:
+                bt_chk = subprocess.run(["systemctl", "is-active", "hciuart.service"], capture_output=True, text=True, timeout=1.0)
+                bt_uart_active = (bt_chk.stdout.strip() == "active")
+            except Exception:
+                pass
+
+        warnings: List[str] = []
+        if protocol_type.lower() != "uart" or protocol_mode.lower() != "air":
+            warnings.append(
+                f"Modem protocol is set to type='{protocol_type}', mode='{protocol_mode}' (expected type='uart', mode='air')."
+            )
+        if uart_speed != 115200:
+            warnings.append(
+                f"UART baud rate is set to {uart_speed} (DVMProject dvmfirmware-hs uses 115200 bps)."
+            )
+        if is_dvm_firmware is False:
+            warnings.append(
+                f"Stock MMDVM_HS firmware detected ({firmware_string}). DVMHost requires DVMProject firmware (dvmfirmware-hs, Protocol 04) to link DMR and P25 radios."
+            )
+        if is_single_hat_firmware and config_duplex:
+            warnings.append(
+                "Hardware Duplex Mismatch: Your MMDVM hat reports 1-antenna [MMDVM_HS_Hat] firmware, which cannot transmit and receive simultaneously. Switch to Simplex (duplex: false, RX = TX) or use a 2-antenna [MMDVM_HS_Dual_Hat] board."
+            )
+        if serial_getty_active:
+            warnings.append(
+                "Linux login console (serial-getty@ttyAMA0.service) is active and blocking /dev/ttyAMA0."
+            )
+        if bt_uart_active:
+            warnings.append(
+                "Bluetooth UART service (hciuart.service) is active and may conflict with /dev/ttyAMA0 unless dtoverlay=disable-bt is set."
+            )
+        if uart_timeout_in_logs:
+            warnings.append(
+                f"DVMHost reported a serial communication failure on {uart_port} ('Unable to read the firmware version'). Check GPIO UART and hat seating."
+            )
+
+        summary = {
+            "protocol_type": protocol_type,
+            "protocol_mode": protocol_mode,
+            "uart_port": uart_port,
+            "uart_speed": uart_speed,
+            "config_duplex": config_duplex,
+            "firmware_string": firmware_string or "DVMProject dvmfirmware-hs (awaiting log line)",
+            "is_dvm_firmware": is_dvm_firmware,
+            "is_single_hat_firmware": is_single_hat_firmware,
+            "is_dual_hat_firmware": is_dual_hat_firmware,
+            "modem_ready_mode": modem_ready_mode,
+            "serial_getty_active": serial_getty_active,
+            "bt_uart_active": bt_uart_active,
+            "uart_timeout_in_logs": uart_timeout_in_logs,
+            "warnings": warnings,
+            "healthy": len(warnings) == 0,
+        }
+        self._cached_modem_summary = summary
+        self._cached_modem_summary_time = now
+        return summary
 
     def clear_logs(self, service_name: str = "dvmhost") -> Dict[str, Any]:
         """
@@ -145,6 +277,8 @@ class DiagnosticsEngine:
         """Clear cached health check report."""
         self._cached_report = None
         self._cached_report_time = 0.0
+        self._cached_modem_summary = None
+        self._cached_modem_summary_time = 0.0
 
     def run_health_checks(self, force: bool = False) -> Dict[str, Any]:
         """
@@ -352,9 +486,12 @@ class DiagnosticsEngine:
         # Check 3: Modem Serial Port & Linux Hardware UART
         # ----------------------------------------------------------------------
         modem_proto_type = cfg_dict.get("system", {}).get("modem", {}).get("protocol", {}).get("type", "uart")
+        modem_proto_mode = cfg_dict.get("system", {}).get("modem", {}).get("protocol", {}).get("mode", "air")
         uart_port = cfg_dict.get("system", {}).get("modem", {}).get("protocol", {}).get("uart", {}).get("port", "/dev/ttyAMA0")
+        uart_speed = cfg_dict.get("system", {}).get("modem", {}).get("protocol", {}).get("uart", {}).get("speed", 115200)
+        modem_summary = self.get_modem_firmware_summary(cfg_dict=cfg_dict)
 
-        # Safety Check: Null Dummy Modem Trap
+        # Safety Check: Null Dummy Modem Trap & Protocol Mode
         if str(modem_proto_type).lower() in ("null", "'null'", '"null"'):
             checks.append({
                 "id": "modem_null_trap",
@@ -366,13 +503,55 @@ class DiagnosticsEngine:
                 "auto_fixable": True,
                 "fix_id": "fix_modem_null",
             })
+        elif str(modem_proto_mode).lower() != "air" or int(uart_speed or 115200) != 115200:
+            checks.append({
+                "id": "modem_null_trap",
+                "name": "Modem Protocol & UART Speed",
+                "status": "warn",
+                "badge": "MISMATCH",
+                "summary": f"Modem configured as mode='{modem_proto_mode}', speed={uart_speed}. DVMProject MMDVM hats expect mode='air' at 115200 bps.",
+                "remedy": "Click Auto-Repair to enforce protocol.mode: air and speed: 115200.",
+                "auto_fixable": True,
+                "fix_id": "fix_modem_null",
+            })
         else:
             checks.append({
                 "id": "modem_null_trap",
                 "name": "Modem Controller Hardware Type",
                 "status": "pass",
-                "badge": "HARDWARE UART",
-                "summary": f"Modem interface is configured for real hardware '{modem_proto_type}'.",
+                "badge": "AIR / 115200",
+                "summary": f"Modem interface is configured for hardware '{modem_proto_type}' (mode: {modem_proto_mode}, {uart_port} @ {uart_speed} bps).",
+                "auto_fixable": False,
+            })
+
+        # Safety Check: Modem Firmware & 1-Antenna vs 2-Antenna Duplex Match
+        if modem_summary.get("is_dvm_firmware") is False:
+            checks.append({
+                "id": "modem_firmware_check",
+                "name": "Modem DSP Firmware (dvmfirmware-hs)",
+                "status": "fail",
+                "badge": "STOCK MMDVM_HS",
+                "summary": f"Stock MMDVM_HS firmware detected ({modem_summary.get('firmware_string')}). DVMHost requires DVMProject firmware (dvmfirmware-hs).",
+                "remedy": "Flash DVMProject dvmfirmware-hs to the MMDVM hat.",
+                "auto_fixable": False,
+            })
+        elif modem_summary.get("is_single_hat_firmware") and modem_summary.get("config_duplex"):
+            checks.append({
+                "id": "modem_firmware_check",
+                "name": "Modem Hardware Duplex Capability",
+                "status": "warn",
+                "badge": "1-ANTENNA HAT IN DUPLEX",
+                "summary": f"Modem reports 1-antenna [MMDVM_HS_Hat] firmware ({modem_summary.get('firmware_string')}), which only supports Simplex, while config.yml has duplex: true.",
+                "remedy": "Switch to Simplex (Direct / Hotspot) mode on the DMR or P25 page so duplex: false and RX = TX.",
+                "auto_fixable": False,
+            })
+        elif modem_summary.get("is_dvm_firmware") is True:
+            checks.append({
+                "id": "modem_firmware_check",
+                "name": "Modem DSP Firmware (dvmfirmware-hs)",
+                "status": "pass",
+                "badge": "DVMFIRMWARE-HS",
+                "summary": f"Verified DVMProject firmware: {modem_summary.get('firmware_string')}",
                 "auto_fixable": False,
             })
 

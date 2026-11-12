@@ -71,6 +71,45 @@ def sanitize_p25_wacn(val: Any) -> str:
     return f"{int_val:X}"
 
 
+def normalize_p25_nac(val: Any) -> str:
+    """
+    Normalize a P25 NAC (12-bit hex, e.g. '293', '0x293', '$293') into an uppercase
+    hex string without prefix (e.g. '293') for DVMHost ::strtoul(..., NULL, 16).
+    """
+    s = str(val if val is not None else "293").strip().upper()
+    if s.startswith("0X"):
+        s = s[2:]
+    elif s.startswith("$"):
+        s = s[1:]
+    try:
+        int_val = int(s, 16)
+        if 1 <= int_val <= 0xFFF:
+            return f"{int_val:03X}"
+    except ValueError:
+        pass
+    return "293"
+
+
+def normalize_p25_sys_id(val: Any) -> str:
+    """
+    Normalize a P25 System ID (12-bit hex, e.g. '001', '0x001', '$001') into an uppercase
+    3-digit hex string (e.g. '001') for DVMHost ::strtoul(..., NULL, 16).
+    """
+    s = str(val if val is not None else "001").strip().upper()
+    if s.startswith("0X"):
+        s = s[2:]
+    elif s.startswith("$"):
+        s = s[1:]
+    try:
+        int_val = int(s, 16)
+        if 1 <= int_val <= 0xFFF:
+            return f"{int_val:03X}"
+    except ValueError:
+        pass
+    return "001"
+
+
+
 def parse_channel_no(val: Any) -> int:
     """
     Parse channelNo from config.yml into a decimal integer (1..4095).
@@ -183,13 +222,25 @@ class DVMConfigManager:
                         proto_blk["type"] = "uart"
                         modified = True
 
-        # Heal system.config: netId (BEE00 panic), channelNo (base-16 hex), and voiceChNo
+        # Heal system.config: netId (BEE00 panic), nac, sysId, channelNo (base-16 hex), and voiceChNo
         sys_config = data.get("system", {}).get("config", {}) if isinstance(data.get("system"), dict) else {}
         if isinstance(sys_config, dict):
             raw_net_id = sys_config.get("netId", "BB800")
             safe_net_id = sanitize_p25_wacn(raw_net_id)
             if str(raw_net_id) != safe_net_id:
                 sys_config["netId"] = safe_net_id
+                modified = True
+
+            raw_nac = sys_config.get("nac", "293")
+            safe_nac = normalize_p25_nac(raw_nac)
+            if str(raw_nac) != safe_nac:
+                sys_config["nac"] = safe_nac
+                modified = True
+
+            raw_sys_id = sys_config.get("sysId", "001")
+            safe_sys_id = normalize_p25_sys_id(raw_sys_id)
+            if str(raw_sys_id) != safe_sys_id:
+                sys_config["sysId"] = safe_sys_id
                 modified = True
 
             raw_ch_no = sys_config.get("channelNo", "1")
@@ -217,9 +268,40 @@ class DVMConfigManager:
                             vc["rpcPort"] = 0
                             modified = True
 
-        # Heal multi-protocol collision
+        # Ensure radio_id and talkgroup_id lookup blocks have allowUnknown / acl defaults
+        sys_blk = data.get("system")
+        if isinstance(sys_blk, dict):
+            rid_blk = sys_blk.setdefault("radio_id", {"file": "rid_acl.dat", "time": 2, "acl": False})
+            if isinstance(rid_blk, dict):
+                acl_en = bool(rid_blk.get("acl", False))
+                if rid_blk.get("allowUnknown") != (not acl_en):
+                    rid_blk["allowUnknown"] = not acl_en
+                    modified = True
+            tg_blk = sys_blk.setdefault("talkgroup_id", {"file": "talkgroup_rules.yml", "time": 2, "acl": False})
+            if isinstance(tg_blk, dict) and "acl" not in tg_blk:
+                tg_blk["acl"] = False
+                modified = True
+
+        # Heal multi-protocol collision & mirror colorCode / P25 IDs
         protocols = data.get("protocols", {})
         if isinstance(protocols, dict):
+            dmr_blk = protocols.get("dmr")
+            if isinstance(dmr_blk, dict) and isinstance(sys_config, dict):
+                cc_val = int(sys_config.get("colorCode", dmr_blk.get("colorCode", 1)))
+                if dmr_blk.get("colorCode") != cc_val:
+                    dmr_blk["colorCode"] = cc_val
+                    modified = True
+            p25_blk = protocols.get("p25")
+            if isinstance(p25_blk, dict) and isinstance(sys_config, dict):
+                for k, v in (
+                    ("nac", sys_config.get("nac", "293")),
+                    ("sysId", sys_config.get("sysId", "001")),
+                    ("wacn", sys_config.get("netId", "BB800")),
+                    ("netId", sys_config.get("netId", "BB800")),
+                ):
+                    if p25_blk.get(k) != v:
+                        p25_blk[k] = v
+                        modified = True
             dmr_on = bool(protocols.get("dmr", {}).get("enable", False)) if isinstance(protocols.get("dmr"), dict) else False
             p25_on = bool(protocols.get("p25", {}).get("enable", False)) if isinstance(protocols.get("p25"), dict) else False
             nxdn_on = bool(protocols.get("nxdn", {}).get("enable", False)) if isinstance(protocols.get("nxdn"), dict) else False
@@ -410,6 +492,9 @@ class DVMConfigManager:
                 sys_config["netId"] = safe_net_id
                 log_audit("SAFETY", "WACN_PANIC_FIX", f"Replaced banned/invalid P25 WACN '{raw_net_id}' with '{safe_net_id}' to prevent DVMHost FATAL PANIC error 4")
 
+            sys_config["nac"] = normalize_p25_nac(sys_config.get("nac", "293"))
+            sys_config["sysId"] = normalize_p25_sys_id(sys_config.get("sysId", "001"))
+
             # Safety Net: Ensure channelNo is formatted in base-16 hex for DVMHost ::strtoul(..., NULL, 16)
             hex_ch_no = format_channel_no(parse_channel_no(sys_config.get("channelNo", "1")))
             sys_config["channelNo"] = hex_ch_no
@@ -422,18 +507,37 @@ class DVMConfigManager:
                         vc["channelNo"] = format_channel_no(parse_channel_no(vc.get("channelNo", hex_ch_no)))
                         if "rxChannelNo" in vc:
                             vc["rxChannelNo"] = format_channel_no(parse_channel_no(vc["rxChannelNo"]))
-                        # If VC RPC port is set to the same port as DVMHost's main RPC port (e.g. 9890),
-                        # DVMHost flags an invalid loopback RPC configuration. For standalone single-station,
-                        # the VC RPC port should be 0 (disabled/internal) or distinct.
                         vc_rpc_port = vc.get("rpcPort")
                         if vc_rpc_port == root_rpc_port:
                             vc["rpcPort"] = 0
                             log_audit("SAFETY", "VC_RPC_COLLISION_FIX", f"Set voiceChNo rpcPort to 0 to prevent RPC port collision with main daemon (port {root_rpc_port})")
 
+        # Ensure radio_id and talkgroup_id lookup blocks allow unknown RIDs/TGs unless ACL is explicitly enabled
+        rid_blk = data["system"].setdefault("radio_id", {"file": "rid_acl.dat", "time": 2, "acl": False})
+        if isinstance(rid_blk, dict):
+            rid_blk.setdefault("file", "rid_acl.dat")
+            rid_blk.setdefault("time", 2)
+            acl_on = bool(rid_blk.get("acl", False))
+            rid_blk["acl"] = acl_on
+            rid_blk["allowUnknown"] = not acl_on
+
+        tg_blk = data["system"].setdefault("talkgroup_id", {"file": "talkgroup_rules.yml", "time": 2, "acl": False})
+        if isinstance(tg_blk, dict):
+            tg_blk.setdefault("file", "talkgroup_rules.yml")
+            tg_blk.setdefault("time", 2)
+            tg_blk["acl"] = bool(tg_blk.get("acl", False))
+
         # Safety block: Enforce single-protocol mutual exclusion for hotspot / UART modems.
         # ADF7021 MMDVM_HS firmware aborts with NAK 32 (HS_NO_DUAL_MODE) if multiple protocols are enabled.
         protocols = data.get("protocols", {})
         if isinstance(protocols, dict):
+            if isinstance(protocols.get("dmr"), dict) and isinstance(sys_config, dict):
+                protocols["dmr"]["colorCode"] = int(sys_config.get("colorCode", protocols["dmr"].get("colorCode", 1)))
+            if isinstance(protocols.get("p25"), dict) and isinstance(sys_config, dict):
+                protocols["p25"]["nac"] = sys_config.get("nac", "293")
+                protocols["p25"]["sysId"] = sys_config.get("sysId", "001")
+                protocols["p25"]["wacn"] = sys_config.get("netId", "BB800")
+                protocols["p25"]["netId"] = sys_config.get("netId", "BB800")
             dmr_on = bool(protocols.get("dmr", {}).get("enable", False)) if isinstance(protocols.get("dmr"), dict) else False
             p25_on = bool(protocols.get("p25", {}).get("enable", False)) if isinstance(protocols.get("p25"), dict) else False
             nxdn_on = bool(protocols.get("nxdn", {}).get("enable", False)) if isinstance(protocols.get("nxdn"), dict) else False
@@ -476,7 +580,9 @@ class DVMConfigManager:
         """
         conf = self.load_config_dict()
         sys_conf = conf.get("system", {}).get("config", {})
-        channel_id = int(sys_conf.get("channelId", 2))
+        is_duplex = bool(conf.get("system", {}).get("duplex", True))
+        simplex_same = bool(conf.get("system", {}).get("simplexSameFrequency", not is_duplex))
+        channel_id = int(sys_conf.get("channelId", 1))
         channel_no = parse_channel_no(sys_conf.get("channelNo", "1"))
         from dvm_nexus.config_engine.iden_calculator import read_iden_table_file, calculate_frequency_from_channel
         iden_entries = read_iden_table_file(self.iden_path)
@@ -486,39 +592,143 @@ class DVMConfigManager:
                     channel_no=channel_no,
                     base_freq_hz=entry.base_freq_hz,
                     spacing_khz=entry.spacing_khz,
-                    offset_mhz=entry.offset_mhz
+                    offset_mhz=entry.offset_mhz,
+                    duplex=is_duplex,
+                    simplex_same_freq=simplex_same,
                 )
                 return round(tx_hz / 1000000.0, 6), round(rx_hz / 1000000.0, 6)
-        return 462.61875, 467.61875
+        return 462.61875, (467.61875 if is_duplex else 462.61875)
 
-    def set_tuned_frequencies(self, tx_mhz: float, rx_mhz: float, conf_dict: Optional[Dict[str, Any]] = None) -> Tuple[int, int]:
+    def get_rf_verification(self, conf: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Calculate IDEN entry for target frequencies, update iden_table.dat, 
-        and update channelId / channelNo (in hex) in config dict.
-        Returns: (channel_id, channel_no)
+        Return the exact DVMHost calculated RX/TX frequencies in Hz, effective frequencies with
+        calibration offsets (rxTuning/txTuning), and auto-calculated iden_table.dat parameters.
+        """
+        c = conf if conf is not None else self.load_config_dict()
+        sys_blk = c.get("system", {})
+        sys_conf = sys_blk.get("config", {})
+        hotspot = sys_blk.get("modem", {}).get("hotspot", {})
+        is_duplex = bool(sys_blk.get("duplex", True))
+        simplex_same = bool(sys_blk.get("simplexSameFrequency", not is_duplex))
+        channel_id = int(sys_conf.get("channelId", 1))
+        channel_no = parse_channel_no(sys_conf.get("channelNo", "1"))
+        rx_tuning_hz = int(hotspot.get("rxTuning", 0) or 0)
+        tx_tuning_hz = int(hotspot.get("txTuning", 0) or 0)
+
+        from dvm_nexus.config_engine.iden_calculator import read_iden_table_file, calculate_frequency_from_channel
+        iden_entries = read_iden_table_file(self.iden_path)
+        chosen = None
+        for entry in iden_entries:
+            if entry.channel_id == channel_id:
+                chosen = entry
+                break
+        if chosen is None and iden_entries:
+            chosen = iden_entries[0]
+
+        if chosen is not None:
+            tx_hz, rx_hz = calculate_frequency_from_channel(
+                channel_no=channel_no,
+                base_freq_hz=chosen.base_freq_hz,
+                spacing_khz=chosen.spacing_khz,
+                offset_mhz=chosen.offset_mhz,
+                duplex=is_duplex,
+                simplex_same_freq=simplex_same,
+            )
+            spacing_khz = chosen.spacing_khz
+            base_freq_hz = chosen.base_freq_hz
+            iden_offset_mhz = chosen.offset_mhz
+            bandwidth_khz = chosen.bandwidth_khz
+        else:
+            tx_hz = 462_618_750
+            rx_hz = 467_618_750 if is_duplex else 462_618_750
+            spacing_khz = 12.5
+            base_freq_hz = tx_hz - 12_500
+            iden_offset_mhz = 5.0
+            bandwidth_khz = 12.5
+
+        if not is_duplex:
+            rx_hz = tx_hz
+
+        eff_rx_hz = rx_hz + rx_tuning_hz
+        eff_tx_hz = tx_hz + tx_tuning_hz
+
+        return {
+            "duplex": is_duplex,
+            "simplex_same_freq": simplex_same,
+            "channel_id": channel_id,
+            "channel_no": channel_no,
+            "channel_no_hex": format_channel_no(channel_no),
+            "base_freq_hz": base_freq_hz,
+            "spacing_khz": spacing_khz,
+            "spacing_hz": int(round(spacing_khz / 0.125)) * 125,
+            "bandwidth_khz": bandwidth_khz,
+            "tx_freq_hz": tx_hz,
+            "rx_freq_hz": rx_hz,
+            "tx_freq_mhz": round(tx_hz / 1_000_000.0, 6),
+            "rx_freq_mhz": round(rx_hz / 1_000_000.0, 6),
+            "tx_offset_hz": rx_hz - tx_hz,
+            "tx_offset_mhz": round((rx_hz - tx_hz) / 1_000_000.0, 6),
+            "iden_offset_mhz": iden_offset_mhz,
+            "rx_tuning_hz": rx_tuning_hz,
+            "tx_tuning_hz": tx_tuning_hz,
+            "effective_rx_hz": eff_rx_hz,
+            "effective_tx_hz": eff_tx_hz,
+            "effective_rx_mhz": round(eff_rx_hz / 1_000_000.0, 6),
+            "effective_tx_mhz": round(eff_tx_hz / 1_000_000.0, 6),
+        }
+
+    def set_tuned_frequencies(
+        self,
+        tx_mhz: float,
+        rx_mhz: float,
+        conf_dict: Optional[Dict[str, Any]] = None,
+        spacing_khz: float = 12.5,
+    ) -> Tuple[int, int]:
+        """
+        Automatically calculate iden_table.dat using channelId=1 and channelNo=1 so
+        BaseFrequency + (1 * ChannelSpacing) lands on the exact requested RX/TX frequencies in Hz,
+        write iden_table.dat, and sync channelId: 1 / channelNo: '1' into config.yml.
+        Returns: (channel_id=1, channel_no=1)
         """
         from dvm_nexus.config_engine.iden_calculator import (
-            read_iden_table_file, format_iden_table, find_or_create_iden_entry
+            read_iden_table_file, format_iden_table, auto_calculate_single_iden_entry
         )
-        tx_hz = int(round(tx_mhz * 1000000.0))
-        rx_hz = int(round(rx_mhz * 1000000.0))
+        is_duplex = True
+        if conf_dict is not None:
+            is_duplex = bool(conf_dict.get("system", {}).get("duplex", True))
+        else:
+            is_duplex = abs(rx_mhz - tx_mhz) >= 0.000001
+
+        entry, _ = auto_calculate_single_iden_entry(
+            rx_freq_mhz=rx_mhz,
+            tx_freq_mhz=tx_mhz,
+            spacing_khz=spacing_khz,
+            bandwidth_khz=12.5,
+            duplex=is_duplex,
+            channel_id=1,
+        )
         iden_entries = read_iden_table_file(self.iden_path)
-        entry, channel_no = find_or_create_iden_entry(iden_entries, tx_hz, rx_hz)
+        replaced = False
+        for idx, existing in enumerate(iden_entries):
+            if existing.channel_id == 1:
+                iden_entries[idx] = entry
+                replaced = True
+                break
+        if not replaced:
+            iden_entries.append(entry)
         backup_manager.atomic_write(self.iden_path, format_iden_table(iden_entries))
 
         if conf_dict is not None:
-            hex_ch_no = format_channel_no(channel_no)
             sys_conf = conf_dict.setdefault("system", {}).setdefault("config", {})
-            sys_conf["channelId"] = entry.channel_id
-            sys_conf["channelNo"] = hex_ch_no
+            sys_conf["channelId"] = 1
+            sys_conf["channelNo"] = "1"
             if "voiceChNo" in sys_conf and isinstance(sys_conf["voiceChNo"], list) and len(sys_conf["voiceChNo"]) > 0:
-                sys_conf["voiceChNo"][0]["channelId"] = entry.channel_id
-                sys_conf["voiceChNo"][0]["channelNo"] = hex_ch_no
-                is_duplex = conf_dict.get("system", {}).get("duplex", True)
+                sys_conf["voiceChNo"][0]["channelId"] = 1
+                sys_conf["voiceChNo"][0]["channelNo"] = "1"
                 if not is_duplex:
                     sys_conf["voiceChNo"][0].pop("rxChannelId", None)
                     sys_conf["voiceChNo"][0].pop("rxChannelNo", None)
-        return entry.channel_id, channel_no
+        return 1, 1
 
     def get_quick_status(self) -> Dict[str, Any]:
         """Extract high-level overview info for dashboard."""

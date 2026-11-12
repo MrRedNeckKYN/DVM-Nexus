@@ -81,53 +81,90 @@
   <div class="card" style="border-left:4px solid var(--accent-indigo);">
     <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div>
-        <div class="card-title">📻 Radio Frequencies, Duplex Mode &amp; Station Identity</div>
-        <span style="font-size:0.85rem; color:var(--text-dim);">Operating Frequencies, Repeater Offset &amp; Duplex / Simplex Mode (DVMHost <code>system.duplex</code>)</span>
+        <div class="card-title">📻 Step 1: Choose P25 Operating Mode, RF Frequencies &amp; Crystal Calibration</div>
+        <span style="font-size:0.85rem; color:var(--text-dim);">Automatic <code>iden_table.dat</code> calculation (<code>Channel ID 1 &bull; Channel No 1</code>) &mdash; no manual bandplan math required</span>
       </div>
       <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-        <span class="badge badge-indigo" title="Auto-computed IDEN Channel ID &amp; Hex Channel Number for P25 TSBK">
-          IDEN Ch ID {{ sys.channelId if sys.channelId is defined else 2 }} &bull; Ch No ${{ sys.channelNo or '7E3' }}
+        <span class="badge badge-indigo" title="Auto-computed IDEN Channel ID 1 &amp; Channel No 1 for P25 TSBK">
+          Auto IDEN: Ch ID 1 &bull; Ch No $1
         </span>
-        <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Saved when you press Save</span>
+        <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Auto-Reloads DVMHost on Save</span>
       </div>
     </div>
 
+    <!-- Hardware Firmware & Serial Port Verification Banner -->
+    {% if modem_diag %}
+    <div style="padding:0.7rem 0.95rem; margin-bottom:1rem; border-radius:var(--radius-sm); background:{% if modem_diag.warnings %}rgba(245, 158, 11, 0.12){% else %}rgba(16, 185, 129, 0.08){% endif %}; border:1px solid {% if modem_diag.warnings %}rgba(245, 158, 11, 0.45){% else %}rgba(16, 185, 129, 0.3){% endif %}; font-size:0.8rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <div>
+          <strong>🔌 Modem Hardware &amp; Serial Check:</strong>
+          <code>protocol: {{ modem_diag.protocol_mode }}</code> &bull;
+          <code>{{ modem_diag.uart_port }} @ {{ modem_diag.uart_speed }} bps</code> &bull;
+          <span style="color:var(--text-bright);">{{ modem_diag.firmware_string }}</span>
+        </div>
+        {% if modem_diag.is_single_hat_firmware %}
+          <span class="badge badge-warning">1-Antenna Simplex Hat ([MMDVM_HS_Hat])</span>
+        {% elif modem_diag.is_dual_hat_firmware %}
+          <span class="badge badge-success">2-Antenna Duplex Hat ([Dual_Hat])</span>
+        {% endif %}
+      </div>
+      {% if modem_diag.warnings %}
+        <ul style="margin:0.45rem 0 0 1.1rem; padding:0; color:#fde68a;">
+          {% for w in modem_diag.warnings %}
+            <li>{{ w }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Guided 1-Click P25 Architecture Selector -->
     <div style="margin-bottom:1.1rem;">
-      <label class="form-label" style="margin-bottom:0.45rem; display:block;">⚡ Quick P25 Operating Architecture (Auto-Shows / Hides Relevant DVMHost Menus)</label>
+      <label class="form-label" style="margin-bottom:0.45rem; display:block;">⚡ Quick P25 Operating Architecture (Select 1-Antenna Simplex vs. 2-Antenna Duplex Hat)</label>
       <div id="p25-arch-cards" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(215px, 1fr)); gap:0.65rem;">
         <button type="button" data-arch="simplex" onclick="selectP25Architecture('simplex')" class="arch-mode-card" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s ease; background:{% if p25_arch_mode == 'simplex' %}rgba(99, 102, 241, 0.16){% else %}rgba(15, 23, 42, 0.55){% endif %}; border:1px solid {% if p25_arch_mode == 'simplex' %}rgba(99, 102, 241, 0.75){% else %}var(--border-color){% endif %}; color:var(--text-main);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
-            <strong style="font-size:0.86rem; color:var(--text-bright);">1. Simplex Direct / Hotspot</strong>
-            <span class="badge badge-muted" style="font-size:0.68rem;">1 Freq</span>
+            <strong style="font-size:0.86rem; color:var(--text-bright);">1. Simplex Conventional (1-Ant Hat)</strong>
+            <span class="badge badge-indigo" style="font-size:0.68rem;">1-Ant Hat</span>
           </div>
-          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Single frequency (<code>duplex: false</code>). Hides RX split &amp; TSBK Control Channel menus.</div>
+          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;"><code>duplex: false</code>, <code>control.enable: false</code>, <code>RX = TX</code>. Direct P25 Phase 1 voice.</div>
         </button>
 
         <button type="button" data-arch="duplex_conv" onclick="selectP25Architecture('duplex_conv')" class="arch-mode-card" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s ease; background:{% if p25_arch_mode == 'duplex_conv' %}rgba(99, 102, 241, 0.16){% else %}rgba(15, 23, 42, 0.55){% endif %}; border:1px solid {% if p25_arch_mode == 'duplex_conv' %}rgba(99, 102, 241, 0.75){% else %}var(--border-color){% endif %}; color:var(--text-main);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
             <strong style="font-size:0.86rem; color:var(--text-bright);">2. Full Duplex (Conventional)</strong>
-            <span class="badge badge-indigo" style="font-size:0.68rem;">Voice Only</span>
+            <span class="badge badge-muted" style="font-size:0.68rem;">2-Ant Dual Hat</span>
           </div>
-          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Standard split TX/RX repeater. Direct voice calls using NAC verification (no TSBK CC).</div>
+          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Requires 2-antenna Duplex Hat (<code>duplex: true</code>, split RX/TX). Direct voice using NAC.</div>
         </button>
 
         <button type="button" data-arch="duplex_nondedicated" onclick="selectP25Architecture('duplex_nondedicated')" class="arch-mode-card" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s ease; background:{% if p25_arch_mode == 'duplex_nondedicated' %}rgba(16, 185, 129, 0.15){% else %}rgba(15, 23, 42, 0.55){% endif %}; border:1px solid {% if p25_arch_mode == 'duplex_nondedicated' %}rgba(16, 185, 129, 0.75){% else %}var(--border-color){% endif %}; color:var(--text-main);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
             <strong style="font-size:0.86rem; color:var(--text-bright);">3. Full Duplex + Non-Dedicated CC</strong>
-            <span class="badge badge-success" style="font-size:0.68rem;">Combined CC+Voice</span>
+            <span class="badge badge-success" style="font-size:0.68rem;">2-Ant Dual Hat</span>
           </div>
-          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Periodic TSBK bursts when idle + P25 voice calls on a single Duplex Hat.</div>
+          <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Periodic TSBK bursts when idle + P25 voice calls on a 2-antenna Duplex Hat.</div>
         </button>
 
         <button type="button" data-arch="duplex_dedicated" onclick="selectP25Architecture('duplex_dedicated')" class="arch-mode-card" style="text-align:left; padding:0.75rem 0.9rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s ease; background:{% if p25_arch_mode == 'duplex_dedicated' %}rgba(245, 158, 11, 0.15){% else %}rgba(15, 23, 42, 0.55){% endif %}; border:1px solid {% if p25_arch_mode == 'duplex_dedicated' %}rgba(245, 158, 11, 0.75){% else %}var(--border-color){% endif %}; color:var(--text-main);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
             <strong style="font-size:0.86rem; color:var(--text-bright);">4. Full Duplex + Dedicated 24/7 CC</strong>
-            <span class="badge badge-warning" style="font-size:0.68rem;">24/7 TSBK</span>
+            <span class="badge badge-warning" style="font-size:0.68rem;">2-Ant Dual Hat</span>
           </div>
           <div style="font-size:0.76rem; color:var(--text-muted); line-height:1.35;">Continuous 24/7 P25 TSBK trunking Control Channel broadcast.</div>
         </button>
       </div>
+    </div>
+
+    <!-- Simplex Mode Notice Banner -->
+    <div id="p25-simplex-notice" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(99, 102, 241, 0.1); border:1px solid rgba(99, 102, 241, 0.35); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-main);">
+      ℹ️ <strong>1-Antenna Simplex Conventional Mode (<code>duplex: false</code>, <code>control.enable: false</code>, <code>RX = TX</code>):</strong>
+      DVMHost uses a single frequency for both TX and RX (<code>simplexSameFrequency: true</code>). Program your P25 handheld radio CPS with a <strong>Conventional P25 channel</strong> (same RX &amp; TX frequency, matching NAC <code>${{ sys.nac or '293' }}</code>).
+    </div>
+
+    <div id="p25-duplex-hat-warn" style="{% if not duplex %}display:none;{% else %}display:block;{% endif %} padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.82rem; color:#fde68a;">
+      ⚠️ <strong>2-Antenna Duplex Hat Required for <code>duplex: true</code>:</strong>
+      P25 Full Duplex repeater mode and TSBK Control Channels require a <strong>2-antenna Dual MMDVM Hat</strong> with split RX/TX frequencies. If you have a <strong>1-antenna Simplex MMDVM Hat</strong> (<code>[MMDVM_HS_Hat]</code>), select <strong>1. Simplex Conventional</strong> above so your radio can link!
     </div>
 
     <div class="form-row">
@@ -140,44 +177,101 @@
       <div class="form-group">
         <label class="form-label">RF Operating Mode (<code>system.duplex</code>)</label>
         <select name="duplex" id="p25-duplex-select" class="form-control" onchange="syncDuplexMode()">
-          <option value="false" {% if not duplex %}selected{% endif %}>Simplex (Single Frequency - Direct Talkaround)</option>
-          <option value="true" {% if duplex %}selected{% endif %}>Full Duplex (Repeater Split TX/RX + Control Channel Support)</option>
+          <option value="false" {% if not duplex %}selected{% endif %}>Simplex Conventional (1-Antenna Hat — RX = TX)</option>
+          <option value="true" {% if duplex %}selected{% endif %}>Full Duplex Repeater (2-Antenna Hat — Split RX/TX)</option>
         </select>
         <small class="form-hint" id="p25-duplex-hint">
-          {% if duplex %}Full Duplex active: Simultaneous TX &amp; RX with P25 TSBK Control Channel support.{% else %}Simplex active: Single frequency direct mode (Control Channel &amp; RX split hidden).{% endif %}
+          {% if duplex %}Full Duplex active: Simultaneous TX &amp; RX (requires 2-antenna hat).{% else %}Simplex active: Single frequency direct mode (1-antenna hat).{% endif %}
         </small>
       </div>
 
       <div class="form-group">
-        <label class="form-label" id="p25-tx-freq-label">{% if duplex %}Hotspot TX / Repeater Output (MHz){% else %}Simplex Operating Frequency (MHz){% endif %}</label>
-        <input type="number" step="0.000001" id="p25-tx-freq-input" name="tx_freq_mhz" class="form-control font-mono" value="{{ active_tx_mhz or 462.61875 }}" oninput="onP25FreqInput()" required>
-        <small class="form-hint" id="p25-tx-freq-hint">{% if duplex %}Repeater output frequency &mdash; program this as <strong>RX</strong> in your handheld radio.{% else %}Single frequency used for both transmit and receive.{% endif %}</small>
+        <label class="form-label" id="p25-rx-freq-label">MMDVM Hat RX Frequency (<code>rxFrequencyMHz</code>)</label>
+        <input type="number" step="0.000001" id="p25-rx-freq-input" name="rx_freq_mhz" data-last-duplex-rx="{{ duplex_rx_freq_mhz or 467.61875 }}" class="form-control font-mono" value="{{ '%.6f'|format(active_rx_mhz or 462.61875) }}" oninput="onP25FreqInput('rx')" required>
+        <small class="form-hint" id="p25-rx-freq-hint">Frequency the MMDVM hat <strong>receives</strong> on (your handheld radio <strong>TX</strong> frequency).</small>
       </div>
 
-      <div class="form-group" id="p25-rx-freq-group" {% if not duplex %}style="display:none;"{% endif %}>
-        <label class="form-label">Hotspot RX / Repeater Input (MHz)</label>
-        <input type="number" step="0.000001" id="p25-rx-freq-input" name="rx_freq_mhz" data-last-duplex-rx="{{ duplex_rx_freq_mhz or 467.61875 }}" class="form-control font-mono" value="{{ active_rx_mhz or 467.61875 }}" oninput="onP25FreqInput()" required>
-        <small class="form-hint">Repeater input frequency &mdash; program this as <strong>TX</strong> in your handheld radio.</small>
+      <div class="form-group" id="p25-tx-freq-group">
+        <label class="form-label" id="p25-tx-freq-label">MMDVM Hat TX Frequency (<code>txFrequencyMHz</code>)</label>
+        <input type="number" step="0.000001" id="p25-tx-freq-input" name="tx_freq_mhz" class="form-control font-mono" value="{{ '%.6f'|format(active_tx_mhz or 462.61875) }}" oninput="onP25FreqInput('tx')" {% if not duplex %}readonly style="opacity:0.8;"{% endif %} required>
+        <small class="form-hint" id="p25-tx-freq-hint">{% if duplex %}Frequency the MMDVM hat <strong>transmits</strong> on (your handheld radio <strong>RX</strong> frequency).{% else %}Locked equal to RX Frequency for Simplex operation.{% endif %}</small>
+      </div>
+
+      <div class="form-group" style="max-width:170px;">
+        <label class="form-label">Channel Spacing (kHz)</label>
+        <select name="spacing_khz" id="p25-spacing-input" class="form-control font-mono" onchange="updateP25CodeplugSummary()">
+          <option value="12.5" {% if (spacing_khz or 12.5) == 12.5 %}selected{% endif %}>12.5 kHz (Default)</option>
+          <option value="6.25" {% if spacing_khz == 6.25 %}selected{% endif %}>6.25 kHz</option>
+          <option value="25.0" {% if spacing_khz == 25.0 %}selected{% endif %}>25.0 kHz</option>
+        </select>
+        <small class="form-hint"><code>channelSpacingKHz</code></small>
       </div>
     </div>
 
     <!-- Quick Repeater Offset Helper Bar (Visible ONLY in Full Duplex) -->
     <div id="p25-offset-presets-bar" style="{% if not duplex %}display:none;{% else %}display:flex;{% endif %} align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem; padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(99, 102, 241, 0.08); border:1px solid rgba(99, 102, 241, 0.3); border-radius:var(--radius-sm);">
       <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-        <span style="font-size:0.8rem; font-weight:600; color:#a5b4fc;">⚡ Quick Repeater Split (RX = TX + Offset):</span>
+        <span style="font-size:0.8rem; font-weight:600; color:#a5b4fc;">⚡ Quick Repeater Split (Hat RX = Hat TX + Offset):</span>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(5.0)">+5.0 MHz (UHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(-5.0)">-5.0 MHz (UHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(0.6)">+0.6 MHz (2m VHF)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(30.0)">+30 MHz (700)</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(-45.0)">-45 MHz (800)</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="swapP25TxRx()" title="Swap TX and RX frequencies">⇄ Swap TX/RX</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="swapP25TxRx()" title="Swap TX and RX frequencies">⇄ Swap RX/TX</button>
       </div>
-      <div id="p25-codeplug-summary" style="font-size:0.8rem; font-family:var(--font-mono); color:var(--text-main);"></div>
     </div>
 
-    <!-- Simplex Mode Notice Banner (Visible ONLY in Simplex) -->
-    <div id="p25-simplex-notice" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.7rem 1rem; margin-bottom:1rem; background:rgba(148, 163, 184, 0.08); border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-muted);">
-      ℹ️ <strong>Simplex Mode Active (<code>system.duplex: false</code>):</strong> DVMHost uses a single frequency for both TX and RX (<code>simplexSameFrequency: true</code>). Repeater RX split frequencies and P25 TSBK Control Channel options only apply to Full Duplex repeaters and are hidden automatically.
+    <!-- RF Frequency Calibration (rxOffset / txOffset in Hz) Directly Accessible -->
+    <div style="padding:0.85rem 1rem; margin-bottom:1rem; background:rgba(15, 23, 42, 0.55); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.65rem;">
+        <div style="font-size:0.84rem; font-weight:700; color:#a5b4fc;">
+          🎯 RF Crystal Frequency Calibration (<code>rxOffset</code> / <code>txOffset</code> in Hz)
+        </div>
+        <span style="font-size:0.76rem; color:var(--text-dim);">Tune out MMDVM hat TCXO crystal drift in 50 Hz steps if P25 HDU/LDU frames fail sync</span>
+      </div>
+      <div class="form-row" style="margin-bottom:0;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">RX Frequency Calibration Offset (Hz) (<code>rxTuning</code>)</label>
+          <div style="display:flex; gap:0.35rem; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="stepP25Tuning('p25-rx-tuning-input', -50)">-50</button>
+            <input type="number" step="50" min="-2000" max="2000" id="p25-rx-tuning-input" name="rx_tuning" class="form-control font-mono" value="{{ hotspot.rxTuning or 0 }}" oninput="updateP25CodeplugSummary()">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="stepP25Tuning('p25-rx-tuning-input', 50)">+50</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="resetP25Tuning('p25-rx-tuning-input')">0</button>
+          </div>
+          <small class="form-hint">Range: <code>-500</code> to <code>+500 Hz</code> in <code>50 Hz</code> steps.</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">TX Frequency Calibration Offset (Hz) (<code>txTuning</code>)</label>
+          <div style="display:flex; gap:0.35rem; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="stepP25Tuning('p25-tx-tuning-input', -50)">-50</button>
+            <input type="number" step="50" min="-2000" max="2000" id="p25-tx-tuning-input" name="tx_tuning" class="form-control font-mono" value="{{ hotspot.txTuning or 0 }}" oninput="updateP25CodeplugSummary()">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="stepP25Tuning('p25-tx-tuning-input', 50)">+50</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="resetP25Tuning('p25-tx-tuning-input')">0</button>
+          </div>
+          <small class="form-hint">Range: <code>-500</code> to <code>+500 Hz</code> in <code>50 Hz</code> steps.</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Modulation Output Level (%)</label>
+          <input type="number" name="tx_level" class="form-control font-mono" min="0" max="100" value="{{ modem.txLevel or 50 }}">
+          <small class="form-hint">ADF7021 TX modulation level (default 50%).</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Exact Calculated RX/TX Frequency Verification Box (Hz) -->
+    <div id="p25-iden-container" style="padding:0.85rem 1rem; margin-bottom:1rem; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.35); border-radius:var(--radius-sm);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.45rem;">
+        <strong style="font-size:0.83rem; color:#6ee7b7;">✅ Exact Calculated DVMHost Frequency Verification (Down to 1 Hz) &mdash; IDEN Frequency Bandplan Table</strong>
+        <span style="font-size:0.75rem; font-family:var(--font-mono); color:var(--text-dim);" id="p25-iden-formula-badge">
+          iden_table.dat: ChId=1, ChNo=1, Base={{ '{:,}'.format(rf_verify.base_freq_hz) if rf_verify else '462,606,250' }} Hz, Spacing={{ rf_verify.spacing_khz if rf_verify else 12.5 }} kHz
+        </span>
+      </div>
+      <div id="p25-codeplug-summary" style="font-size:0.84rem; font-family:var(--font-mono); color:var(--text-bright); line-height:1.5;">
+        Hat RX (Radio TX): <strong>{{ '{:,}'.format(rf_verify.rx_freq_hz) if rf_verify else '462,618,750' }} Hz</strong> &bull;
+        Hat TX (Radio RX): <strong>{{ '{:,}'.format(rf_verify.tx_freq_hz) if rf_verify else '462,618,750' }} Hz</strong>
+      </div>
     </div>
 
     <div class="form-row">
@@ -193,12 +287,6 @@
         <label class="form-label">CW ID Interval (Minutes)</label>
         <input type="number" name="cw_id_time" class="form-control" value="{{ cw.time or 15 }}">
         <small class="form-hint">FCC standard is 10 to 15 minutes.</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Modulation Output Level (%)</label>
-        <input type="number" name="tx_level" class="form-control" min="0" max="100" value="{{ modem.txLevel or 50 }}">
-        <small class="form-hint">Air interface transmit modulation power (default 50%).</small>
       </div>
     </div>
   </div>
@@ -377,8 +465,8 @@
 
       <div class="form-group">
         <label class="form-label">P25 NAC (Network Access Code)</label>
-        <input type="text" name="nac" class="form-control font-mono" value="{{ sys.nac or '293' }}" required>
-        <small class="form-hint">3-digit Hex (e.g. 293). Standard RX NAC.</small>
+        <input type="text" name="nac" id="p25-nac-input" class="form-control font-mono" value="{{ sys.nac or '293' }}" oninput="updateP25CodeplugSummary()" required>
+        <small class="form-hint">3-digit Hex (e.g. <code>293</code> or <code>0x293</code>). Must match radio CPS NAC.</small>
       </div>
 
       <div class="form-group">
@@ -420,6 +508,24 @@
     </div>
 
     <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Unlisted Radio ID Policy (<code>radio_id.acl</code>)</label>
+        <select name="allow_unknown_rids" class="form-control">
+          <option value="true" {% if allow_unknown_rids is not defined or allow_unknown_rids %}selected{% endif %}>Allow All Radio IDs (allowUnknown: true / acl: false — Recommended)</option>
+          <option value="false" {% if allow_unknown_rids is defined and not allow_unknown_rids %}selected{% endif %}>Strict RID ACL Only (Reject Unlisted Radio IDs)</option>
+        </select>
+        <small class="form-hint">Keep on Allow All so DVMHost never silently rejects unlisted P25 radios.</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Talkgroup ACL Policy (<code>talkgroup_id.acl</code>)</label>
+        <select name="allow_all_tgs" class="form-control">
+          <option value="true" {% if allow_all_tgs is not defined or allow_all_tgs %}selected{% endif %}>Allow All Talkgroups (acl: false — Recommended)</option>
+          <option value="false" {% if allow_all_tgs is defined and not allow_all_tgs %}selected{% endif %}>Strict Talkgroup Rules Only (acl: true)</option>
+        </select>
+        <small class="form-hint">Allows any P25 TGID to pass without requiring a strict ACL rule match.</small>
+      </div>
+
       <div class="form-group">
         <label class="form-label">Default Idle Network TGID</label>
         <input type="number" name="default_net_idle_tg" class="form-control font-mono" value="{{ sys.defaultNetIdleTalkgroup if sys.defaultNetIdleTalkgroup is defined else 0 }}">
@@ -511,18 +617,6 @@
         </div>
 
         <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">TX Frequency Offset Tuning (Hz)</label>
-            <input type="number" name="tx_tuning" class="form-control" value="{{ hotspot.txTuning or 0 }}">
-            <small class="form-hint">Fine frequency calibration for transmit (usually 0 to ±500 Hz).</small>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">RX Frequency Offset Tuning (Hz)</label>
-            <input type="number" name="rx_tuning" class="form-control" value="{{ hotspot.rxTuning or 0 }}">
-            <small class="form-hint">Fine frequency calibration for receive (usually 0 to ±500 Hz).</small>
-          </div>
-
           <div class="form-group">
             <label class="form-label">ADF7021 LNA Gain Mode</label>
             <select name="adf_gain_mode" class="form-control">
@@ -688,47 +782,6 @@
   </div>
 </div>
 
-<!-- IDEN Bandplan Table -->
-<div class="card">
-  <div class="card-header">
-    <div>
-      <div class="card-title">📋 IDEN Frequency Bandplan Table</div>
-      <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">
-        Defines base frequencies, step spacing, and RX input offsets in <code>iden_table.dat</code>.
-      </div>
-    </div>
-  </div>
-
-  <!-- Add / Update IDEN Row Form -->
-  <form hx-post="/p25/iden/save" hx-target="#p25-iden-container" hx-swap="innerHTML" style="margin-bottom:1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
-    <div style="width:90px;">
-      <label class="form-label">Ch ID</label>
-      <input type="number" name="channel_id" class="form-control" min="0" max="15" placeholder="0" required>
-    </div>
-    <div style="flex:2; min-width:140px;">
-      <label class="form-label">Base Freq (Hz)</label>
-      <input type="number" name="base_freq_hz" class="form-control" placeholder="e.g. 440000000" required>
-    </div>
-    <div style="width:110px;">
-      <label class="form-label">Spacing (kHz)</label>
-      <input type="number" step="0.01" name="spacing_khz" class="form-control" value="6.25" required>
-    </div>
-    <div style="width:120px;">
-      <label class="form-label">Offset (MHz)</label>
-      <input type="number" step="0.001" name="offset_mhz" class="form-control" value="5.000" required>
-    </div>
-    <div style="width:110px;">
-      <label class="form-label">BW (kHz)</label>
-      <input type="number" step="0.1" name="bandwidth_khz" class="form-control" value="12.5" required>
-    </div>
-    <button type="submit" class="btn btn-primary btn-sm" style="height:38px;">Save IDEN</button>
-  </form>
-
-  <div id="p25-iden-container">
-    {% include "components/p25_iden_table.html" %}
-  </div>
-</div>
-
 <!-- P25 Text Messaging & Meshtastic Gateway -->
 <div class="card" style="margin-top: 1.5rem;">
   <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
@@ -776,30 +829,77 @@ function defaultP25SplitForFreq(txMhz) {
   return 5.0;
 }
 
-function updateP25CodeplugSummary() {
-  const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
-  const txInput = document.getElementById('p25-tx-freq-input');
-  const rxInput = document.getElementById('p25-rx-freq-input');
-  const summaryEl = document.getElementById('p25-codeplug-summary');
-  if (!summaryEl || !txInput || !rxInput) return;
-
-  const tx = parseFloat(txInput.value) || 0;
-  const rx = isDuplex ? (parseFloat(rxInput.value) || tx) : tx;
-  const split = rx - tx;
-  const splitSign = split >= 0 ? '+' : '';
-  if (isDuplex) {
-    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug:</strong> Radio RX = <strong>${tx.toFixed(5)}</strong> MHz &bull; Radio TX = <strong>${rx.toFixed(5)}</strong> MHz (${splitSign}${split.toFixed(3)} MHz)`;
-  } else {
-    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug:</strong> Simplex RX/TX = <strong>${tx.toFixed(5)}</strong> MHz`;
-  }
+function stepP25Tuning(inputId, deltaHz) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const cur = parseInt(el.value || '0', 10) || 0;
+  el.value = Math.max(-2000, Math.min(2000, cur + deltaHz));
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  updateP25CodeplugSummary();
 }
 
-function onP25FreqInput() {
+function resetP25Tuning(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = 0;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  updateP25CodeplugSummary();
+}
+
+function updateP25CodeplugSummary() {
+  const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
+  const ccMode = document.getElementById('p25-cc-mode-select')?.value || 'disabled';
+  const nacVal = (document.getElementById('p25-nac-input')?.value || '293').replace(/^0x/i, '').replace(/^\$/, '').toUpperCase();
+  const txInput = document.getElementById('p25-tx-freq-input');
+  const rxInput = document.getElementById('p25-rx-freq-input');
+  const spacingSel = document.getElementById('p25-spacing-input');
+  const rxTuningInput = document.getElementById('p25-rx-tuning-input');
+  const txTuningInput = document.getElementById('p25-tx-tuning-input');
+  const summaryEl = document.getElementById('p25-codeplug-summary');
+  const badgeEl = document.getElementById('p25-iden-formula-badge');
+  if (!summaryEl || !txInput || !rxInput) return;
+
+  const rxMhz = parseFloat(rxInput.value) || 0;
+  const txMhz = isDuplex ? (parseFloat(txInput.value) || rxMhz) : rxMhz;
+  const spacingKhz = parseFloat(spacingSel?.value || '12.5') || 12.5;
+  const rxTuningHz = parseInt(rxTuningInput?.value || '0', 10) || 0;
+  const txTuningHz = parseInt(txTuningInput?.value || '0', 10) || 0;
+
+  const rxHz = Math.round(rxMhz * 1000000);
+  const txHz = Math.round(txMhz * 1000000);
+  const spacingHz = Math.round(spacingKhz * 1000);
+  const baseHz = txHz - spacingHz;
+  const effRxHz = rxHz + rxTuningHz;
+  const effTxHz = txHz + txTuningHz;
+  const offsetMhz = isDuplex ? ((rxHz - txHz) / 1000000).toFixed(6) : '+5.000000 (Simplex bypass)';
+
+  if (badgeEl) {
+    badgeEl.textContent = `iden_table.dat: ChId=1, ChNo=1, Base=${baseHz.toLocaleString()} Hz, Spacing=${spacingKhz} kHz (${spacingHz.toLocaleString()} Hz), Offset=${offsetMhz}`;
+  }
+
+  const modeTag = !isDuplex
+    ? 'Simplex Conventional (1-Ant Hat)'
+    : (ccMode === 'dedicated' ? 'Dedicated TSBK CC (2-Ant Hat)' : (ccMode === 'non_dedicated' ? 'Non-Dedicated CC + Voice (2-Ant Hat)' : 'Duplex Repeater (2-Ant Hat)'));
+
+  const rxToneStr = rxTuningHz !== 0 ? ` (Calibrated: ${effRxHz.toLocaleString()} Hz)` : '';
+  const txToneStr = txTuningHz !== 0 ? ` (Calibrated: ${effTxHz.toLocaleString()} Hz)` : '';
+
+  summaryEl.innerHTML =
+    `📻 <strong>${modeTag} &bull; NAC $${nacVal}:</strong> ` +
+    `Hat RX (Radio TX) = <strong>${rxHz.toLocaleString()} Hz</strong> (${rxMhz.toFixed(6)} MHz)${rxToneStr} &bull; ` +
+    `Hat TX (Radio RX) = <strong>${txHz.toLocaleString()} Hz</strong> (${txMhz.toFixed(6)} MHz)${txToneStr}`;
+}
+
+function onP25FreqInput(sourceField) {
   const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
   const txInput = document.getElementById('p25-tx-freq-input');
   const rxInput = document.getElementById('p25-rx-freq-input');
   if (!isDuplex && txInput && rxInput) {
-    rxInput.value = txInput.value;
+    if (sourceField === 'tx') {
+      rxInput.value = txInput.value;
+    } else {
+      txInput.value = rxInput.value;
+    }
   } else if (isDuplex && rxInput) {
     rxInput.dataset.lastDuplexRx = rxInput.value;
   }
@@ -812,7 +912,7 @@ function applyP25Offset(offsetMhz) {
   if (!txInput || !rxInput) return;
   const tx = parseFloat(txInput.value);
   if (isNaN(tx)) return;
-  rxInput.value = (tx + offsetMhz).toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
+  rxInput.value = (tx + offsetMhz).toFixed(6);
   rxInput.dataset.lastDuplexRx = rxInput.value;
   rxInput.dispatchEvent(new Event('input', { bubbles: true }));
   updateP25CodeplugSummary();
@@ -918,33 +1018,38 @@ function selectP25Architecture(arch) {
 
 function syncDuplexMode() {
   const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
-  const rxGroup = document.getElementById('p25-rx-freq-group');
   const rxInput = document.getElementById('p25-rx-freq-input');
   const txInput = document.getElementById('p25-tx-freq-input');
-  const txLabel = document.getElementById('p25-tx-freq-label');
   const txHint = document.getElementById('p25-tx-freq-hint');
   const duplexHint = document.getElementById('p25-duplex-hint');
   const presetsBar = document.getElementById('p25-offset-presets-bar');
   const simplexNotice = document.getElementById('p25-simplex-notice');
+  const duplexWarn = document.getElementById('p25-duplex-hat-warn');
   const ccCard = document.getElementById('p25-control-channel-card');
 
-  if (rxGroup) rxGroup.style.display = isDuplex ? 'block' : 'none';
   if (presetsBar) presetsBar.style.display = isDuplex ? 'flex' : 'none';
   if (simplexNotice) simplexNotice.style.display = isDuplex ? 'none' : 'block';
+  if (duplexWarn) duplexWarn.style.display = isDuplex ? 'block' : 'none';
   if (ccCard) ccCard.style.display = isDuplex ? 'block' : 'none';
 
-  if (txLabel) {
-    txLabel.textContent = isDuplex ? 'Hotspot TX / Repeater Output (MHz)' : 'Simplex Operating Frequency (MHz)';
+  if (txInput) {
+    if (!isDuplex) {
+      txInput.setAttribute('readonly', 'readonly');
+      txInput.style.opacity = '0.8';
+    } else {
+      txInput.removeAttribute('readonly');
+      txInput.style.opacity = '1';
+    }
   }
   if (txHint) {
     txHint.innerHTML = isDuplex
-      ? 'Repeater output frequency &mdash; program this as <strong>RX</strong> in your handheld radio.'
-      : 'Single frequency used for both transmit and receive.';
+      ? 'Frequency the MMDVM hat <strong>transmits</strong> on (your handheld radio <strong>RX</strong> frequency).'
+      : 'Locked equal to RX Frequency for Simplex operation.';
   }
   if (duplexHint) {
     duplexHint.textContent = isDuplex
-      ? 'Full Duplex active: Simultaneous TX & RX with P25 TSBK Control Channel support.'
-      : 'Simplex active: Single frequency direct mode (Control Channel & RX split hidden).';
+      ? 'Full Duplex active: Simultaneous TX & RX (requires 2-antenna hat).'
+      : 'Simplex active: Single frequency direct mode (1-antenna hat).';
   }
 
   if (txInput && rxInput) {
@@ -955,9 +1060,9 @@ function syncDuplexMode() {
       const txVal = parseFloat(txInput.value) || 462.61875;
       const savedRx = parseFloat(rxInput.dataset.lastDuplexRx || rxInput.value);
       if (!isNaN(savedRx) && Math.abs(savedRx - txVal) >= 0.0001) {
-        rxInput.value = savedRx;
+        rxInput.value = savedRx.toFixed(6);
       } else {
-        rxInput.value = (txVal + defaultP25SplitForFreq(txVal)).toFixed(5);
+        rxInput.value = (txVal + defaultP25SplitForFreq(txVal)).toFixed(6);
       }
     }
   }

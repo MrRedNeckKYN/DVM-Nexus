@@ -232,8 +232,65 @@ class ServiceController:
         except Exception as e:
             return {"success": False, "message": str(e), "recent_logs": [str(e)]}
 
+    @staticmethod
+    def _cleanup_zombie_processes() -> int:
+        """
+        Ensure no lingering/zombie dvmhost processes continue holding /dev/ttyAMA0
+        after service stop or before service start.
+        Returns the number of stray processes terminated.
+        """
+        killed = 0
+        try:
+            stray_procs = []
+            for p in psutil.process_iter(["pid", "name"]):
+                try:
+                    pname = (p.info.get("name") or "").lower()
+                    if pname == "dvmhost":
+                        stray_procs.append(p)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+            if not stray_procs:
+                return 0
+
+            for p in stray_procs:
+                try:
+                    p.terminate()
+                    killed += 1
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+            _, alive = psutil.wait_procs(stray_procs, timeout=1.5)
+            for p in alive:
+                try:
+                    p.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        except Exception:
+            pass
+        return killed
+
+    def _restart_dvmfne_if_active(self) -> bool:
+        """If local dvmfne.service is active, cleanly restart it alongside dvmhost."""
+        if not self.has_systemctl:
+            return False
+        try:
+            chk = subprocess.run(
+                ["systemctl", "is-active", "dvmfne.service"],
+                capture_output=True, text=True, timeout=1.5
+            )
+            if chk.stdout.strip() == "active":
+                subprocess.run(
+                    ["sudo", "systemctl", "restart", "--no-block", "dvmfne.service"],
+                    capture_output=True, text=True, timeout=5
+                )
+                return True
+        except Exception:
+            pass
+        return False
+
     def stop(self) -> Dict[str, Any]:
-        """Stop the dvmhost service."""
+        """Stop the dvmhost service and clean up any zombie processes holding UART."""
         self._cached_status = None
         self._status_timestamp = 0.0
         self._invalidate_rest_token()
@@ -244,15 +301,20 @@ class ServiceController:
 
         try:
             res = subprocess.run(["sudo", "systemctl", "stop", self.service_name], capture_output=True, text=True, timeout=15)
+            self._cleanup_zombie_processes()
             if res.returncode == 0:
                 return {"success": True, "message": f"{self.service_name} stopped successfully"}
             else:
                 return {"success": False, "message": res.stderr.strip() or f"systemctl stop exited with code {res.returncode}"}
         except Exception as e:
+            self._cleanup_zombie_processes()
             return {"success": False, "message": str(e)}
 
     def restart(self) -> Dict[str, Any]:
-        """Restart the dvmhost service."""
+        """
+        Cleanly stop dvmhost, terminate any zombie processes holding /dev/ttyAMA0,
+        start dvmhost.service, and restart dvmfne.service if active.
+        """
         self._cached_status = None
         self._status_timestamp = 0.0
         self._invalidate_rest_token()
@@ -264,13 +326,28 @@ class ServiceController:
             return {"success": True, "message": "Service restarted (simulated dev mode)"}
 
         try:
-            # Use --no-block so systemctl returns immediately without hanging on hardware init
-            res = subprocess.run(["sudo", "systemctl", "restart", "--no-block", self.service_name], capture_output=True, text=True, timeout=10)
+            # 1. Stop service cleanly first so serial port lock on /dev/ttyAMA0 is released
+            subprocess.run(["sudo", "systemctl", "stop", self.service_name], capture_output=True, text=True, timeout=10)
+            # 2. Kill any lingering zombie dvmhost processes holding /dev/ttyAMA0
+            stray_killed = self._cleanup_zombie_processes()
+            if stray_killed > 0:
+                time.sleep(0.3)
+
+            # 3. Start dvmhost.service (using --no-block so systemctl returns immediately)
+            res = subprocess.run(["sudo", "systemctl", "start", "--no-block", self.service_name], capture_output=True, text=True, timeout=10)
+            # 4. Also restart dvmfne.service if running on the same host
+            fne_restarted = self._restart_dvmfne_if_active()
+
             if res.returncode == 0:
                 time.sleep(0.5)
-                return {"success": True, "message": f"{self.service_name} restarted successfully"}
+                msg = f"{self.service_name} restarted cleanly"
+                if stray_killed > 0:
+                    msg += f" (cleared {stray_killed} zombie process)"
+                if fne_restarted:
+                    msg += " + dvmfne restarted"
+                return {"success": True, "message": msg}
             else:
-                err = res.stderr.strip() or f"systemctl restart exited with code {res.returncode}"
+                err = res.stderr.strip() or f"systemctl start exited with code {res.returncode}"
                 return {
                     "success": False,
                     "message": err,
