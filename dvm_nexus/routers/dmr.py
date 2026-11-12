@@ -29,16 +29,15 @@ async def dmr_page(request: Request):
     modem_conf = conf.get("system", {}).get("modem", {})
     hotspot_conf = modem_conf.get("hotspot", {})
     net_conf = conf.get("network", {})
-    cw_conf = conf.get("cwId", {})
+    cw_conf = conf.get("system", {}).get("cwId") or conf.get("cwId", {})
     identity = conf.get("system", {}).get("identity", "NEXUS")
     duplex = conf.get("system", {}).get("duplex", True)
 
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "p25")
 
-    tx_freq_mhz, rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
-    if not duplex:
-        rx_freq_mhz = tx_freq_mhz
+    tx_freq_mhz, iden_rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
+    rx_freq_mhz = iden_rx_freq_mhz if duplex else tx_freq_mhz
     talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
 
@@ -60,6 +59,7 @@ async def dmr_page(request: Request):
             "duplex": duplex,
             "tx_freq_mhz": tx_freq_mhz,
             "rx_freq_mhz": rx_freq_mhz,
+            "duplex_rx_freq_mhz": iden_rx_freq_mhz,
             "talkgroups": talkgroups,
             "rids": rids,
             "config_rev": dvm_config_manager.get_config_revision(),
@@ -94,16 +94,18 @@ async def dmr_save(
     slot1: bool = Form(True),
     slot2: bool = Form(True),
     jitter: int = Form(360),
-    # Advanced DMR Parameters
+    # Advanced DMR Parameters & Control Channel (TSCC)
     silence_threshold: int = Form(21),
     frame_loss_threshold: int = Form(2),
     queue_size: int = Form(31),
+    tscc_mode: Optional[str] = Form(None),
     beacon_enable: bool = Form(False),
     beacon_interval: int = Form(60),
     beacon_duration: int = Form(3),
     tscc_enable: bool = Form(False),
     tscc_slot: int = Form(1),
     tscc_dedicated: bool = Form(False),
+    disable_grant_src_check: bool = Form(False),
     repeat_data_packet: bool = Form(True),
     dump_ta_data: bool = Form(True),
     embedded_lc_only: bool = Form(False),
@@ -130,6 +132,39 @@ async def dmr_save(
             {"type": "error", "message": "Not saved: config.yml changed since this page was loaded (another tab/user, auto-repair or a restore). Reload the page to see the latest values, then re-apply your edit."}
         )
 
+    # Resolve unified tscc_mode selector if provided
+    if tscc_mode is not None:
+        mode_val = tscc_mode.strip().lower()
+        if mode_val == "dedicated":
+            tscc_enable = True
+            tscc_dedicated = True
+            beacon_enable = True
+        elif mode_val == "non_dedicated":
+            tscc_enable = True
+            tscc_dedicated = False
+        else:
+            tscc_enable = False
+            tscc_dedicated = False
+
+    # DVMHost requirement: Control Channel (TSCC) and Roaming Beacons require Full Duplex
+    if not duplex:
+        rx_freq_mhz = tx_freq_mhz
+        tscc_enable = False
+        tscc_dedicated = False
+        beacon_enable = False
+    elif abs(tx_freq_mhz - rx_freq_mhz) < 0.0001:
+        # In Full Duplex, ensure RX has a valid split if user left TX == RX
+        if 400.0 <= tx_freq_mhz <= 480.0:
+            rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
+        elif 136.0 <= tx_freq_mhz <= 174.0:
+            rx_freq_mhz = round(tx_freq_mhz + 0.6, 6)
+        elif 800.0 <= tx_freq_mhz <= 870.0:
+            rx_freq_mhz = round(tx_freq_mhz - 45.0, 6)
+        elif 760.0 <= tx_freq_mhz <= 780.0:
+            rx_freq_mhz = round(tx_freq_mhz + 30.0, 6)
+        else:
+            rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
+
     errors = validate_dmr_settings({"colorCode": color_code, "dmrNetId": dmr_net_id, "siteId": site_id})
     errors += validate_frequencies(tx_freq_mhz, rx_freq_mhz)
     errors += validate_int_range("TX level", tx_level, 0, 100)
@@ -146,9 +181,6 @@ async def dmr_save(
             {"type": "error", "message": "Not saved - " + "; ".join(errors)}
         )
 
-    if not duplex:
-        rx_freq_mhz = tx_freq_mhz
-
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "p25")
 
@@ -159,10 +191,10 @@ async def dmr_save(
         c["system"]["simplexSameFrequency"] = not duplex
         c["system"]["fixedMode"] = True
 
-        c.setdefault("cwId", {})
-        c["cwId"]["enable"] = cw_id_enable
-        c["cwId"]["time"] = cw_id_time
-        c["cwId"]["callsign"] = callsign.strip() or "NEXUS"
+        for cw_target in (c.setdefault("cwId", {}), c["system"].setdefault("cwId", {})):
+            cw_target["enable"] = cw_id_enable
+            cw_target["time"] = cw_id_time
+            cw_target["callsign"] = callsign.strip() or "NEXUS"
 
         c.setdefault("network", {})
         c["network"]["enable"] = net_enable
@@ -197,6 +229,7 @@ async def dmr_save(
         c["protocols"]["dmr"]["control"]["enable"] = tscc_enable
         c["protocols"]["dmr"]["control"]["slot"] = tscc_slot
         c["protocols"]["dmr"]["control"]["dedicated"] = tscc_dedicated
+        c["protocols"]["dmr"]["control"]["disableGrantSourceIdCheck"] = disable_grant_src_check
 
         c.setdefault("system", {}).setdefault("config", {})
         c["system"]["config"]["colorCode"] = color_code

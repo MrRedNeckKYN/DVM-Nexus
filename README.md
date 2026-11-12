@@ -1,11 +1,11 @@
 # DVM Nexus
 
-[![Version](https://img.shields.io/badge/version-1.0.49-cyan.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
+[![Version](https://img.shields.io/badge/version-1.0.50-cyan.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
 [![Hardware](https://img.shields.io/badge/hardware-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/products/raspberry-pi-5/)
 [![Modem](https://img.shields.io/badge/modem-MMDVM%20Duplex%20Hat-blueviolet.svg)](#hardware-setup)
-[![Tests](https://img.shields.io/badge/tests-89%20passed-brightgreen.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus)
+[![Tests](https://img.shields.io/badge/tests-90%20passed-brightgreen.svg)](https://github.com/MrRedNeckKYN/DVM-Nexus)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **DVM Nexus** is a next-generation web management operating system and configuration manager for [DVMHost](https://github.com/DVMProject/dvmhost) and [DVMProject](https://github.com/DVMProject) repeaters/hotspots.

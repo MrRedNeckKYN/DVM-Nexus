@@ -287,3 +287,97 @@ def test_voice_gateway_resampler():
     assert len(out_8k) == 16000
 
 
+def test_duplex_simplex_and_control_channel_rules(client):
+    """Verify DVMHost Full Duplex vs Simplex and Control Channel safety rules on /dmr, /p25, and /modem."""
+    from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+
+    # 1. DMR Full Duplex + Dedicated TSCC + equal TX/RX auto-splits UHF (+5.0 MHz)
+    resp_dmr_dup = client.post("/dmr/save", data={
+        "enable": "true",
+        "duplex": "true",
+        "tx_freq": 439.0,
+        "rx_freq": 439.0,
+        "color_code": 1,
+        "tscc_mode": "dedicated",
+        "tscc_slot": 1,
+        "disable_grant_src_check": "true",
+        "beacon_enable": "true",
+        "beacon_interval": 60,
+        "beacon_duration": 3,
+    })
+    assert resp_dmr_dup.status_code == 200
+    cfg = dvm_config_manager.load_config_dict()
+    assert cfg["system"]["duplex"] is True
+    assert cfg["system"]["simplexSameFrequency"] is False
+    assert cfg["protocols"]["dmr"]["control"]["enable"] is True
+    assert cfg["protocols"]["dmr"]["control"]["dedicated"] is True
+    assert cfg["protocols"]["dmr"]["control"]["slot"] == 1
+    assert cfg["protocols"]["dmr"]["control"]["disableGrantSourceIdCheck"] is True
+    assert cfg["protocols"]["dmr"]["beacons"]["enable"] is True
+
+    # 2. DMR Simplex forces TSCC and Beacons off and sets simplexSameFrequency=True
+    resp_dmr_sim = client.post("/dmr/save", data={
+        "enable": "true",
+        "duplex": "false",
+        "tx_freq": 439.0,
+        "rx_freq": 444.0,
+        "color_code": 1,
+        "tscc_mode": "dedicated",
+        "beacon_enable": "true",
+    })
+    assert resp_dmr_sim.status_code == 200
+    cfg = dvm_config_manager.load_config_dict()
+    assert cfg["system"]["duplex"] is False
+    assert cfg["system"]["simplexSameFrequency"] is True
+    assert cfg["protocols"]["dmr"]["control"]["enable"] is False
+    assert cfg["protocols"]["dmr"]["control"]["dedicated"] is False
+    assert cfg["protocols"]["dmr"]["beacons"]["enable"] is False
+
+    # 3. P25 Full Duplex + Non-Dedicated Control Channel
+    resp_p25_dup = client.post("/p25/save", data={
+        "enable": "true",
+        "duplex": "true",
+        "tx_freq": 439.0,
+        "rx_freq": 444.0,
+        "nac": "293",
+        "wacn": "BEE00",
+        "sys_id": "001",
+        "cc_mode": "non_dedicated",
+        "cc_broadcast": "true",
+        "cc_interval": 300,
+        "cc_duration": 1,
+        "control_only": "true",
+        "disable_grant_src_check": "true",
+    })
+    assert resp_p25_dup.status_code == 200
+    cfg = dvm_config_manager.load_config_dict()
+    assert cfg["system"]["duplex"] is True
+    assert cfg["system"]["simplexSameFrequency"] is False
+    assert cfg["protocols"]["p25"]["control"]["enable"] is True
+    assert cfg["protocols"]["p25"]["control"]["dedicated"] is False
+    assert cfg["protocols"]["p25"]["control"]["interval"] == 300
+    assert cfg["protocols"]["p25"]["controlOnly"] is True
+    assert cfg["protocols"]["p25"]["control"]["disableGrantSourceIdCheck"] is True
+
+    # 4. P25 Simplex forces Control Channel & controlOnly off
+    resp_p25_sim = client.post("/p25/save", data={
+        "enable": "true",
+        "duplex": "false",
+        "tx_freq": 439.0,
+        "rx_freq": 444.0,
+        "nac": "293",
+        "wacn": "BEE00",
+        "sys_id": "001",
+        "cc_mode": "dedicated",
+        "control_only": "true",
+    })
+    assert resp_p25_sim.status_code == 200
+    cfg = dvm_config_manager.load_config_dict()
+    assert cfg["system"]["duplex"] is False
+    assert cfg["system"]["simplexSameFrequency"] is True
+    assert cfg["protocols"]["p25"]["control"]["enable"] is False
+    assert cfg["protocols"]["p25"]["control"]["dedicated"] is False
+    assert cfg["protocols"]["p25"]["controlOnly"] is False
+
+
+

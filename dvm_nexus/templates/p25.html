@@ -59,10 +59,10 @@
 
   <!-- Section 1: Radio Frequencies & Station Identity -->
   <div class="card" style="border-left:4px solid var(--accent-indigo);">
-    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div>
-        <div class="card-title">📻 Radio Frequencies &amp; Station Identity</div>
-        <span style="font-size:0.85rem; color:var(--text-dim);">Operating Frequencies, Station Callsign &amp; Duplex Mode</span>
+        <div class="card-title">📻 Radio Frequencies, Duplex Mode &amp; Station Identity</div>
+        <span style="font-size:0.85rem; color:var(--text-dim);">Operating Frequencies, Repeater Offset &amp; Duplex / Simplex Mode (DVMHost <code>system.duplex</code>)</span>
       </div>
       <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Saved when you press Save</span>
     </div>
@@ -75,37 +75,58 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">RF Operating Mode</label>
-        <select name="duplex" id="p25-duplex-select" class="form-control" onchange="syncDuplexMode(this.value === 'true')">
+        <label class="form-label">RF Operating Mode (<code>system.duplex</code>)</label>
+        <select name="duplex" id="p25-duplex-select" class="form-control" onchange="syncDuplexMode()">
           <option value="false" {% if not duplex %}selected{% endif %}>Simplex (Single Frequency - Direct Talkaround)</option>
-          <option value="true" {% if duplex %}selected{% endif %}>Full Duplex (Split TX / RX Frequencies)</option>
+          <option value="true" {% if duplex %}selected{% endif %}>Full Duplex (Repeater Split TX/RX + Control Channel Support)</option>
         </select>
-        <small class="form-hint">Choose Simplex to use one frequency with no split or repeater offset.</small>
+        <small class="form-hint" id="p25-duplex-hint">
+          {% if duplex %}Full Duplex active: Simultaneous TX &amp; RX with P25 TSBK Control Channel support.{% else %}Simplex active: Single frequency direct mode (Control Channel &amp; RX split hidden).{% endif %}
+        </small>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Operating Frequency (MHz)</label>
-        <input type="number" step="0.000001" id="p25-tx-freq-input" name="tx_freq_mhz" class="form-control font-mono" value="{{ active_tx_mhz or 462.61875 }}" oninput="if(document.getElementById('p25-duplex-select').value === 'false') document.getElementById('p25-rx-freq-input').value = this.value;" required>
-        <small class="form-hint">Radio and Hotspot frequency (e.g. 462.562500 for GMRS).</small>
+        <label class="form-label" id="p25-tx-freq-label">{% if duplex %}Hotspot TX / Repeater Output (MHz){% else %}Simplex Operating Frequency (MHz){% endif %}</label>
+        <input type="number" step="0.000001" id="p25-tx-freq-input" name="tx_freq_mhz" class="form-control font-mono" value="{{ active_tx_mhz or 462.61875 }}" oninput="onP25FreqInput()" required>
+        <small class="form-hint" id="p25-tx-freq-hint">{% if duplex %}Repeater output frequency &mdash; program this as <strong>RX</strong> in your handheld radio.{% else %}Single frequency used for both transmit and receive.{% endif %}</small>
       </div>
 
       <div class="form-group" id="p25-rx-freq-group" {% if not duplex %}style="display:none;"{% endif %}>
-        <label class="form-label">Receive (RX) Frequency (MHz)</label>
-        <input type="number" step="0.000001" id="p25-rx-freq-input" name="rx_freq_mhz" class="form-control font-mono" value="{{ active_rx_mhz or 462.61875 }}" required>
-        <small class="form-hint">Repeater input frequency (Handheld radio transmits here in Duplex).</small>
+        <label class="form-label">Hotspot RX / Repeater Input (MHz)</label>
+        <input type="number" step="0.000001" id="p25-rx-freq-input" name="rx_freq_mhz" data-last-duplex-rx="{{ duplex_rx_freq_mhz or 467.61875 }}" class="form-control font-mono" value="{{ active_rx_mhz or 467.61875 }}" oninput="onP25FreqInput()" required>
+        <small class="form-hint">Repeater input frequency &mdash; program this as <strong>TX</strong> in your handheld radio.</small>
       </div>
+    </div>
+
+    <!-- Quick Repeater Offset Helper Bar (Visible ONLY in Full Duplex) -->
+    <div id="p25-offset-presets-bar" style="{% if not duplex %}display:none;{% else %}display:flex;{% endif %} align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem; padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(99, 102, 241, 0.08); border:1px solid rgba(99, 102, 241, 0.3); border-radius:var(--radius-sm);">
+      <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <span style="font-size:0.8rem; font-weight:600; color:#a5b4fc;">⚡ Quick Repeater Split (RX = TX + Offset):</span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(5.0)">+5.0 MHz (UHF)</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(-5.0)">-5.0 MHz (UHF)</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(0.6)">+0.6 MHz (2m VHF)</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(30.0)">+30 MHz (700)</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyP25Offset(-45.0)">-45 MHz (800)</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="swapP25TxRx()" title="Swap TX and RX frequencies">⇄ Swap TX/RX</button>
+      </div>
+      <div id="p25-codeplug-summary" style="font-size:0.8rem; font-family:var(--font-mono); color:var(--text-main);"></div>
+    </div>
+
+    <!-- Simplex Mode Notice Banner (Visible ONLY in Simplex) -->
+    <div id="p25-simplex-notice" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.7rem 1rem; margin-bottom:1rem; background:rgba(148, 163, 184, 0.08); border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-muted);">
+      ℹ️ <strong>Simplex Mode Active (<code>system.duplex: false</code>):</strong> DVMHost uses a single frequency for both TX and RX (<code>simplexSameFrequency: true</code>). Repeater RX split frequencies and P25 TSBK Control Channel options only apply to Full Duplex repeaters and are hidden automatically.
     </div>
 
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">CW ID Transmission</label>
-        <select name="cw_id_enable" class="form-control">
+        <select name="cw_id_enable" id="p25-cwid-select" class="form-control" onchange="syncP25CwId()">
           <option value="true" {% if cw.enable is not defined or cw.enable %}selected{% endif %}>Enabled (Periodic Morse ID)</option>
           <option value="false" {% if cw.enable is defined and not cw.enable %}selected{% endif %}>Disabled</option>
         </select>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" id="p25-cw-interval-group" {% if cw.enable is defined and not cw.enable %}style="display:none;"{% endif %}>
         <label class="form-label">CW ID Interval (Minutes)</label>
         <input type="number" name="cw_id_time" class="form-control" value="{{ cw.time or 15 }}">
         <small class="form-hint">FCC standard is 10 to 15 minutes.</small>
@@ -115,6 +136,103 @@
         <label class="form-label">Modulation Output Level (%)</label>
         <input type="number" name="tx_level" class="form-control" min="0" max="100" value="{{ modem.txLevel or 50 }}">
         <small class="form-hint">Air interface transmit modulation power (default 50%).</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 1B: P25 Control Channel (TSBK) & Trunking Architecture (Visible ONLY in Full Duplex) -->
+  {% set p25_cc_on = (p25.control and p25.control.enable) %}
+  {% set p25_cc_ded = (p25.control and p25.control.dedicated) %}
+  {% set p25_cc_mode = 'dedicated' if (p25_cc_on and p25_cc_ded) else ('non_dedicated' if p25_cc_on else 'disabled') %}
+  <div class="card" id="p25-control-channel-card" style="border-left:4px solid var(--accent-emerald); {% if not duplex %}display:none;{% endif %}">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+      <div>
+        <div class="card-title">🗼 P25 Control Channel (TSBK) &amp; Trunking Architecture</div>
+        <span style="font-size:0.85rem; color:var(--text-dim);">DVMHost <code>protocols.p25.control</code> &mdash; Options adapt automatically to your chosen Control Channel mode</span>
+      </div>
+      <span class="badge badge-indigo" id="p25-cc-badge">Full Duplex Repeater Feature</span>
+    </div>
+
+    <input type="hidden" name="cc_enable" id="p25-cc-enable-hidden" value="{{ 'true' if p25_cc_on else 'false' }}">
+    <input type="hidden" name="cc_dedicated" id="p25-cc-dedicated-hidden" value="{{ 'true' if p25_cc_ded else 'false' }}">
+
+    <div class="form-row">
+      <div class="form-group" style="flex:2; min-width:280px;">
+        <label class="form-label">P25 Control Channel Operating Mode</label>
+        <select name="cc_mode" id="p25-cc-mode-select" class="form-control" onchange="syncP25CcMode()">
+          <option value="disabled" {% if p25_cc_mode == 'disabled' %}selected{% endif %}>1. Conventional P25 Repeater (No Control Channel — Standard Voice)</option>
+          <option value="non_dedicated" {% if p25_cc_mode == 'non_dedicated' %}selected{% endif %}>2. Non-Dedicated Control Channel (Combined CC + Voice on 1 Duplex Hat — Recommended)</option>
+          <option value="dedicated" {% if p25_cc_mode == 'dedicated' %}selected{% endif %}>3. Dedicated 24/7 Control Channel (Continuous TSBK Broadcast)</option>
+        </select>
+        <small class="form-hint" id="p25-cc-mode-desc"></small>
+      </div>
+
+      <div class="form-group" id="p25-cc-ack-group" {% if p25_cc_mode == 'disabled' %}style="display:none;"{% endif %}>
+        <label class="form-label">TSBK Acknowledge Requests (<code>control.ackRequests</code>)</label>
+        <select name="cc_ack_requests" class="form-control">
+          <option value="true" {% if not p25.control or p25.control.ackRequests is not defined or p25.control.ackRequests %}selected{% endif %}>Enabled (Respond to Registration / Affiliation)</option>
+          <option value="false" {% if p25.control and p25.control.ackRequests is defined and not p25.control.ackRequests %}selected{% endif %}>Disabled</option>
+        </select>
+        <small class="form-hint">Acknowledge incoming subscriber TSBK requests.</small>
+      </div>
+
+      <div class="form-group" id="p25-cc-grant-check-group" {% if p25_cc_mode == 'disabled' %}style="display:none;"{% endif %}>
+        <label class="form-label">Grant Source ID Check</label>
+        <select name="disable_grant_src_check" class="form-control">
+          <option value="false" {% if not p25.control or not p25.control.disableGrantSourceIdCheck %}selected{% endif %}>Enforce Source RID Check (Default)</option>
+          <option value="true" {% if p25.control and p25.control.disableGrantSourceIdCheck %}selected{% endif %}>Disable Grant Source ID Check</option>
+        </select>
+        <small class="form-hint">DVMHost <code>control.disableGrantSourceIdCheck</code>.</small>
+      </div>
+    </div>
+
+    <!-- Non-Dedicated CC Specific Options (Hidden when Disabled or Dedicated) -->
+    <div class="form-row" id="p25-cc-nondedicated-row" {% if p25_cc_mode != 'non_dedicated' %}style="display:none;"{% endif %}>
+      <div class="form-group">
+        <label class="form-label">Periodic CC Broadcast (<code>control.broadcast</code>)</label>
+        <select name="cc_broadcast" id="p25-cc-broadcast-select" class="form-control" onchange="syncP25CcMode()">
+          <option value="true" {% if not p25.control or p25.control.broadcast is not defined or p25.control.broadcast %}selected{% endif %}>Enabled (Periodic Idle TSBK Bursts)</option>
+          <option value="false" {% if p25.control and p25.control.broadcast is defined and not p25.control.broadcast %}selected{% endif %}>Disabled (On-Demand TSBK Only)</option>
+        </select>
+        <small class="form-hint">Broadcasts TSBK control bursts when channel is idle.</small>
+      </div>
+
+      <div class="form-group" id="p25-cc-interval-group">
+        <label class="form-label">CC Broadcast Interval (seconds)</label>
+        <input type="number" name="cc_interval" class="form-control" min="5" max="3600" value="{{ (p25.control and p25.control.interval) or 300 }}">
+        <small class="form-hint">Time between non-dedicated CC broadcasts (default 300s).</small>
+      </div>
+
+      <div class="form-group" id="p25-cc-duration-group">
+        <label class="form-label">CC Burst Duration (seconds)</label>
+        <input type="number" name="cc_duration" class="form-control" min="1" max="30" value="{{ (p25.control and p25.control.duration) or 1 }}">
+        <small class="form-hint">Duration of each non-dedicated CC burst (default 1s).</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Voice Frame Handling (<code>controlOnly</code>)</label>
+        <select name="control_only" class="form-control">
+          <option value="false" {% if not p25.controlOnly %}selected{% endif %}>Combined Voice + Control (Standard Single-Hat)</option>
+          <option value="true" {% if p25.controlOnly %}selected{% endif %}>Control-Only (Ignore Voice Frames)</option>
+        </select>
+        <small class="form-hint">Keep on Combined Voice + Control for a single Duplex Hat.</small>
+      </div>
+    </div>
+
+    <!-- Dedicated CC Specific Options & Architecture Warning (Visible ONLY when Dedicated is selected) -->
+    <div id="p25-cc-dedicated-box" {% if p25_cc_mode != 'dedicated' %}style="display:none;"{% endif %}>
+      <div class="form-row">
+        <div class="form-group" style="max-width:360px;">
+          <label class="form-label">Notify Voice Channels of Active TGIDs (<code>notifyActiveTG</code>)</label>
+          <select name="cc_notify_active_tg" class="form-control">
+            <option value="false" {% if not p25.control or not p25.control.notifyActiveTG %}selected{% endif %}>Disabled (Default)</option>
+            <option value="true" {% if p25.control and p25.control.notifyActiveTG %}selected{% endif %}>Enabled (Notify Subordinate VCs via RPC)</option>
+          </select>
+          <small class="form-hint">Used when this Dedicated CC coordinates separate Voice Channel nodes.</small>
+        </div>
+      </div>
+      <div style="padding:0.75rem 1rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.82rem; color:#fde68a;">
+        ⚠️ <strong>DVMHost Dedicated P25 Control Channel Note:</strong> Because P25 Phase 1 is FDMA (single channel per carrier), enabling <strong>Dedicated CC (`control.dedicated: true`)</strong> keys your transmitter <strong>100% continuously</strong> broadcasting TSBK trunking data. A dedicated P25 CC requires a second DVMHost Voice Channel (`voiceChNo`) radio to carry voice calls. If you are using a <strong>single Raspberry Pi + MMDVM Duplex Hat</strong> and want both TSBK Control Channel features AND voice calls, select <strong>2. Non-Dedicated Control Channel (Combined CC + Voice)</strong> above.
       </div>
     </div>
   </div>
@@ -220,35 +338,37 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Network Linking Mode</label>
-        <select name="net_enable" class="form-control">
-          <option value="false" {% if not net.enable %}selected{% endif %}>Standalone Direct (Offline / No Master)</option>
-          <option value="true" {% if net.enable %}selected{% endif %}>Connected to Upstream Master / FNE</option>
+        <label class="form-label">Network Linking Mode (<code>network.enable</code>)</label>
+        <select name="net_enable" id="p25-net-enable-select" class="form-control" onchange="syncP25NetMode()">
+          <option value="false" {% if not net.enable %}selected{% endif %}>Standalone Direct (Offline / Local RF Repeater Only)</option>
+          <option value="true" {% if net.enable %}selected{% endif %}>Connected to Upstream Master / FNE Server</option>
         </select>
-        <small class="form-hint">Set to Standalone if running locally without an upstream network server.</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Network Peer ID</label>
-        <input type="number" name="net_id" class="form-control font-mono" value="{{ net.id or 100000 }}">
-        <small class="form-hint">Assigned repeater ID on master network.</small>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Master Server Address / IP</label>
-        <input type="text" name="net_address" class="form-control font-mono" value="{{ net.address or '127.0.0.1' }}">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Master Server Port</label>
-        <input type="number" name="net_port" class="form-control font-mono" value="{{ net.port or 62031 }}">
+        <small class="form-hint">Standalone mode keeps all RF traffic local without an external master server.</small>
       </div>
     </div>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Network Authentication Password</label>
-        <input type="password" name="net_password" class="form-control" value="{{ net.password or 'PASSWORD' }}">
+    <div id="p25-net-fields" {% if not net.enable %}style="display:none;"{% endif %}>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Network Peer ID</label>
+          <input type="number" name="net_id" class="form-control font-mono" value="{{ net.id or 100000 }}">
+          <small class="form-hint">Assigned repeater ID on master network.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Master Server Address / IP</label>
+          <input type="text" name="net_address" class="form-control font-mono" value="{{ net.address or '127.0.0.1' }}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Master Server Port</label>
+          <input type="number" name="net_port" class="form-control font-mono" value="{{ net.port or 62031 }}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Network Authentication Password</label>
+          <input type="password" name="net_password" class="form-control" value="{{ net.password or 'PASSWORD' }}">
+        </div>
       </div>
     </div>
   </div>
@@ -441,50 +561,6 @@
               <option value="false" {% if p25.demandUnitRegForRefusedAff is defined and not p25.demandUnitRegForRefusedAff %}selected{% endif %}>Disabled</option>
             </select>
           </div>
-
-          <div class="form-group">
-            <label class="form-label">P25 Control Channel (CC)</label>
-            <select name="cc_enable" class="form-control">
-              <option value="false" {% if not p25.control or not p25.control.enable %}selected{% endif %}>Disabled</option>
-              <option value="true" {% if p25.control and p25.control.enable %}selected{% endif %}>Enabled</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">TSBK Continuous Broadcast</label>
-            <select name="cc_broadcast" class="form-control">
-              <option value="true" {% if not p25.control or p25.control.broadcast is not defined or p25.control.broadcast %}selected{% endif %}>Enabled</option>
-              <option value="false" {% if p25.control and p25.control.broadcast is defined and not p25.control.broadcast %}selected{% endif %}>Disabled</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">CC Broadcast Interval (ms)</label>
-            <input type="number" name="cc_interval" class="form-control" value="{{ (p25.control and p25.control.interval) or 300 }}">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">CC Burst Duration (ms)</label>
-            <input type="number" name="cc_duration" class="form-control" value="{{ (p25.control and p25.control.duration) or 1 }}">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">TSBK Acknowledge Requests</label>
-            <select name="cc_ack_requests" class="form-control">
-              <option value="true" {% if not p25.control or p25.control.ackRequests is not defined or p25.control.ackRequests %}selected{% endif %}>Enabled</option>
-              <option value="false" {% if p25.control and p25.control.ackRequests is defined and not p25.control.ackRequests %}selected{% endif %}>Disabled</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Dedicated Control Channel</label>
-            <select name="cc_dedicated" class="form-control">
-              <option value="false" {% if not p25.control or not p25.control.dedicated %}selected{% endif %}>No (Mixed Voice / CC)</option>
-              <option value="true" {% if p25.control and p25.control.dedicated %}selected{% endif %}>Yes (Dedicated CC Only)</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -625,15 +701,179 @@
 </div>
 
 <script>
-function syncDuplexMode(isDuplex) {
+function defaultP25SplitForFreq(txMhz) {
+  if (txMhz >= 400 && txMhz <= 480) return 5.0;
+  if (txMhz >= 136 && txMhz <= 174) return 0.6;
+  if (txMhz >= 800 && txMhz <= 870) return -45.0;
+  if (txMhz >= 760 && txMhz <= 780) return 30.0;
+  return 5.0;
+}
+
+function updateP25CodeplugSummary() {
+  const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
+  const txInput = document.getElementById('p25-tx-freq-input');
+  const rxInput = document.getElementById('p25-rx-freq-input');
+  const summaryEl = document.getElementById('p25-codeplug-summary');
+  if (!summaryEl || !txInput || !rxInput) return;
+
+  const tx = parseFloat(txInput.value) || 0;
+  const rx = isDuplex ? (parseFloat(rxInput.value) || tx) : tx;
+  const split = rx - tx;
+  const splitSign = split >= 0 ? '+' : '';
+  if (isDuplex) {
+    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug:</strong> Radio RX = <strong>${tx.toFixed(5)}</strong> MHz &bull; Radio TX = <strong>${rx.toFixed(5)}</strong> MHz (${splitSign}${split.toFixed(3)} MHz)`;
+  } else {
+    summaryEl.innerHTML = `📻 <strong>Handheld Codeplug:</strong> Simplex RX/TX = <strong>${tx.toFixed(5)}</strong> MHz`;
+  }
+}
+
+function onP25FreqInput() {
+  const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
+  const txInput = document.getElementById('p25-tx-freq-input');
+  const rxInput = document.getElementById('p25-rx-freq-input');
+  if (!isDuplex && txInput && rxInput) {
+    rxInput.value = txInput.value;
+  } else if (isDuplex && rxInput) {
+    rxInput.dataset.lastDuplexRx = rxInput.value;
+  }
+  updateP25CodeplugSummary();
+}
+
+function applyP25Offset(offsetMhz) {
+  const txInput = document.getElementById('p25-tx-freq-input');
+  const rxInput = document.getElementById('p25-rx-freq-input');
+  if (!txInput || !rxInput) return;
+  const tx = parseFloat(txInput.value);
+  if (isNaN(tx)) return;
+  rxInput.value = (tx + offsetMhz).toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
+  rxInput.dataset.lastDuplexRx = rxInput.value;
+  rxInput.dispatchEvent(new Event('input', { bubbles: true }));
+  updateP25CodeplugSummary();
+}
+
+function swapP25TxRx() {
+  const txInput = document.getElementById('p25-tx-freq-input');
+  const rxInput = document.getElementById('p25-rx-freq-input');
+  if (!txInput || !rxInput) return;
+  const tmp = txInput.value;
+  txInput.value = rxInput.value;
+  rxInput.value = tmp;
+  rxInput.dataset.lastDuplexRx = rxInput.value;
+  txInput.dispatchEvent(new Event('input', { bubbles: true }));
+  updateP25CodeplugSummary();
+}
+
+function syncDuplexMode() {
+  const isDuplex = document.getElementById('p25-duplex-select')?.value === 'true';
   const rxGroup = document.getElementById('p25-rx-freq-group');
   const rxInput = document.getElementById('p25-rx-freq-input');
   const txInput = document.getElementById('p25-tx-freq-input');
-  if (rxGroup) {
-    rxGroup.style.display = isDuplex ? 'block' : 'none';
+  const txLabel = document.getElementById('p25-tx-freq-label');
+  const txHint = document.getElementById('p25-tx-freq-hint');
+  const duplexHint = document.getElementById('p25-duplex-hint');
+  const presetsBar = document.getElementById('p25-offset-presets-bar');
+  const simplexNotice = document.getElementById('p25-simplex-notice');
+  const ccCard = document.getElementById('p25-control-channel-card');
+
+  if (rxGroup) rxGroup.style.display = isDuplex ? 'block' : 'none';
+  if (presetsBar) presetsBar.style.display = isDuplex ? 'flex' : 'none';
+  if (simplexNotice) simplexNotice.style.display = isDuplex ? 'none' : 'block';
+  if (ccCard) ccCard.style.display = isDuplex ? 'block' : 'none';
+
+  if (txLabel) {
+    txLabel.textContent = isDuplex ? 'Hotspot TX / Repeater Output (MHz)' : 'Simplex Operating Frequency (MHz)';
   }
-  if (!isDuplex && rxInput && txInput) {
-    rxInput.value = txInput.value;
+  if (txHint) {
+    txHint.innerHTML = isDuplex
+      ? 'Repeater output frequency &mdash; program this as <strong>RX</strong> in your handheld radio.'
+      : 'Single frequency used for both transmit and receive.';
+  }
+  if (duplexHint) {
+    duplexHint.textContent = isDuplex
+      ? 'Full Duplex active: Simultaneous TX & RX with P25 TSBK Control Channel support.'
+      : 'Simplex active: Single frequency direct mode (Control Channel & RX split hidden).';
+  }
+
+  if (txInput && rxInput) {
+    if (!isDuplex) {
+      rxInput.dataset.lastDuplexRx = rxInput.value;
+      rxInput.value = txInput.value;
+    } else {
+      const txVal = parseFloat(txInput.value) || 462.61875;
+      const savedRx = parseFloat(rxInput.dataset.lastDuplexRx || rxInput.value);
+      if (!isNaN(savedRx) && Math.abs(savedRx - txVal) >= 0.0001) {
+        rxInput.value = savedRx;
+      } else {
+        rxInput.value = (txVal + defaultP25SplitForFreq(txVal)).toFixed(5);
+      }
+    }
+  }
+  updateP25CodeplugSummary();
+}
+
+function syncP25CcMode() {
+  const modeSel = document.getElementById('p25-cc-mode-select');
+  const ackGrp = document.getElementById('p25-cc-ack-group');
+  const grantGrp = document.getElementById('p25-cc-grant-check-group');
+  const nonDedRow = document.getElementById('p25-cc-nondedicated-row');
+  const bcastSel = document.getElementById('p25-cc-broadcast-select');
+  const intervalGrp = document.getElementById('p25-cc-interval-group');
+  const durationGrp = document.getElementById('p25-cc-duration-group');
+  const dedBox = document.getElementById('p25-cc-dedicated-box');
+  const descEl = document.getElementById('p25-cc-mode-desc');
+  const badgeEl = document.getElementById('p25-cc-badge');
+  const hiddenEn = document.getElementById('p25-cc-enable-hidden');
+  const hiddenDed = document.getElementById('p25-cc-dedicated-hidden');
+
+  if (!modeSel) return;
+  const mode = modeSel.value;
+
+  if (mode === 'disabled') {
+    if (hiddenEn) hiddenEn.value = 'false';
+    if (hiddenDed) hiddenDed.value = 'false';
+    if (ackGrp) ackGrp.style.display = 'none';
+    if (grantGrp) grantGrp.style.display = 'none';
+    if (nonDedRow) nonDedRow.style.display = 'none';
+    if (dedBox) dedBox.style.display = 'none';
+    if (descEl) descEl.innerHTML = 'Conventional P25 Phase 1 repeater. Radios transmit and receive directly on programmed talkgroups using NAC verification.';
+    if (badgeEl) badgeEl.textContent = 'Conventional P25 Voice';
+  } else if (mode === 'non_dedicated') {
+    if (hiddenEn) hiddenEn.value = 'true';
+    if (hiddenDed) hiddenDed.value = 'false';
+    if (ackGrp) ackGrp.style.display = 'block';
+    if (grantGrp) grantGrp.style.display = 'block';
+    if (nonDedRow) nonDedRow.style.display = 'flex';
+    if (dedBox) dedBox.style.display = 'none';
+    const bOn = !bcastSel || bcastSel.value === 'true';
+    if (intervalGrp) intervalGrp.style.display = bOn ? 'block' : 'none';
+    if (durationGrp) durationGrp.style.display = bOn ? 'block' : 'none';
+    if (descEl) descEl.innerHTML = '<strong>Single-Hat Trunking Mode:</strong> DVMHost broadcasts periodic P25 TSBK control bursts when idle so radios can affiliate, and automatically uses this same channel for P25 voice calls.';
+    if (badgeEl) badgeEl.textContent = 'Non-Dedicated CC (Combined CC + Voice)';
+  } else if (mode === 'dedicated') {
+    if (hiddenEn) hiddenEn.value = 'true';
+    if (hiddenDed) hiddenDed.value = 'true';
+    if (ackGrp) ackGrp.style.display = 'block';
+    if (grantGrp) grantGrp.style.display = 'block';
+    if (nonDedRow) nonDedRow.style.display = 'none';
+    if (dedBox) dedBox.style.display = 'block';
+    if (descEl) descEl.innerHTML = '<strong>Dedicated 24/7 Control Channel:</strong> DVMHost transmits continuous TSBK control data on this frequency pair.';
+    if (badgeEl) badgeEl.textContent = 'Dedicated 24/7 TSBK Control Channel';
+  }
+}
+
+function syncP25CwId() {
+  const cwSel = document.getElementById('p25-cwid-select');
+  const cwGrp = document.getElementById('p25-cw-interval-group');
+  if (cwSel && cwGrp) {
+    cwGrp.style.display = (cwSel.value === 'true') ? 'block' : 'none';
+  }
+}
+
+function syncP25NetMode() {
+  const netSel = document.getElementById('p25-net-enable-select');
+  const netFields = document.getElementById('p25-net-fields');
+  if (netSel && netFields) {
+    netFields.style.display = (netSel.value === 'true') ? 'block' : 'none';
   }
 }
 
@@ -645,5 +885,12 @@ function quickAddTG(tgid, name, parrot) {
   form.querySelector('select[name="parrot"]').value = parrot ? 'true' : 'false';
   htmx.trigger(form, 'submit');
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  updateP25CodeplugSummary();
+  syncP25CcMode();
+  syncP25CwId();
+  syncP25NetMode();
+});
 </script>
 {% endblock %}

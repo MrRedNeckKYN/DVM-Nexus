@@ -36,7 +36,7 @@ async def p25_page(request: Request):
     modem_conf = conf.get("system", {}).get("modem", {})
     hotspot_conf = modem_conf.get("hotspot", {})
     net_conf = conf.get("network", {})
-    cw_conf = conf.get("cwId", {})
+    cw_conf = conf.get("system", {}).get("cwId") or conf.get("cwId", {})
     identity = conf.get("system", {}).get("identity", "NEXUS")
     duplex = conf.get("system", {}).get("duplex", True)
 
@@ -44,9 +44,8 @@ async def p25_page(request: Request):
     is_standby = (active_proto == "dmr")
 
     iden_entries = read_iden_table_file(dvm_config_manager.iden_path)
-    tx_freq_mhz, rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
-    if not duplex:
-        rx_freq_mhz = tx_freq_mhz
+    tx_freq_mhz, iden_rx_freq_mhz = dvm_config_manager.get_tuned_frequencies()
+    rx_freq_mhz = iden_rx_freq_mhz if duplex else tx_freq_mhz
     talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
 
@@ -69,6 +68,7 @@ async def p25_page(request: Request):
             "iden_entries": iden_entries,
             "active_tx_mhz": tx_freq_mhz,
             "active_rx_mhz": rx_freq_mhz,
+            "duplex_rx_freq_mhz": iden_rx_freq_mhz,
             "talkgroups": talkgroups,
             "rids": rids,
             "config_rev": dvm_config_manager.get_config_revision(),
@@ -105,10 +105,11 @@ async def p25_save(
     net_address: str = Form("127.0.0.1"),
     net_port: int = Form(62031),
     net_password: str = Form("PASSWORD"),
-    # Advanced P25 Parameters
+    # Advanced P25 Parameters & Control Channel
     silence_threshold: int = Form(124),
     frame_loss_threshold: int = Form(6),
     queue_size: int = Form(12),
+    cc_mode: Optional[str] = Form(None),
     cc_enable: bool = Form(False),
     cc_broadcast: bool = Form(True),
     cc_interval: int = Form(300),
@@ -116,6 +117,8 @@ async def p25_save(
     cc_ack_requests: bool = Form(True),
     cc_notify_active_tg: bool = Form(False),
     cc_dedicated: bool = Form(False),
+    control_only: bool = Form(False),
+    disable_grant_src_check: bool = Form(False),
     inhibit_unauthorized: bool = Form(False),
     disable_deny_response: bool = Form(False),
     repeat_data_packet: bool = Form(True),
@@ -146,6 +149,40 @@ async def p25_save(
             {"type": "error", "message": "Not saved: config.yml changed since this page was loaded (another tab/user, auto-repair or a restore). Reload the page to see the latest values, then re-apply your edit."}
         )
 
+    # Resolve unified cc_mode selector if provided
+    if cc_mode is not None:
+        mode_val = cc_mode.strip().lower()
+        if mode_val == "dedicated":
+            cc_enable = True
+            cc_dedicated = True
+            cc_broadcast = True
+            control_only = False
+        elif mode_val == "non_dedicated":
+            cc_enable = True
+            cc_dedicated = False
+        else:
+            cc_enable = False
+            cc_dedicated = False
+            control_only = False
+
+    # DVMHost requirement: P25 Control Channel requires Full Duplex
+    if not duplex:
+        rx_freq_mhz = tx_freq_mhz
+        cc_enable = False
+        cc_dedicated = False
+        control_only = False
+    elif abs(tx_freq_mhz - rx_freq_mhz) < 0.0001:
+        if 400.0 <= tx_freq_mhz <= 480.0:
+            rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
+        elif 136.0 <= tx_freq_mhz <= 174.0:
+            rx_freq_mhz = round(tx_freq_mhz + 0.6, 6)
+        elif 800.0 <= tx_freq_mhz <= 870.0:
+            rx_freq_mhz = round(tx_freq_mhz - 45.0, 6)
+        elif 760.0 <= tx_freq_mhz <= 780.0:
+            rx_freq_mhz = round(tx_freq_mhz + 30.0, 6)
+        else:
+            rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
+
     errors = validate_p25_settings({
         "nac": nac,
         "netId": wacn,
@@ -166,9 +203,6 @@ async def p25_save(
             {"type": "error", "message": "Not saved - " + "; ".join(errors)}
         )
 
-    if not duplex:
-        rx_freq_mhz = tx_freq_mhz
-
     active_proto = dvm_config_manager.get_active_protocol()
     is_standby = (active_proto == "dmr")
 
@@ -179,10 +213,10 @@ async def p25_save(
         c["system"]["simplexSameFrequency"] = not duplex
         c["system"]["fixedMode"] = True
 
-        c.setdefault("cwId", {})
-        c["cwId"]["enable"] = cw_id_enable
-        c["cwId"]["time"] = cw_id_time
-        c["cwId"]["callsign"] = callsign.strip() or "NEXUS"
+        for cw_target in (c.setdefault("cwId", {}), c["system"].setdefault("cwId", {})):
+            cw_target["enable"] = cw_id_enable
+            cw_target["time"] = cw_id_time
+            cw_target["callsign"] = callsign.strip() or "NEXUS"
 
         c.setdefault("network", {})
         c["network"]["enable"] = net_enable
@@ -209,6 +243,7 @@ async def p25_save(
         c["protocols"]["p25"]["legacyGroupReg"] = legacy_group_reg
         c["protocols"]["p25"]["convNetGrantDemand"] = conv_net_grant_demand
         c["protocols"]["p25"]["demandUnitRegForRefusedAff"] = demand_unit_reg_for_refused_aff
+        c["protocols"]["p25"]["controlOnly"] = control_only
 
         c["protocols"]["p25"].setdefault("control", {})
         c["protocols"]["p25"]["control"]["enable"] = cc_enable
@@ -218,6 +253,7 @@ async def p25_save(
         c["protocols"]["p25"]["control"]["ackRequests"] = cc_ack_requests
         c["protocols"]["p25"]["control"]["notifyActiveTG"] = cc_notify_active_tg
         c["protocols"]["p25"]["control"]["dedicated"] = cc_dedicated
+        c["protocols"]["p25"]["control"]["disableGrantSourceIdCheck"] = disable_grant_src_check
 
         c.setdefault("system", {}).setdefault("config", {})
         c["system"]["config"]["nac"] = nac

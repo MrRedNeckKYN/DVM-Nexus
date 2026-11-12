@@ -55,12 +55,19 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">Duplex Mode</label>
-          <select name="duplex" class="form-control">
-            <option value="true" {% if duplex %}selected{% endif %}>Full Duplex (AURSINC Dual ADF7021)</option>
-            <option value="false" {% if not duplex %}selected{% endif %}>Simplex (Single Transceiver)</option>
+          <label class="form-label">Duplex Mode (<code>system.duplex</code>)</label>
+          <select name="duplex" id="modem-duplex-select" class="form-control" onchange="syncModemDuplexHint()">
+            <option value="true" {% if duplex %}selected{% endif %}>Full Duplex — Dual Transceiver (Repeater Split &amp; Control Channel)</option>
+            <option value="false" {% if not duplex %}selected{% endif %}>Simplex — Single Transceiver (Single Frequency, No Control Channel)</option>
           </select>
         </div>
+      </div>
+
+      <div id="modem-duplex-hint-full" style="margin-top:0.5rem; padding:0.75rem 1rem; border-radius:var(--radius-sm); background:rgba(16, 185, 129, 0.08); border-left:3px solid var(--accent-emerald); font-size:0.82rem; color:var(--text-muted); {% if not duplex %}display:none;{% endif %}">
+        <strong style="color:var(--accent-emerald);">🔄 Full Duplex Active:</strong> Unlocks separate TX/RX repeater split frequencies, both DMR Timeslots (TS1 &amp; TS2 simultaneously), and <strong>DMR TSCC / P25 TSBK Control Channel</strong> options on the <a href="/dmr" style="color:var(--accent-cyan); text-decoration:underline;">DMR Setup</a> and <a href="/p25" style="color:var(--accent-cyan); text-decoration:underline;">P25 Setup</a> pages.
+      </div>
+      <div id="modem-duplex-hint-simplex" style="margin-top:0.5rem; padding:0.75rem 1rem; border-radius:var(--radius-sm); background:rgba(245, 158, 11, 0.08); border-left:3px solid var(--accent-amber); font-size:0.82rem; color:var(--text-muted); {% if duplex %}display:none;{% endif %}">
+        <strong style="color:var(--accent-amber);">📻 Simplex Active:</strong> Locks TX &amp; RX to a single frequency (<code>simplexSameFrequency: true</code>) and automatically hides/disables repeater splits, Roaming Beacons, and Control Channel options in DVMHost.
       </div>
     </div>
 
@@ -224,4 +231,16 @@
     </div>
   </div>
 </div>
+
+<script>
+function syncModemDuplexHint() {
+  var sel = document.getElementById('modem-duplex-select');
+  var fullHint = document.getElementById('modem-duplex-hint-full');
+  var simplexHint = document.getElementById('modem-duplex-hint-simplex');
+  if (!sel || !fullHint || !simplexHint) return;
+  var isFull = sel.value === 'true';
+  fullHint.style.display = isFull ? '' : 'none';
+  simplexHint.style.display = isFull ? 'none' : '';
+}
+</script>
 {% endblock %}

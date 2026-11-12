@@ -107,6 +107,19 @@ async def modem_save(
     conf = dvm_config_manager.load_config_dict()
     conf.setdefault("system", {})
     conf["system"]["duplex"] = duplex
+    conf["system"]["simplexSameFrequency"] = not duplex
+
+    if not duplex:
+        # DVMHost safety rule: Simplex hardware cannot run Control Channel or Roaming Beacons
+        dmr_p = conf.setdefault("protocols", {}).setdefault("dmr", {})
+        dmr_p.setdefault("control", {})["enable"] = False
+        dmr_p["control"]["dedicated"] = False
+        dmr_p.setdefault("beacons", {})["enable"] = False
+
+        p25_p = conf.setdefault("protocols", {}).setdefault("p25", {})
+        p25_p.setdefault("control", {})["enable"] = False
+        p25_p["control"]["dedicated"] = False
+        p25_p["controlOnly"] = False
 
     conf["system"].setdefault("modem", {})
     conf["system"]["modem"].setdefault("protocol", {})
