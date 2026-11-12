@@ -129,9 +129,10 @@ def test_save_updates_active_config(client):
     assert save_resp.status_code == 200
     assert "saved to active config" in save_resp.text.lower()
 
-    # Verify active config has updated NAC and P25 enabled
+    # Verify active config has updated NAC, P25 enabled, and BEE00 auto-sanitized to BB800
     cfg = dvm_config_manager.load_config_dict()
     assert cfg["system"]["config"]["nac"] == "456"
+    assert cfg["system"]["config"]["netId"] == "BB800"
     assert cfg["protocols"]["p25"]["enable"] is True
 
 
@@ -378,6 +379,50 @@ def test_duplex_simplex_and_control_channel_rules(client):
     assert cfg["protocols"]["p25"]["control"]["enable"] is False
     assert cfg["protocols"]["p25"]["control"]["dedicated"] is False
     assert cfg["protocols"]["p25"]["controlOnly"] is False
+
+
+def test_dvmhost_error_4_wacn_and_hex_channel_no_guard(client):
+    """
+    Verify DVMHost C++ compatibility guards:
+    1. Banned P25 WACN (0xBEE00..0xBEEFF) is never written to config.yml (prevents 'FATAL PANIC; error 4' / 'error 38258').
+    2. channelNo and voiceChNo[0].channelNo are written as uppercase hex strings (prevents $0FFF clamping in strtoul base-16).
+    3. Legacy decimal channelNo: 2019 is migrated to '7E3' while preserving 462.61875 MHz.
+    """
+    from dvm_nexus.config_engine.dvm_yaml import (
+        dvm_config_manager, is_banned_p25_wacn, sanitize_p25_wacn, parse_channel_no, format_channel_no
+    )
+
+    assert is_banned_p25_wacn("BEE00") is True
+    assert is_banned_p25_wacn("BEE09") is True
+    assert is_banned_p25_wacn("BEEFF") is True
+    assert is_banned_p25_wacn("BB800") is False
+    assert sanitize_p25_wacn("BEE00") == "BB800"
+    assert sanitize_p25_wacn("BEE09") == "BB800"
+    assert sanitize_p25_wacn("AB123") == "AB123"
+
+    # Legacy int 2019 -> 2019 -> '7E3' -> 2019
+    assert parse_channel_no(2019) == 2019
+    assert format_channel_no(2019) == "7E3"
+    assert parse_channel_no("7E3") == 2019
+
+    # Save DMR at 462.61875 MHz TX / 467.61875 MHz RX (Channel ID 2, Channel No 2019 = 0x7E3)
+    resp = client.post("/dmr/save", data={
+        "enable": "true",
+        "duplex": "true",
+        "tx_freq": 462.61875,
+        "rx_freq": 467.61875,
+        "color_code": 1,
+    })
+    assert resp.status_code == 200
+    cfg = dvm_config_manager.load_config_dict()
+    assert cfg["system"]["config"]["netId"] == "BB800"
+    assert cfg["system"]["config"]["channelNo"] == "7E3"
+    assert cfg["system"]["config"]["voiceChNo"][0]["channelNo"] == "7E3"
+
+    tx_mhz, rx_mhz = dvm_config_manager.get_tuned_frequencies()
+    assert abs(tx_mhz - 462.61875) < 0.0001
+    assert abs(rx_mhz - 467.61875) < 0.0001
+
 
 
 

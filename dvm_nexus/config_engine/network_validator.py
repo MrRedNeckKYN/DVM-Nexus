@@ -64,8 +64,13 @@ def validate_p25_settings(data: Dict[str, Any]) -> List[str]:
     if wacn:
         try:
             val = int(wacn, 16)
-            if not (0 <= val <= 0xFFFFF):
-                errors.append(f"P25 WACN must be a 20-bit hex value up to 5 characters (got {wacn})")
+            if not (1 <= val <= 0xFFFFF):
+                errors.append(f"P25 WACN must be a 20-bit hex value between 00001 and FFFFF (got {wacn})")
+            elif (val >> 8) == 0xBEE:
+                errors.append(
+                    f"P25 WACN '{wacn}' (0xBEE00–0xBEEFF) is prohibited by DVMHost and triggers "
+                    f"'FATAL PANIC; error 4 / error 38258'. Use 'BB800' instead."
+                )
         except ValueError:
             errors.append(f"Invalid WACN '{wacn}': must be hexadecimal")
 

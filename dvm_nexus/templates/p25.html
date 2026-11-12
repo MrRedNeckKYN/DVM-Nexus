@@ -271,7 +271,7 @@
       <div class="form-group">
         <label class="form-label">WACN (Wide Area Net ID)</label>
         <input type="text" name="wacn" class="form-control font-mono" value="{{ sys.netId or 'BB800' }}" required>
-        <small class="form-hint">5-digit Hex P25 Wide Area Communication Network ID.</small>
+        <small class="form-hint">5-digit Hex P25 WACN (Default: <code>BB800</code>; DVMHost blocks <code>BEE00</code>&ndash;<code>BEEFF</code>).</small>
       </div>
     </div>
 

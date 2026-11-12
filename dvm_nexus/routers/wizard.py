@@ -19,7 +19,9 @@ from dvm_nexus.config_engine.iden_calculator import (
 )
 from dvm_nexus.config_engine.network_validator import validate_dmr_settings, validate_p25_settings
 from dvm_nexus.config_engine.diff_engine import generate_unified_diff, generate_structured_diff
-from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+from dvm_nexus.config_engine.dvm_yaml import (
+    dvm_config_manager, IndentedSafeDumper, format_channel_no, is_banned_p25_wacn, sanitize_p25_wacn
+)
 from dvm_nexus.config_engine.profile_manager import profile_manager
 from dvm_nexus.config_engine.backup_manager import backup_manager
 from dvm_nexus.core.service_controller import service_controller
@@ -80,6 +82,8 @@ async def wizard_preview(
         dmr_errors = validate_dmr_settings({"colorCode": color_code, "dmrNetId": dmr_net_id, "siteId": site_id})
         errors.extend(dmr_errors)
     elif protocol == "p25":
+        if is_banned_p25_wacn(wacn):
+            wacn = "BB800"
         p25_errors = validate_p25_settings({"nac": nac, "netId": wacn, "sysId": sys_id, "rfssId": rfss_id, "siteId": site_id})
         errors.extend(p25_errors)
 
@@ -140,10 +144,15 @@ async def wizard_preview(
     new_conf["system"]["identity"] = identity
     new_conf["system"]["duplex"] = duplex
 
+    hex_channel_no = format_channel_no(channel_no)
     new_conf.setdefault("system", {}).setdefault("config", {})
     new_conf["system"]["config"]["channelId"] = channel_id
-    new_conf["system"]["config"]["channelNo"] = channel_no
+    new_conf["system"]["config"]["channelNo"] = hex_channel_no
     new_conf["system"]["config"]["siteId"] = site_id
+    new_conf["system"]["config"]["netId"] = sanitize_p25_wacn(wacn if protocol == "p25" else new_conf["system"]["config"].get("netId", "BB800"))
+    if "voiceChNo" in new_conf["system"]["config"] and isinstance(new_conf["system"]["config"]["voiceChNo"], list) and len(new_conf["system"]["config"]["voiceChNo"]) > 0:
+        new_conf["system"]["config"]["voiceChNo"][0]["channelId"] = channel_id
+        new_conf["system"]["config"]["voiceChNo"][0]["channelNo"] = hex_channel_no
 
     new_conf.setdefault("protocols", {})
     if protocol == "dmr":
@@ -155,7 +164,7 @@ async def wizard_preview(
         new_conf["protocols"]["dmr"] = {"enable": False}
         new_conf["protocols"]["p25"] = {"enable": True}
         new_conf["system"]["config"]["nac"] = nac
-        new_conf["system"]["config"]["netId"] = wacn
+        new_conf["system"]["config"]["netId"] = sanitize_p25_wacn(wacn)
         new_conf["system"]["config"]["sysId"] = sys_id
         new_conf["system"]["config"]["rfssId"] = rfss_id
 
@@ -168,9 +177,11 @@ async def wizard_preview(
         new_conf["network"]["port"] = peer_port
         new_conf["network"]["password"] = peer_password
 
+    dvm_config_manager._heal_yaml_dict(new_conf)
+
     # Generate texts for diff
     current_config_yaml = dvm_config_manager.load_config_raw()
-    proposed_config_yaml = yaml.dump(new_conf, default_flow_style=False, sort_keys=False)
+    proposed_config_yaml = yaml.dump(new_conf, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
     diff_text = generate_unified_diff(current_config_yaml, proposed_config_yaml)
     structured_diff = generate_structured_diff(current_config_yaml, proposed_config_yaml)
 

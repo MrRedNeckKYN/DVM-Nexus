@@ -286,24 +286,10 @@ class DVMHostUpdater:
             return
 
         try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                conf = yaml.safe_load(f) or {}
-
-            modified = False
-            # DVMHost upstream requires iAgreeNotToBeStupid: true or false
-            if "iAgreeNotToBeStupid" not in conf:
-                conf["iAgreeNotToBeStupid"] = True
-                modified = True
-
-            # Ensure daemon flag is set to true for Linux systemd
-            if os.name != "nt" and conf.get("daemon") is not True:
-                conf["daemon"] = True
-                modified = True
-
-            if modified:
-                with open(cfg_path, "w", encoding="utf-8") as f:
-                    yaml.dump(conf, f, default_flow_style=False, sort_keys=False)
-                logger.info("Normalized config.yml for updated DVMHost release requirements")
+            from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+            conf = dvm_config_manager.load_config_dict()
+            dvm_config_manager.save_config_dict(conf, summary="Normalize config.yml after DVMHost binary update")
+            logger.info("Normalized config.yml for updated DVMHost release requirements")
         except Exception as e:
             logger.warning(f"Could not verify config compatibility: {e}")
 

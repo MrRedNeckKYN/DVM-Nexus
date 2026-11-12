@@ -16,7 +16,7 @@ from dvm_nexus.core.config import settings
 from dvm_nexus.core.database import get_db_connection, log_audit, init_db
 from dvm_nexus.core.service_controller import service_controller
 from dvm_nexus.config_engine.backup_manager import backup_manager
-from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager, IndentedSafeDumper, sanitize_p25_wacn
 
 
 class ProfileManager:
@@ -57,10 +57,12 @@ class ProfileManager:
         conf.setdefault("system", {})["duplex"] = True
         conf["system"].setdefault("config", {})["colorCode"] = 1
         conf["system"]["config"]["dmrNetId"] = 1
+        conf["system"]["config"]["netId"] = sanitize_p25_wacn(conf["system"]["config"].get("netId", "BB800"))
+        dvm_config_manager._heal_yaml_dict(conf)
 
         # Write files
         import yaml
-        (target_dir / "config.yml").write_text(yaml.dump(conf, default_flow_style=False, sort_keys=False), encoding="utf-8")
+        (target_dir / "config.yml").write_text(yaml.dump(conf, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False), encoding="utf-8")
         if dvm_config_manager.iden_path.exists():
             shutil.copy2(dvm_config_manager.iden_path, target_dir / "iden_table.dat")
         if dvm_config_manager.tg_rules_path.exists():
@@ -93,9 +95,10 @@ class ProfileManager:
         conf["system"].setdefault("config", {})["nac"] = "293"
         conf["system"]["config"]["netId"] = "BB800"
         conf["system"]["config"]["sysId"] = "001"
+        dvm_config_manager._heal_yaml_dict(conf)
 
         import yaml
-        (target_dir / "config.yml").write_text(yaml.dump(conf, default_flow_style=False, sort_keys=False), encoding="utf-8")
+        (target_dir / "config.yml").write_text(yaml.dump(conf, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False), encoding="utf-8")
         if dvm_config_manager.iden_path.exists():
             shutil.copy2(dvm_config_manager.iden_path, target_dir / "iden_table.dat")
         if dvm_config_manager.tg_rules_path.exists():
@@ -242,7 +245,7 @@ class ProfileManager:
                 log_audit("PROFILE", "SWITCH_FAILED", f"Could not stop dvmhost: {stop_res.get('message')}", status="error")
                 return {"success": False, "error": f"Failed to stop dvmhost service: {stop_res.get('message')}"}
 
-            # Step 4: Copy profile files into active location safely
+            # Step 4: Copy profile files into active location safely and run safety-net sanitization
             try:
                 for fname in ["config.yml", "iden_table.dat", "talkgroup_rules.yml", "rid_acl.dat"]:
                     src = source_dir / fname
@@ -251,6 +254,15 @@ class ProfileManager:
                             backup_manager.atomic_write(self.dvm_dir / fname, src.read_text(encoding="utf-8"))
                         except UnicodeDecodeError:
                             shutil.copy2(src, self.dvm_dir / fname)
+
+                # Sanitize active config.yml through DVMConfigManager (heals BEE00 WACN, hex channelNo, Linux log paths, UART mode, RPC ports)
+                active_conf = dvm_config_manager.load_config_dict()
+                dvm_config_manager.save_config_dict(active_conf, summary=f"Activate profile '{prof['name']}' ({prof['protocol'].upper()})")
+                # Sync sanitized config back into the profile directory so it remains clean
+                try:
+                    backup_manager.atomic_write(source_dir / "config.yml", dvm_config_manager.config_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
             except Exception as e:
                 # Restore files from backup immediately
                 backup_manager.restore_from_directory(prev_backup, summary="Rollback on file copy failure")
@@ -353,7 +365,8 @@ class ProfileManager:
                 elif protocol == "p25":
                     conf["protocols"].setdefault("p25", {})["enable"] = True
                     conf["protocols"].setdefault("dmr", {})["enable"] = False
-                backup_manager.atomic_write(prof_config, yaml.dump(conf, default_flow_style=False, sort_keys=False))
+                dvm_config_manager._heal_yaml_dict(conf)
+                backup_manager.atomic_write(prof_config, yaml.dump(conf, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False))
                 if prof_dir.exists() and dvm_config_manager.iden_path.exists():
                     try:
                         shutil.copy2(dvm_config_manager.iden_path, prof_dir / "iden_table.dat")

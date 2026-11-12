@@ -14,7 +14,9 @@ import yaml
 
 from dvm_nexus.core.config import settings, DEFAULT_CONFIGS_DIR
 from dvm_nexus.core.service_controller import service_controller
-from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+from dvm_nexus.config_engine.dvm_yaml import (
+    dvm_config_manager, is_banned_p25_wacn, sanitize_p25_wacn, parse_channel_no, format_channel_no
+)
 from dvm_nexus.config_engine.backup_manager import backup_manager
 from dvm_nexus.core.database import log_audit
 
@@ -426,6 +428,53 @@ class DiagnosticsEngine:
                 "summary": "DVMHost is running in Authoritative Master mode.",
                 "auto_fixable": False,
             })
+
+        # Safety Check: Banned P25 WACN (0xBEE00..0xBEEFF -> FATAL PANIC; error 4 / error 38258)
+        raw_net_id = sys_cfg.get("netId", "BB800") if isinstance(sys_cfg, dict) else "BB800"
+        if is_banned_p25_wacn(raw_net_id):
+            checks.append({
+                "id": "p25_wacn_panic",
+                "name": "P25 WACN / NetId Validation (error 4 guard)",
+                "status": "fail",
+                "badge": "FATAL ERROR 4",
+                "summary": f"system.config.netId is set to '{raw_net_id}'. DVMHost aborts unconditionally at startup with 'FATAL PANIC; error 4' / 'error 38258' if netId is in 0xBEE00–0xBEEFF (even in DMR mode!).",
+                "remedy": "Click Auto-Repair to replace netId with standard 'BB800'.",
+                "auto_fixable": True,
+                "fix_id": "fix_wacn_panic",
+            })
+        else:
+            checks.append({
+                "id": "p25_wacn_panic",
+                "name": "P25 WACN / NetId Validation (error 4 guard)",
+                "status": "pass",
+                "badge": f"WACN {raw_net_id}",
+                "summary": f"system.config.netId ('{raw_net_id}') is valid and compliant with DVMHost startup checks.",
+                "auto_fixable": False,
+            })
+
+        # Safety Check: Hexadecimal Channel Number (channelNo)
+        raw_ch_no = sys_cfg.get("channelNo", "1") if isinstance(sys_cfg, dict) else "1"
+        expected_hex_ch = format_channel_no(parse_channel_no(raw_ch_no))
+        if not isinstance(raw_ch_no, str) or raw_ch_no != expected_hex_ch:
+            checks.append({
+                "id": "channel_no_hex",
+                "name": "RF Channel Number Hex Format (channelNo)",
+                "status": "fail",
+                "badge": "DECIMAL OVERFLOW",
+                "summary": f"channelNo is '{raw_ch_no}' instead of hex '{expected_hex_ch}'. DVMHost parses channelNo in base-16 and clamps values > $0FFF to 4095.",
+                "remedy": f"Click Auto-Repair to convert channelNo to hexadecimal '{expected_hex_ch}'.",
+                "auto_fixable": True,
+                "fix_id": "fix_channel_no_hex",
+            })
+        else:
+            checks.append({
+                "id": "channel_no_hex",
+                "name": "RF Channel Number Hex Format (channelNo)",
+                "status": "pass",
+                "badge": f"CH ${expected_hex_ch}",
+                "summary": f"RF channelNo is formatted in hexadecimal (${expected_hex_ch}) for DVMHost.",
+                "auto_fixable": False,
+            })
         if os.name != "nt":
             if os.path.exists(uart_port):
                 checks.append({
@@ -639,7 +688,7 @@ class DiagnosticsEngine:
                             fixes_applied.append(f"Auto-routed modem serial port to hardware GPIO '{target_port}'")
                             modified = True
 
-            # Enforce Authoritative Master Mode & fix Voice Channel RPC collision
+            # Enforce Authoritative Master Mode, WACN error-4 guard, hex channelNo & fix Voice Channel RPC collision
             sys_config_blk = cfg.get("system", {}).get("config", {})
             if isinstance(sys_config_blk, dict):
                 if sys_config_blk.get("authoritative") is not True:
@@ -647,13 +696,33 @@ class DiagnosticsEngine:
                     fixes_applied.append("Set 'system.config.authoritative: true' (Authoritative Site Master)")
                     modified = True
 
+                raw_net = sys_config_blk.get("netId", "BB800")
+                safe_net = sanitize_p25_wacn(raw_net)
+                if str(raw_net) != safe_net:
+                    sys_config_blk["netId"] = safe_net
+                    fixes_applied.append(f"Replaced banned P25 WACN '{raw_net}' with '{safe_net}' (prevents DVMHost FATAL PANIC error 4)")
+                    modified = True
+
+                raw_ch = sys_config_blk.get("channelNo", "1")
+                hex_ch = format_channel_no(parse_channel_no(raw_ch))
+                if not isinstance(raw_ch, str) or raw_ch != hex_ch:
+                    sys_config_blk["channelNo"] = hex_ch
+                    fixes_applied.append(f"Converted channelNo '{raw_ch}' to hexadecimal '${hex_ch}' for DVMHost")
+                    modified = True
+
                 root_rpc = cfg.get("network", {}).get("rpcPort", 9890)
                 if "voiceChNo" in sys_config_blk and isinstance(sys_config_blk["voiceChNo"], list):
                     for vc in sys_config_blk["voiceChNo"]:
-                        if isinstance(vc, dict) and vc.get("rpcPort") == root_rpc and root_rpc != 0:
-                            vc["rpcPort"] = 0
-                            fixes_applied.append("Set 'voiceChNo.rpcPort: 0' to eliminate RPC port conflict with main host daemon")
-                            modified = True
+                        if isinstance(vc, dict):
+                            vc_ch = vc.get("channelNo", hex_ch)
+                            vc_hex = format_channel_no(parse_channel_no(vc_ch))
+                            if not isinstance(vc_ch, str) or vc_ch != vc_hex:
+                                vc["channelNo"] = vc_hex
+                                modified = True
+                            if vc.get("rpcPort") == root_rpc and root_rpc != 0:
+                                vc["rpcPort"] = 0
+                                fixes_applied.append("Set 'voiceChNo.rpcPort: 0' to eliminate RPC port conflict with main host daemon")
+                                modified = True
 
             # Enforce logging settings for systemd journald
             if "log" not in cfg or not isinstance(cfg["log"], dict):

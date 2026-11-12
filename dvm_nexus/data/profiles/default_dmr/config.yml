@@ -5,8 +5,8 @@ log:
   displayLevel: 1
   fileLevel: 1
   useSyslog: true
-  filePath: C:\Users\Administrator\Documents\DVM Nexus\dvm_nexus\data\active
-  activityFilePath: C:\Users\Administrator\Documents\DVM Nexus\dvm_nexus\data\active
+  filePath: /opt/dvm
+  activityFilePath: /opt/dvm
   fileRoot: DVM
 network:
   enable: false
@@ -28,15 +28,15 @@ network:
   debug: false
   rpcAddress: 127.0.0.1
   rpcPort: 9890
-  rpcPassword: ULTRA-VERY-SECURE-DEFAULT
+  rpcPassword: TEST_RPC_PASSWORD
   rpcDebug: false
-  restEnable: false
+  restEnable: true
   restAddress: 127.0.0.1
   restPort: 9990
   restSsl: false
   restSslCertificate: web.crt
   restSslKey: web.key
-  restPassword: PASSWORD
+  restPassword: TEST_PASSWORD
   restDebug: false
 protocols:
   dmr:
@@ -146,7 +146,7 @@ system:
   duplex: true
   simplexSameFrequency: false
   modeHang: 10
-  fixedMode: false
+  fixedMode: true
   rfTalkgroupHang: 10
   activeTickDelay: 5
   idleTickDelay: 5
@@ -162,7 +162,7 @@ system:
     authoritative: true
     supervisor: false
     channelId: 2
-    channelNo: 2019
+    channelNo: 7E3
     controlCh:
       rpcAddress: 127.0.0.1
       rpcPort: 0
@@ -171,30 +171,30 @@ system:
       presence: 120
     voiceChNo:
       - channelId: 2
-        channelNo: 2019
+        channelNo: 7E3
         rpcAddress: 127.0.0.1
-        rpcPort: 9890
+        rpcPort: 0
         rpcPassword: ULTRA-VERY-SECURE-DEFAULT
     secure:
       key: 000102030405060708090A0B0C0D0E0F
     colorCode: 1
-    nac: '456'
+    nac: '293'
     ran: 1
     pSuperGroup: FFFE
     announcementGroup: FFFE
     defaultNetIdleTalkgroup: 0
     dmrNetId: 1
-    netId: BEE00
-    sysId: '002'
+    netId: BB800
+    sysId: '001'
     rfssId: 1
     siteId: 1
   cwId:
     enable: true
     time: 15
-    callsign: ABCD123
+    callsign: NEXUS
   modem:
     protocol:
-      type: 'null'
+      type: uart
       mode: air
       uart:
         port: /dev/ttyUSB0

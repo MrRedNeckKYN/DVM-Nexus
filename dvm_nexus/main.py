@@ -52,6 +52,17 @@ async def lifespan(app: FastAPI):
     dvm_config_manager.ensure_active_config_exists()
     log_audit("SYSTEM", "STARTUP", f"DVM Nexus v{settings.app_version} initialized")
 
+    # On Linux, if dvmhost crashed prior to startup (e.g. before config self-heal), restart it cleanly
+    if os.name != "nt":
+        try:
+            from dvm_nexus.core.service_controller import service_controller
+            st = await asyncio.to_thread(service_controller.get_status)
+            if st.get("is_failed") or not st.get("is_running"):
+                await asyncio.to_thread(service_controller.restart)
+                log_audit("SAFETY", "AUTO_RESTART_DVMHOST", "Restarted dvmhost service after startup config self-heal")
+        except Exception:
+            logger.exception("Could not auto-restart dvmhost on startup")
+
     # Auto-provision Field Hotspot and launch embedded failover watchdog
     watchdog_task = None
     try:

@@ -27,10 +27,99 @@ class IndentedSafeDumper(yaml.SafeDumper):
         return super().increase_indent(flow=flow, indentless=False)
 
 
+def is_banned_p25_wacn(val: Any) -> bool:
+    """
+    Check if a P25 WACN (netId) falls in the 0xBEE00..0xBEEFF range.
+    DVMHost upstream (src/host/Host.Config.cpp:350 & src/host/Host.cpp:649)
+    unconditionally calls ::fatal("error 4") on 0xBEE00 and ::fatal("... error 38258")
+    on any netId where (netId >> 8) == 0xBEE — even when running in DMR mode!
+    """
+    if val is None:
+        return False
+    s = str(val).strip().upper()
+    if s.startswith("0X"):
+        s = s[2:]
+    elif s.startswith("$"):
+        s = s[1:]
+    try:
+        int_val = int(s, 16)
+        return (int_val >> 8) == 0xBEE
+    except ValueError:
+        return False
+
+
+def sanitize_p25_wacn(val: Any) -> str:
+    """
+    Return a safe, valid 20-bit hexadecimal P25 WACN (netId).
+    Replaces empty, invalid, 0, or banned 0xBEE00..0xBEEFF values with 'BB800'.
+    """
+    if val is None:
+        return "BB800"
+    s = str(val).strip().upper()
+    if s.startswith("0X"):
+        s = s[2:]
+    elif s.startswith("$"):
+        s = s[1:]
+    if not s:
+        return "BB800"
+    try:
+        int_val = int(s, 16)
+    except ValueError:
+        return "BB800"
+    if int_val <= 0 or int_val > 0xFFFFF or (int_val >> 8) == 0xBEE:
+        return "BB800"
+    return f"{int_val:X}"
+
+
+def parse_channel_no(val: Any) -> int:
+    """
+    Parse channelNo from config.yml into a decimal integer (1..4095).
+    DVMHost reads channelNo in base-16 (::strtoul(..., NULL, 16)).
+    - If val is an unquoted Python int (legacy decimal format written by older Nexus),
+      interpret it directly as decimal (e.g., 2019 -> 2019).
+    - If val is a string (e.g., '7E3', '1', '100'), interpret it as base-16 hex
+      (with fallback to base-10 if int(s, 16) > 4095 and s.isdigit()).
+    """
+    if isinstance(val, int) and not isinstance(val, bool):
+        return max(1, min(4095, val))
+    s = str(val or "1").strip().upper()
+    if s.startswith("0X"):
+        s = s[2:]
+    elif s.startswith("$"):
+        s = s[1:]
+    if not s:
+        return 1
+    try:
+        hex_val = int(s, 16)
+        if 1 <= hex_val <= 4095:
+            return hex_val
+        if hex_val > 4095 and s.isdigit():
+            dec_val = int(s, 10)
+            if 1 <= dec_val <= 4095:
+                return dec_val
+        return max(1, min(4095, hex_val))
+    except ValueError:
+        try:
+            return max(1, min(4095, int(s, 10)))
+        except ValueError:
+            return 1
+
+
+def format_channel_no(ch_no: int) -> str:
+    """
+    Format a channel number (1..4095) as an uppercase hexadecimal string for DVMHost.
+    DVMHost parses system.config.channelNo and voiceChNo[i].channelNo with
+    ::strtoul(..., NULL, 16), so storing a hex string ensures exact frequency tuning.
+    """
+    clamped = max(1, min(4095, int(ch_no)))
+    return f"{clamped:X}"
+
+
 class DVMConfigManager:
     """Manages active DVMHost configuration files."""
 
     _permissions_fixed = False
+    _profiles_healed = False
 
     def __init__(self, dvm_dir: Optional[Path] = None):
         self.dvm_dir = dvm_dir or settings.dvm_dir
@@ -50,6 +139,97 @@ class DVMConfigManager:
     @property
     def rid_acl_path(self) -> Path:
         return self.dvm_dir / "rid_acl.dat"
+
+    def _heal_yaml_dict(self, data: Dict[str, Any], include_policy: bool = False) -> bool:
+        """
+        Inspect a config.yml dict and heal any fatal DVMHost configuration traps in-place:
+        1. P25 WACN (netId) in 0xBEE00..0xBEEFF -> 'BB800' (prevents FATAL PANIC; error 4 / error 38258)
+        2. Decimal integer channelNo -> uppercase hex string (prevents $0FFF clamping in strtoul base-16)
+        3. Multi-protocol collision -> single active protocol (prevents MMDVM NAK 32)
+        4. Voice channel RPC port collision -> 0
+        5. Cross-platform log.filePath on Linux -> '/opt/dvm'
+        When include_policy=True, also enforces iAgreeNotToBeStupid=True, daemon=False, and protocol.type='uart'.
+        Returns True if any field was modified.
+        """
+        modified = False
+        if not isinstance(data, dict):
+            return False
+
+        if include_policy:
+            if data.get("iAgreeNotToBeStupid") is not True:
+                data["iAgreeNotToBeStupid"] = True
+                modified = True
+            if data.get("daemon") is not False:
+                data["daemon"] = False
+                modified = True
+
+        # Heal log path on Linux if it points to a Windows drive path
+        log_blk = data.get("log")
+        if isinstance(log_blk, dict) and os.name != "nt":
+            for k in ("filePath", "activityFilePath"):
+                v = str(log_blk.get(k, "")).strip()
+                if ":" in v or "\\" in v:
+                    log_blk[k] = "/opt/dvm"
+                    modified = True
+
+        # Heal modem 'null' trap when include_policy is True
+        if include_policy:
+            modem_blk = data.get("system", {}).get("modem", {}) if isinstance(data.get("system"), dict) else {}
+            if isinstance(modem_blk, dict):
+                proto_blk = modem_blk.get("protocol", {})
+                if isinstance(proto_blk, dict):
+                    curr_type = str(proto_blk.get("type", "")).strip().lower()
+                    if curr_type in ("null", "'null'", '"null"', ""):
+                        proto_blk["type"] = "uart"
+                        modified = True
+
+        # Heal system.config: netId (BEE00 panic), channelNo (base-16 hex), and voiceChNo
+        sys_config = data.get("system", {}).get("config", {}) if isinstance(data.get("system"), dict) else {}
+        if isinstance(sys_config, dict):
+            raw_net_id = sys_config.get("netId", "BB800")
+            safe_net_id = sanitize_p25_wacn(raw_net_id)
+            if str(raw_net_id) != safe_net_id:
+                sys_config["netId"] = safe_net_id
+                modified = True
+
+            raw_ch_no = sys_config.get("channelNo", "1")
+            hex_ch_no = format_channel_no(parse_channel_no(raw_ch_no))
+            if not isinstance(raw_ch_no, str) or raw_ch_no != hex_ch_no:
+                sys_config["channelNo"] = hex_ch_no
+                modified = True
+
+            root_rpc_port = data.get("network", {}).get("rpcPort", 9890) if isinstance(data.get("network"), dict) else 9890
+            if "voiceChNo" in sys_config and isinstance(sys_config["voiceChNo"], list):
+                for vc in sys_config["voiceChNo"]:
+                    if isinstance(vc, dict):
+                        vc_ch = vc.get("channelNo", hex_ch_no)
+                        vc_hex = format_channel_no(parse_channel_no(vc_ch))
+                        if not isinstance(vc_ch, str) or vc_ch != vc_hex:
+                            vc["channelNo"] = vc_hex
+                            modified = True
+                        if "rxChannelNo" in vc:
+                            rx_ch = vc.get("rxChannelNo")
+                            rx_hex = format_channel_no(parse_channel_no(rx_ch))
+                            if not isinstance(rx_ch, str) or rx_ch != rx_hex:
+                                vc["rxChannelNo"] = rx_hex
+                                modified = True
+                        if vc.get("rpcPort") == root_rpc_port and root_rpc_port != 0:
+                            vc["rpcPort"] = 0
+                            modified = True
+
+        # Heal multi-protocol collision
+        protocols = data.get("protocols", {})
+        if isinstance(protocols, dict):
+            dmr_on = bool(protocols.get("dmr", {}).get("enable", False)) if isinstance(protocols.get("dmr"), dict) else False
+            p25_on = bool(protocols.get("p25", {}).get("enable", False)) if isinstance(protocols.get("p25"), dict) else False
+            nxdn_on = bool(protocols.get("nxdn", {}).get("enable", False)) if isinstance(protocols.get("nxdn"), dict) else False
+            if sum([dmr_on, p25_on, nxdn_on]) > 1:
+                protocols.setdefault("p25", {})["enable"] = False
+                if "nxdn" in protocols and isinstance(protocols["nxdn"], dict):
+                    protocols["nxdn"]["enable"] = False
+                modified = True
+
+        return modified
 
     def ensure_active_config_exists(self):
         """Ensure active directory has baseline configuration files."""
@@ -81,26 +261,34 @@ class DVMConfigManager:
             if src.exists():
                 backup_manager.atomic_write(self.rid_acl_path, src.read_text(encoding="utf-8"))
 
-        # Safety block: Self-heal active configuration if legacy multi-protocol collision is present
+        # Safety block: Self-heal active configuration if legacy traps (BEE00, decimal channelNo, multi-protocol) are present
         try:
             if self.config_path.exists():
                 raw = self.config_path.read_text(encoding="utf-8")
                 data = yaml.safe_load(raw)
-                if isinstance(data, dict):
-                    protocols = data.get("protocols", {})
-                    if isinstance(protocols, dict):
-                        dmr_on = bool(protocols.get("dmr", {}).get("enable", False)) if isinstance(protocols.get("dmr"), dict) else False
-                        p25_on = bool(protocols.get("p25", {}).get("enable", False)) if isinstance(protocols.get("p25"), dict) else False
-                        nxdn_on = bool(protocols.get("nxdn", {}).get("enable", False)) if isinstance(protocols.get("nxdn"), dict) else False
-                        if sum([dmr_on, p25_on, nxdn_on]) > 1:
-                            protocols.setdefault("p25", {})["enable"] = False
-                            if "nxdn" in protocols and isinstance(protocols["nxdn"], dict):
-                                protocols["nxdn"]["enable"] = False
-                            content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
-                            backup_manager.atomic_write(self.config_path, content)
-                            log_audit("SAFETY", "AUTO_HEAL_ACTIVE_CONFIG", "Self-healed multi-protocol collision in active config.yml")
+                if isinstance(data, dict) and self._heal_yaml_dict(data):
+                    content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
+                    backup_manager.atomic_write(self.config_path, content)
+                    log_audit("SAFETY", "AUTO_HEAL_ACTIVE_CONFIG", "Self-healed active config.yml (WACN/channelNo/protocol safety)")
         except Exception:
-            logger.exception("Could not self-heal multi-protocol collision in active config.yml")
+            logger.exception("Could not self-heal active config.yml")
+
+        # One-time per process: Self-heal saved profile config.yml files so switching profiles never introduces a trap
+        if not DVMConfigManager._profiles_healed:
+            DVMConfigManager._profiles_healed = True
+            try:
+                if PROFILES_DIR.exists():
+                    for prof_cfg in PROFILES_DIR.glob("*/config.yml"):
+                        try:
+                            p_raw = prof_cfg.read_text(encoding="utf-8")
+                            p_data = yaml.safe_load(p_raw)
+                            if isinstance(p_data, dict) and self._heal_yaml_dict(p_data, include_policy=True):
+                                p_content = yaml.dump(p_data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
+                                backup_manager.atomic_write(prof_cfg, p_content)
+                        except Exception:
+                            logger.exception("Could not self-heal profile %s", prof_cfg)
+            except Exception:
+                pass
 
         self._ensure_permissions_once()
 
@@ -215,11 +403,25 @@ class DVMConfigManager:
             if "authoritative" not in sys_config:
                 sys_config["authoritative"] = True
 
+            # Safety Net: Prevent DVMHost FATAL PANIC error 4 / error 38258 on 0xBEE00..0xBEEFF WACN
+            raw_net_id = sys_config.get("netId", "BB800")
+            safe_net_id = sanitize_p25_wacn(raw_net_id)
+            if str(raw_net_id) != safe_net_id:
+                sys_config["netId"] = safe_net_id
+                log_audit("SAFETY", "WACN_PANIC_FIX", f"Replaced banned/invalid P25 WACN '{raw_net_id}' with '{safe_net_id}' to prevent DVMHost FATAL PANIC error 4")
+
+            # Safety Net: Ensure channelNo is formatted in base-16 hex for DVMHost ::strtoul(..., NULL, 16)
+            hex_ch_no = format_channel_no(parse_channel_no(sys_config.get("channelNo", "1")))
+            sys_config["channelNo"] = hex_ch_no
+
             # If voiceChNo exists in standalone mode, its rpcPort must not collide with system.rpcPort
             root_rpc_port = data.get("network", {}).get("rpcPort", 9890)
             if "voiceChNo" in sys_config and isinstance(sys_config["voiceChNo"], list):
                 for vc in sys_config["voiceChNo"]:
                     if isinstance(vc, dict):
+                        vc["channelNo"] = format_channel_no(parse_channel_no(vc.get("channelNo", hex_ch_no)))
+                        if "rxChannelNo" in vc:
+                            vc["rxChannelNo"] = format_channel_no(parse_channel_no(vc["rxChannelNo"]))
                         # If VC RPC port is set to the same port as DVMHost's main RPC port (e.g. 9890),
                         # DVMHost flags an invalid loopback RPC configuration. For standalone single-station,
                         # the VC RPC port should be 0 (disabled/internal) or distinct.
@@ -274,8 +476,8 @@ class DVMConfigManager:
         """
         conf = self.load_config_dict()
         sys_conf = conf.get("system", {}).get("config", {})
-        channel_id = sys_conf.get("channelId", 2)
-        channel_no = sys_conf.get("channelNo", 1)
+        channel_id = int(sys_conf.get("channelId", 2))
+        channel_no = parse_channel_no(sys_conf.get("channelNo", "1"))
         from dvm_nexus.config_engine.iden_calculator import read_iden_table_file, calculate_frequency_from_channel
         iden_entries = read_iden_table_file(self.iden_path)
         for entry in iden_entries:
@@ -292,7 +494,7 @@ class DVMConfigManager:
     def set_tuned_frequencies(self, tx_mhz: float, rx_mhz: float, conf_dict: Optional[Dict[str, Any]] = None) -> Tuple[int, int]:
         """
         Calculate IDEN entry for target frequencies, update iden_table.dat, 
-        and update channelId / channelNo in config dict.
+        and update channelId / channelNo (in hex) in config dict.
         Returns: (channel_id, channel_no)
         """
         from dvm_nexus.config_engine.iden_calculator import (
@@ -305,12 +507,13 @@ class DVMConfigManager:
         backup_manager.atomic_write(self.iden_path, format_iden_table(iden_entries))
 
         if conf_dict is not None:
+            hex_ch_no = format_channel_no(channel_no)
             sys_conf = conf_dict.setdefault("system", {}).setdefault("config", {})
             sys_conf["channelId"] = entry.channel_id
-            sys_conf["channelNo"] = channel_no
+            sys_conf["channelNo"] = hex_ch_no
             if "voiceChNo" in sys_conf and isinstance(sys_conf["voiceChNo"], list) and len(sys_conf["voiceChNo"]) > 0:
                 sys_conf["voiceChNo"][0]["channelId"] = entry.channel_id
-                sys_conf["voiceChNo"][0]["channelNo"] = channel_no
+                sys_conf["voiceChNo"][0]["channelNo"] = hex_ch_no
                 is_duplex = conf_dict.get("system", {}).get("duplex", True)
                 if not is_duplex:
                     sys_conf["voiceChNo"][0].pop("rxChannelId", None)
@@ -334,12 +537,12 @@ class DVMConfigManager:
         # Frequencies
         tx_freq_mhz, rx_freq_mhz = self.get_tuned_frequencies()
         channel_id = sys_conf.get("channelId", 0)
-        channel_no = sys_conf.get("channelNo", 1)
+        channel_no = parse_channel_no(sys_conf.get("channelNo", "1"))
 
         # DMR and P25 specifics
         color_code = sys_conf.get("colorCode", 1)
         nac = sys_conf.get("nac", "293")
-        net_id = sys_conf.get("netId", "BB800")
+        net_id = sanitize_p25_wacn(sys_conf.get("netId", "BB800"))
         callsign = conf.get("system", {}).get("identity", "NEXUS")
 
         return {

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from dvm_nexus.core.templates import render_template
-from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager, is_banned_p25_wacn, sanitize_p25_wacn
 from dvm_nexus.config_engine.network_validator import (
     validate_p25_settings, validate_frequencies, validate_int_range, validate_port,
 )
@@ -182,6 +182,10 @@ async def p25_save(
             rx_freq_mhz = round(tx_freq_mhz + 30.0, 6)
         else:
             rx_freq_mhz = round(tx_freq_mhz + 5.0, 6)
+
+    # Auto-sanitize banned 0xBEE00..0xBEEFF WACN values so DVMHost never panics with error 4 / 38258
+    if is_banned_p25_wacn(wacn):
+        wacn = "BB800"
 
     errors = validate_p25_settings({
         "nac": nac,
