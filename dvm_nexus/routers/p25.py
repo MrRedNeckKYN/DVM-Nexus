@@ -106,9 +106,25 @@ def build_p25_programming_summary(
     bandwidth_khz = rf_verify.get("bandwidth_khz", 12.5)
 
     # Primary RF channel (MMDVM Hat TX -> Radio RX; MMDVM Hat RX <- Radio TX)
-    primary_role = "Primary Control Channel (TSBK)" if (duplex and cc_enabled) else ("Simplex Voice" if not duplex else "Repeater Voice")
+    if not duplex:
+        primary_role = "Simplex Voice Carrier (No CC)"
+        primary_name = "Ch 1 (Simplex Voice)"
+        primary_status = "Direct Simplex Voice"
+    elif cc_dedicated:
+        primary_role = "Dedicated Control Channel (Data Only)"
+        primary_name = "Ch 1 (Dedicated 24/7 CC)"
+        primary_status = "Continuous 24/7 TSBK Data (No voice on CC carrier)"
+    elif cc_enabled:
+        primary_role = "Combined CC + Voice Channel"
+        primary_name = "Ch 1 (Combined CC & Voice)"
+        primary_status = f"Periodic TSBK bursts ({cc_conf.get('interval', 300)}s) + Voice Traffic"
+    else:
+        primary_role = "Repeater Voice Carrier (Conventional)"
+        primary_name = "Ch 1 (Conventional Repeater Voice)"
+        primary_status = "Conventional Repeater Voice (No CC)"
+
     channels_list = [{
-        "name": "Ch 1 (Primary CC / Traffic)",
+        "name": primary_name,
         "role": primary_role,
         "is_control": bool(duplex and cc_enabled),
         "channel_id": ch_id,
@@ -119,10 +135,11 @@ def build_p25_programming_summary(
         "radio_tx_mhz": rx_freq_mhz,
         "radio_tx_hz": rx_freq_hz,
         "offset_mhz": tx_offset_mhz,
+        "status_text": primary_status,
         "note": "MMDVM Hat TX -> Radio RX | MMDVM Hat RX <- Radio TX",
     }]
 
-    # Additional Voice Channels if defined in voiceChNo
+    # Additional Voice Channels if defined in voiceChNo (only add distinct secondary channels)
     iden_map = {e.channel_id: e for e in iden_entries}
     raw_vcs = sys_conf.get("voiceChNo", [])
     if isinstance(raw_vcs, list):
@@ -131,6 +148,9 @@ def build_p25_programming_summary(
                 continue
             vc_ch_id = int(vc.get("channelId", ch_id))
             vc_ch_no = parse_channel_no(vc.get("channelNo", 2))
+            if vc_ch_id == ch_id and vc_ch_no == ch_no:
+                # Same as primary carrier; do not add redundant duplicate row
+                continue
             entry = iden_map.get(vc_ch_id)
             if entry:
                 vc_tx_hz, vc_rx_hz = calculate_frequency_from_channel(
@@ -150,7 +170,7 @@ def build_p25_programming_summary(
                 vc_radio_tx_mhz = rx_freq_mhz
             channels_list.append({
                 "name": f"Voice Channel {idx}",
-                "role": "Voice Channel (Payload)",
+                "role": "Secondary Voice Channel (Payload)",
                 "is_control": False,
                 "channel_id": vc_ch_id,
                 "channel_no": vc_ch_no,
@@ -160,6 +180,7 @@ def build_p25_programming_summary(
                 "radio_tx_mhz": vc_radio_tx_mhz,
                 "radio_tx_hz": vc_rx_hz,
                 "offset_mhz": round((vc_rx_hz - vc_tx_hz) / 1_000_000.0, 6),
+                "status_text": "Secondary Voice Channel (Subordinate Node)",
                 "note": "Secondary voice channel grant target",
             })
 

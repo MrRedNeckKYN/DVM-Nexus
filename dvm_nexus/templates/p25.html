@@ -397,6 +397,15 @@
 
     <!-- Tab 2: Control Channels -->
     <div id="p25-guide-tab-control" class="p25-guide-tab-pane" style="display:none; padding:0 1rem 0.5rem 1rem;">
+      <div style="padding:0.75rem 0.95rem; margin-bottom:0.75rem; background:rgba(56, 189, 248, 0.08); border:1px solid rgba(56, 189, 248, 0.3); border-radius:var(--radius-sm); font-size:0.8rem; line-height:1.5;">
+        <strong>📡 How Control Channels vs. Voice Channels Work in Radio CPS:</strong>
+        <ul style="margin:0.35rem 0 0 1.1rem; padding:0;">
+          <li><strong>What you program in Radio CPS (e.g. Tait "Control Channel List Members"):</strong> You <em>ONLY</em> program the <strong>Control Channel</strong> frequency pair (Radio RX = Hat TX, Radio TX = Hat RX).</li>
+          <li><strong>Why Voice Channels are NOT programmed in CPS:</strong> In P25 Trunking, radios do <em>NOT</em> have static voice channels in their list. When the Control Channel grants a call, the radio automatically calculates the Voice Channel frequency dynamically using the <strong>Channel ID (Bandplan)</strong> and jumps there on the fly!</li>
+          <li><strong>Single Hotspot Warning:</strong> In <em>Dedicated 24/7 CC</em> mode, Channel 1 is 100% data. For a single hotspot to handle both control channel data AND voice calls, use <em>Non-Dedicated CC (Combined CC + Voice)</em> so Channel 1 is shared!</li>
+        </ul>
+      </div>
+
       <div style="padding:0.65rem 0.85rem; margin-bottom:0.75rem; background:rgba(99, 102, 241, 0.08); border:1px solid rgba(99, 102, 241, 0.25); border-radius:var(--radius-sm); font-size:0.8rem; line-height:1.45;">
         ℹ️ <strong>Transceiver Frequency Inversion:</strong> Your radio <strong>RECEIVES</strong> on the MMDVM Hat <strong>TRANSMIT</strong> frequency, and <strong>TRANSMITS</strong> on the MMDVM Hat <strong>RECEIVE</strong> frequency. The table below displays the exact frequencies you must enter into your radio CPS.
       </div>
@@ -1409,6 +1418,7 @@ function updateP25ProgrammingGuide(rxMhz, txMhz, spacingKhz, isDuplex, ccMode, n
   // 3. Update Tab 2 (Control Channels Table - Primary Row)
   const primaryChRow = document.querySelector('.p25-channel-row[data-chno="1"]');
   if (primaryChRow) {
+    const nameEl = primaryChRow.querySelector('.p25-ch-name');
     const rxMhzEl = primaryChRow.querySelector('.p25-ch-rx-mhz');
     const rxHzEl = primaryChRow.querySelector('.p25-ch-rx-hz');
     const txMhzEl = primaryChRow.querySelector('.p25-ch-tx-mhz');
@@ -1421,21 +1431,36 @@ function updateP25ProgrammingGuide(rxMhz, txMhz, spacingKhz, isDuplex, ccMode, n
     if (txMhzEl) txMhzEl.textContent = `${radioTxMhz} MHz`;
     if (txHzEl) txHzEl.textContent = `${radioTxHz.toLocaleString()} Hz`;
 
+    if (nameEl) {
+      if (!isDuplex) {
+        nameEl.textContent = 'Ch 1 (Simplex Voice)';
+      } else if (ccMode === 'dedicated') {
+        nameEl.textContent = 'Ch 1 (Dedicated 24/7 CC)';
+      } else if (ccMode === 'non_dedicated') {
+        nameEl.textContent = 'Ch 1 (Combined CC & Voice)';
+      } else {
+        nameEl.textContent = 'Ch 1 (Conventional Repeater Voice)';
+      }
+    }
+
     if (statusEl) {
       if (!isDuplex) {
         statusEl.innerHTML = '<span>Simplex Direct Voice (No CC)</span>';
       } else if (ccMode === 'dedicated') {
-        statusEl.innerHTML = '<span style="color:#f59e0b;">Continuous 24/7 TSBK Control Broadcast</span>';
+        statusEl.innerHTML = '<span style="color:#f59e0b;">Continuous 24/7 TSBK Data (No voice on CC carrier)</span>';
       } else if (ccMode === 'non_dedicated') {
-        statusEl.innerHTML = '<span style="color:#10b981;">Periodic TSBK bursts + Combined Voice</span>';
+        statusEl.innerHTML = '<span style="color:#10b981;">Periodic TSBK bursts + Combined Voice Traffic</span>';
       } else {
         statusEl.innerHTML = '<span>Conventional Repeater Voice (No CC)</span>';
       }
     }
     if (badgeEl) {
-      if (isDuplex && ccMode !== 'disabled') {
+      if (isDuplex && ccMode === 'dedicated') {
+        badgeEl.className = 'badge badge-warning p25-ch-badge';
+        badgeEl.textContent = 'Dedicated CC (Data Only)';
+      } else if (isDuplex && ccMode === 'non_dedicated') {
         badgeEl.className = 'badge badge-indigo p25-ch-badge';
-        badgeEl.textContent = 'Control Channel';
+        badgeEl.textContent = 'Combined CC + Voice';
       } else {
         badgeEl.className = 'badge badge-muted p25-ch-badge';
         badgeEl.textContent = 'Voice Traffic';
