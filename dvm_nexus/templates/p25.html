@@ -170,7 +170,7 @@
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Repeater / Station Callsign</label>
-        <input type="text" name="callsign" class="form-control font-mono" value="{{ identity or 'NEXUS' }}" required>
+        <input type="text" name="callsign" id="p25-callsign-input" class="form-control font-mono" value="{{ identity or 'NEXUS' }}" oninput="updateP25CodeplugSummary()" required>
         <small class="form-hint">Station identifier broadcast in CW ID and system logs.</small>
       </div>
 
@@ -287,6 +287,338 @@
         <label class="form-label">CW ID Interval (Minutes)</label>
         <input type="number" name="cw_id_time" class="form-control" value="{{ cw.time or 15 }}">
         <small class="form-hint">FCC standard is 10 to 15 minutes.</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- P25 Radio CPS Programming Guide (Sites, Control Channels & Channel IDs) -->
+  <div class="card" id="p25-programming-guide-card" style="border-left:4px solid #38bdf8; margin-bottom:1.5rem;">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+      <div>
+        <div class="card-title" style="display:flex; align-items:center; gap:0.5rem;">
+          <span>📋 Radio CPS Programming Guide (Sites, Control Channels &amp; Channel IDs)</span>
+        </div>
+        <span style="font-size:0.83rem; color:var(--text-dim);">
+          Exact reference parameters to program into Motorola APX / Astro 25, Harris, EFJohnson, Unication, and Uniden Scanners
+        </span>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;" id="p25-guide-quick-badges">
+        <span class="badge badge-indigo" title="Wide Area Communication Network" id="p25-badge-wacn">WACN: ${{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</span>
+        <span class="badge badge-indigo" title="System ID" id="p25-badge-sysid">Sys ID: ${{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</span>
+        <span class="badge badge-muted" title="RFSS and Site ID" id="p25-badge-site">Site: {{ p25_prog.rfss_id if p25_prog else (sys.rfssId or 1) }}.{{ p25_prog.site_id if p25_prog else (sys.siteId or 1) }}</span>
+        <span class="badge badge-emerald" title="Network Access Code" id="p25-badge-nac">NAC: ${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</span>
+        <span class="badge badge-warning" id="p25-badge-cc-freq">CC RX: {{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</span>
+      </div>
+    </div>
+
+    <!-- Tab navigation inside guide -->
+    <div style="display:flex; gap:0.4rem; border-bottom:1px solid var(--border-color); padding:0 1rem 0.65rem 1rem; margin-bottom:1rem; flex-wrap:wrap;">
+      <button type="button" class="btn btn-sm btn-primary p25-guide-tab-btn" data-guide-tab="sites" onclick="switchP25GuideTab('sites')">🌐 Sites &amp; Identity</button>
+      <button type="button" class="btn btn-sm btn-secondary p25-guide-tab-btn" data-guide-tab="control" onclick="switchP25GuideTab('control')">📡 Control Channels</button>
+      <button type="button" class="btn btn-sm btn-secondary p25-guide-tab-btn" data-guide-tab="channelids" onclick="switchP25GuideTab('channelids')">🔢 Channel IDs &amp; IDEN Table</button>
+      <button type="button" class="btn btn-sm btn-secondary p25-guide-tab-btn" data-guide-tab="cheat_sheet" onclick="switchP25GuideTab('cheat_sheet')">📝 Radio CPS Cheat-Sheet</button>
+    </div>
+
+    <!-- Tab 1: Sites & Identity -->
+    <div id="p25-guide-tab-sites" class="p25-guide-tab-pane" style="display:block; padding:0 1rem 0.5rem 1rem;">
+      <div style="font-size:0.82rem; color:var(--text-muted); margin-bottom:0.75rem;">
+        P25 Phase 1 Trunking and Conventional site identification parameters. Match these in your radio CPS System Definition and Personality.
+      </div>
+      <div class="table-responsive">
+        <table class="table" style="font-size:0.83rem; margin-bottom:0.5rem;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border-color);">
+              <th>Parameter</th>
+              <th>Hex Value</th>
+              <th>Decimal Value</th>
+              <th>CPS Field Name / Standard</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>WACN</strong> (Wide Area Net ID)</td>
+              <td><code class="font-mono" id="p25-tbl-wacn-hex">${{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</code></td>
+              <td><span id="p25-tbl-wacn-dec">{{ p25_prog.wacn_dec if p25_prog else 768000 }}</span></td>
+              <td>Motorola: <em>WACN</em> &bull; Harris: <em>WACN</em> (5 hex digits)</td>
+              <td><button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param(document.getElementById('p25-wacn-input')?.value || 'BB800', 'WACN Hex')">📋 Copy</button></td>
+            </tr>
+            <tr>
+              <td><strong>System ID</strong> (SysID)</td>
+              <td><code class="font-mono" id="p25-tbl-sysid-hex">${{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</code></td>
+              <td><span id="p25-tbl-sysid-dec">{{ p25_prog.sys_id_dec if p25_prog else 1 }}</span></td>
+              <td>Motorola / Harris: <em>System ID</em> (3 hex digits)</td>
+              <td><button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param(document.getElementById('p25-sysid-input')?.value || '001', 'System ID')">📋 Copy</button></td>
+            </tr>
+            <tr>
+              <td><strong>RFSS ID</strong> (Subsystem)</td>
+              <td><code class="font-mono" id="p25-tbl-rfss-hex">{{ '0x%02X'|format(p25_prog.rfss_id if p25_prog else (sys.rfssId or 1)) }}</code></td>
+              <td><span id="p25-tbl-rfss-dec">{{ p25_prog.rfss_id if p25_prog else (sys.rfssId or 1) }}</span></td>
+              <td>Trunking Site: <em>RFSS ID</em> (1 &ndash; 255)</td>
+              <td><button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param(document.getElementById('p25-rfss-input')?.value || '1', 'RFSS ID')">📋 Copy</button></td>
+            </tr>
+            <tr>
+              <td><strong>Site ID</strong></td>
+              <td><code class="font-mono" id="p25-tbl-site-hex">{{ '0x%02X'|format(p25_prog.site_id if p25_prog else (sys.siteId or 1)) }}</code></td>
+              <td><span id="p25-tbl-site-dec">{{ p25_prog.site_id if p25_prog else (sys.siteId or 1) }}</span></td>
+              <td>Trunking Site: <em>Site ID</em> (1 &ndash; 255)</td>
+              <td><button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param(document.getElementById('p25-site-input')?.value || '1', 'Site ID')">📋 Copy</button></td>
+            </tr>
+            <tr>
+              <td><strong>Primary NAC</strong> (Network Access Code)</td>
+              <td><code class="font-mono" id="p25-tbl-nac-hex">${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</code></td>
+              <td><span id="p25-tbl-nac-dec">{{ p25_prog.nac_dec if p25_prog else 659 }}</span></td>
+              <td>Conventional / Trunking: <em>RX NAC</em> (3 hex digits)</td>
+              <td><button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param(document.getElementById('p25-nac-input')?.value || '293', 'NAC')">📋 Copy</button></td>
+            </tr>
+            <tr>
+              <td><strong>Transmit NAC</strong> (TX NAC)</td>
+              <td><code class="font-mono" id="p25-tbl-txnac-hex">${{ p25_prog.tx_nac if p25_prog else (sys.txNAC or sys.nac or '293') }}</code></td>
+              <td><span id="p25-tbl-txnac-dec">{{ p25_prog.tx_nac_dec if p25_prog else 659 }}</span></td>
+              <td>Conventional: <em>TX NAC</em> (Matches RX NAC if blank)</td>
+              <td><button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param(document.getElementById('p25-txnac-input')?.value || document.getElementById('p25-nac-input')?.value || '293', 'TX NAC')">📋 Copy</button></td>
+            </tr>
+            <tr>
+              <td><strong>Station Callsign / Identity</strong></td>
+              <td colspan="2"><code class="font-mono" id="p25-tbl-callsign">{{ p25_prog.callsign if p25_prog else (identity or 'NEXUS') }}</code></td>
+              <td>CW Identification and Host identity</td>
+              <td><button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param(document.getElementById('p25-callsign-input')?.value || 'NEXUS', 'Callsign')">📋 Copy</button></td>
+            </tr>
+            <tr>
+              <td><strong>Site Authority Role</strong></td>
+              <td colspan="2"><span id="p25-tbl-auth">{% if p25_prog and p25_prog.authoritative %}Authoritative Master (FNE Master Site){% else %}Subordinate (Linked Site){% endif %}</span></td>
+              <td><code>system.config.authoritative</code></td>
+              <td><span class="badge badge-success">Master</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 2: Control Channels -->
+    <div id="p25-guide-tab-control" class="p25-guide-tab-pane" style="display:none; padding:0 1rem 0.5rem 1rem;">
+      <div style="padding:0.65rem 0.85rem; margin-bottom:0.75rem; background:rgba(99, 102, 241, 0.08); border:1px solid rgba(99, 102, 241, 0.25); border-radius:var(--radius-sm); font-size:0.8rem; line-height:1.45;">
+        ℹ️ <strong>Transceiver Frequency Inversion:</strong> Your radio <strong>RECEIVES</strong> on the MMDVM Hat <strong>TRANSMIT</strong> frequency, and <strong>TRANSMITS</strong> on the MMDVM Hat <strong>RECEIVE</strong> frequency. The table below displays the exact frequencies you must enter into your radio CPS.
+      </div>
+      <div class="table-responsive">
+        <table class="table" style="font-size:0.83rem; margin-bottom:0.5rem;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border-color);">
+              <th>Channel Name &amp; Role</th>
+              <th>Ch ID &bull; Ch No</th>
+              <th>Radio RX Frequency (Hat TX)</th>
+              <th>Radio TX Frequency (Hat RX)</th>
+              <th>Operating Status / Broadcast</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="p25-tbl-channels-tbody">
+            {% if p25_prog and p25_prog.channels %}
+              {% for ch in p25_prog.channels %}
+              <tr class="p25-channel-row" data-chid="{{ ch.channel_id }}" data-chno="{{ ch.channel_no }}">
+                <td>
+                  <strong class="p25-ch-name">{{ ch.name }}</strong>
+                  {% if ch.is_control %}
+                    <span class="badge badge-indigo p25-ch-badge" style="font-size:0.7rem; margin-left:4px;">Control Channel</span>
+                  {% else %}
+                    <span class="badge badge-muted p25-ch-badge" style="font-size:0.7rem; margin-left:4px;">Voice Traffic</span>
+                  {% endif %}
+                </td>
+                <td><code>Ch ID {{ ch.channel_id }} &bull; Ch No {{ ch.channel_no }} ({{ ch.channel_no_hex }})</code></td>
+                <td>
+                  <strong class="p25-ch-rx-mhz" style="color:var(--text-bright);">{{ '%.6f'|format(ch.radio_rx_mhz) }} MHz</strong>
+                  <div class="p25-ch-rx-hz" style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '{:,}'.format(ch.radio_rx_hz) }} Hz</div>
+                </td>
+                <td>
+                  <strong class="p25-ch-tx-mhz" style="color:var(--text-bright);">{{ '%.6f'|format(ch.radio_tx_mhz) }} MHz</strong>
+                  <div class="p25-ch-tx-hz" style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '{:,}'.format(ch.radio_tx_hz) }} Hz</div>
+                </td>
+                <td class="p25-ch-status">
+                  {% if not p25_prog.duplex %}
+                    <span>Simplex Direct Voice (No CC)</span>
+                  {% elif p25_prog.cc_dedicated %}
+                    <span style="color:#f59e0b;">Continuous 24/7 TSBK Control Broadcast</span>
+                  {% elif p25_prog.cc_enabled %}
+                    <span style="color:#10b981;">Periodic TSBK bursts ({{ p25_prog.cc_interval }}s) + Combined Voice</span>
+                  {% else %}
+                    <span>Conventional Repeater Voice (No CC)</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param('{{ '%.6f'|format(ch.radio_rx_mhz) }}', 'Radio RX Frequency')">📋 Copy RX</button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr class="p25-channel-row" data-chid="1" data-chno="1">
+                <td><strong class="p25-ch-name">Ch 1 (Primary CC / Traffic)</strong></td>
+                <td><code>Ch ID 1 &bull; Ch No 1 ($0001)</code></td>
+                <td>
+                  <strong class="p25-ch-rx-mhz" style="color:var(--text-bright);">{{ '%.6f'|format(active_tx_mhz or 462.618750) }} MHz</strong>
+                  <div class="p25-ch-rx-hz" style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '{:,}'.format(rf_verify.tx_freq_hz) if rf_verify else '462,618,750' }} Hz</div>
+                </td>
+                <td>
+                  <strong class="p25-ch-tx-mhz" style="color:var(--text-bright);">{{ '%.6f'|format(active_rx_mhz or 462.618750) }} MHz</strong>
+                  <div class="p25-ch-tx-hz" style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '{:,}'.format(rf_verify.rx_freq_hz) if rf_verify else '462,618,750' }} Hz</div>
+                </td>
+                <td class="p25-ch-status"><span>Primary RF Carrier</span></td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="copyP25Param('{{ '%.6f'|format(active_tx_mhz or 462.618750) }}', 'Radio RX Frequency')">📋 Copy RX</button>
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 3: Channel IDs & IDEN Bandplans -->
+    <div id="p25-guide-tab-channelids" class="p25-guide-tab-pane" style="display:none; padding:0 1rem 0.5rem 1rem;">
+      <div style="padding:0.65rem 0.85rem; margin-bottom:0.75rem; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.25); border-radius:var(--radius-sm); font-size:0.8rem; line-height:1.45;">
+        🔢 <strong>P25 Phase 1 IDEN Table (Frequency Bandplan):</strong> P25 trunked radios convert control channel TSBK channel grants into transmit/receive frequencies using the IDEN table. In DVMHost, this is computed deterministically in <code>iden_table.dat</code> (<code>Channel ID 1 &bull; Channel No 1</code>). Enter these exact IDEN parameters into your radio CPS <em>Trunking Bandplan / Frequency Table</em>.
+      </div>
+      <div class="table-responsive">
+        <table class="table" style="font-size:0.83rem; margin-bottom:0.5rem;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border-color);">
+              <th>Channel ID (IDEN #)</th>
+              <th>Base Frequency (Hz &amp; MHz)</th>
+              <th>Channel Spacing</th>
+              <th>Transmit Offset</th>
+              <th>Bandwidth</th>
+              <th>Calculated Radio Frequencies</th>
+            </tr>
+          </thead>
+          <tbody id="p25-tbl-iden-tbody">
+            {% if p25_prog and p25_prog.iden_tables %}
+              {% for iden in p25_prog.iden_tables %}
+              <tr class="p25-iden-row" data-chid="{{ iden.channel_id }}">
+                <td><strong class="badge badge-indigo">IDEN {{ iden.channel_id }}</strong></td>
+                <td>
+                  <strong class="p25-iden-basehz" style="color:var(--text-bright);">{{ '{:,}'.format(iden.base_freq_hz) }} Hz</strong>
+                  <div class="p25-iden-basemhz" style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '%.6f'|format(iden.base_freq_mhz) }} MHz</div>
+                </td>
+                <td class="p25-iden-spacing">{{ iden.spacing_khz }} kHz ({{ '{:,}'.format(iden.spacing_hz) }} Hz)</td>
+                <td class="p25-iden-offset">
+                  {% if iden.offset_mhz >= 0 %}+{% endif %}{{ '%.6f'|format(iden.offset_mhz) }} MHz
+                  <div style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '{:,}'.format(iden.offset_hz) }} Hz</div>
+                </td>
+                <td>{{ iden.bandwidth_khz }} kHz</td>
+                <td>
+                  <div>Ch 1 RX: <strong class="p25-sync-rxmhz">{{ '%.6f'|format(p25_prog.radio_rx_mhz) }} MHz</strong></div>
+                  <div>Ch 1 TX: <strong class="p25-sync-txmhz">{{ '%.6f'|format(p25_prog.radio_tx_mhz) }} MHz</strong></div>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr class="p25-iden-row" data-chid="1">
+                <td><strong class="badge badge-indigo">IDEN 1</strong></td>
+                <td>
+                  <strong class="p25-iden-basehz" style="color:var(--text-bright);">{{ '{:,}'.format(rf_verify.base_freq_hz) if rf_verify else '462,606,250' }} Hz</strong>
+                  <div class="p25-iden-basemhz" style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '%.6f'|format(rf_verify.base_freq_hz / 1000000.0) if rf_verify else '462.606250' }} MHz</div>
+                </td>
+                <td class="p25-iden-spacing">{{ rf_verify.spacing_khz if rf_verify else 12.5 }} kHz</td>
+                <td class="p25-iden-offset">{% if rf_verify and rf_verify.tx_offset_mhz >= 0 %}+{% endif %}{{ '%.6f'|format(rf_verify.tx_offset_mhz) if rf_verify else '0.000000' }} MHz</td>
+                <td>12.5 kHz</td>
+                <td>
+                  <div>Ch 1 RX: <strong class="p25-sync-rxmhz">{{ '%.6f'|format(active_tx_mhz or 462.618750) }} MHz</strong></div>
+                  <div>Ch 1 TX: <strong class="p25-sync-txmhz">{{ '%.6f'|format(active_rx_mhz or 462.618750) }} MHz</strong></div>
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 4: Radio CPS Cheat-Sheet -->
+    <div id="p25-guide-tab-cheat_sheet" class="p25-guide-tab-pane" style="display:none; padding:0 1rem 0.5rem 1rem;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(310px, 1fr)); gap:1rem;">
+        
+        <!-- Motorola APX & Astro 25 -->
+        <div style="padding:0.85rem 1rem; border-radius:var(--radius-sm); background:rgba(15, 23, 42, 0.6); border:1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <strong style="font-size:0.88rem; color:#a5b4fc;">📻 Motorola APX / Astro 25 CPS</strong>
+            <span class="badge badge-indigo">Motorola</span>
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.5;">
+            <div style="margin-bottom:0.3rem;"><strong>Trunking System &bull; General:</strong></div>
+            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
+              <li>System Type: <strong>ASTRO 25 / P25 Standard</strong></li>
+              <li>WACN: <code class="p25-sync-wacn">{{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</code> (Hex)</li>
+              <li>System ID: <code class="p25-sync-sysid">{{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</code> (Hex)</li>
+            </ul>
+            <div style="margin-bottom:0.3rem;"><strong>Trunking Site &bull; Frequencies:</strong></div>
+            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
+              <li>RFSS ID: <code class="p25-sync-rfss">{{ p25_prog.rfss_id if p25_prog else (sys.rfssId or 1) }}</code> &bull; Site ID: <code class="p25-sync-site">{{ p25_prog.site_id if p25_prog else (sys.siteId or 1) }}</code></li>
+              <li>Control Channel: <strong class="p25-sync-rxmhz" style="color:#6ee7b7;">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</strong></li>
+            </ul>
+            <div style="margin-bottom:0.3rem;"><strong>Trunking System &bull; Frequency Table (IDEN):</strong></div>
+            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
+              <li>Table ID: <strong>1</strong> (or 0 depending on CPS model)</li>
+              <li>Base Frequency: <strong class="p25-sync-basemhz">{{ '%.6f'|format(p25_prog.base_freq_mhz) if p25_prog else '462.606250' }} MHz</strong> (<span class="p25-sync-basehz">{{ '{:,}'.format(p25_prog.base_freq_hz) if p25_prog else '462,606,250' }}</span> Hz)</li>
+              <li>Channel Spacing: <strong class="p25-sync-spacing">{{ p25_prog.spacing_khz if p25_prog else 12.5 }} kHz</strong></li>
+              <li>TX Offset: <strong class="p25-sync-offset">{% if p25_prog and p25_prog.offset_mhz >= 0 %}+{% endif %}{{ '%.6f'|format(p25_prog.offset_mhz) if p25_prog else '0.000000' }} MHz</strong></li>
+            </ul>
+            <div style="margin-bottom:0.3rem;"><strong>Conventional Channel (Simplex Mode):</strong></div>
+            <ul style="margin:0 0 0 1.1rem; padding:0;">
+              <li>RX Freq: <span class="p25-sync-rxmhz">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</span> &bull; TX Freq: <span class="p25-sync-txmhz">{{ '%.6f'|format(p25_prog.radio_tx_mhz) if p25_prog else '462.618750' }} MHz</span></li>
+              <li>RX NAC: <code class="p25-sync-nac">${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</code> &bull; TX NAC: <code class="p25-sync-txnac">${{ p25_prog.tx_nac if p25_prog else (sys.txNAC or sys.nac or '293') }}</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Harris RPM & EFJohnson -->
+        <div style="padding:0.85rem 1rem; border-radius:var(--radius-sm); background:rgba(15, 23, 42, 0.6); border:1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <strong style="font-size:0.88rem; color:#6ee7b7;">📡 Harris RPM / EFJohnson Armada</strong>
+            <span class="badge badge-emerald">Harris / EFJ</span>
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.5;">
+            <div style="margin-bottom:0.3rem;"><strong>P25 Trunked System Setup:</strong></div>
+            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
+              <li>Network / WACN: <code class="p25-sync-wacn">{{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</code> (Dec: <span class="p25-sync-wacndec">{{ p25_prog.wacn_dec if p25_prog else 768000 }}</span>)</li>
+              <li>System ID: <code class="p25-sync-sysid">{{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</code> (Dec: <span class="p25-sync-sysiddec">{{ p25_prog.sys_id_dec if p25_prog else 1 }}</span>)</li>
+              <li>Site Number: <code class="p25-sync-site">{{ p25_prog.site_id if p25_prog else (sys.siteId or 1) }}</code> &bull; RFSS: <code class="p25-sync-rfss">{{ p25_prog.rfss_id if p25_prog else (sys.rfssId or 1) }}</code></li>
+              <li>Primary CC: <strong class="p25-sync-rxmhz" style="color:#6ee7b7;">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</strong></li>
+            </ul>
+            <div style="margin-bottom:0.3rem;"><strong>Channel Bandplan (IDEN):</strong></div>
+            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
+              <li>Bandplan ID: <strong>1</strong></li>
+              <li>Base Freq: <strong class="p25-sync-basemhz">{{ '%.6f'|format(p25_prog.base_freq_mhz) if p25_prog else '462.606250' }} MHz</strong></li>
+              <li>Channel Step: <strong class="p25-sync-spacing">{{ p25_prog.spacing_khz if p25_prog else 12.5 }} kHz</strong></li>
+              <li>TX Offset: <strong class="p25-sync-offset">{% if p25_prog and p25_prog.offset_mhz >= 0 %}+{% endif %}{{ '%.6f'|format(p25_prog.offset_mhz) if p25_prog else '0.000000' }} MHz</strong></li>
+            </ul>
+            <div style="margin-bottom:0.3rem;"><strong>Conventional P25 Channel:</strong></div>
+            <ul style="margin:0 0 0 1.1rem; padding:0;">
+              <li>Receive: <span class="p25-sync-rxmhz">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</span> &bull; Transmit: <span class="p25-sync-txmhz">{{ '%.6f'|format(p25_prog.radio_tx_mhz) if p25_prog else '462.618750' }} MHz</span></li>
+              <li>NAC Code: <code class="p25-sync-nac">${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Uniden Scanners & SDR Trunk Recorders -->
+        <div style="padding:0.85rem 1rem; border-radius:var(--radius-sm); background:rgba(15, 23, 42, 0.6); border:1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <strong style="font-size:0.88rem; color:#f59e0b;">📻 Uniden Scanners &amp; SDRTrunk / OP25</strong>
+            <span class="badge badge-warning">Scanner / SDR</span>
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.5;">
+            <div style="margin-bottom:0.3rem;"><strong>Uniden Sentinel / BCDx36HP / SDS100:</strong></div>
+            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
+              <li>System Type: <strong>P25 Standard</strong></li>
+              <li>Site Frequencies: Control Channel <strong class="p25-sync-rxmhz" style="color:#6ee7b7;">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</strong></li>
+              <li>Custom Band Plan: Base <span class="p25-sync-basemhz">{{ '%.6f'|format(p25_prog.base_freq_mhz) if p25_prog else '462.606250' }} MHz</span>, Step <span class="p25-sync-spacing">{{ p25_prog.spacing_khz if p25_prog else 12.5 }} kHz</span>, Offset <span class="p25-sync-offset">{% if p25_prog and p25_prog.offset_mhz >= 0 %}+{% endif %}{{ '%.6f'|format(p25_prog.offset_mhz) if p25_prog else '0.000000' }} MHz</span></li>
+            </ul>
+            <div style="margin-bottom:0.3rem;"><strong>SDRTrunk / OP25 / DSD+ FastLane:</strong></div>
+            <ul style="margin:0 0 0 1.1rem; padding:0;">
+              <li>Control Channel: <strong class="p25-sync-rxmhz">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</strong></li>
+              <li>System NAC: <code class="p25-sync-nac">${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</code></li>
+              <li>WACN / SysID: <code class="p25-sync-wacn">{{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</code> / <code class="p25-sync-sysid">{{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</code></li>
+            </ul>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -471,13 +803,13 @@
 
       <div class="form-group">
         <label class="form-label">TX NAC Override (Optional)</label>
-        <input type="text" name="tx_nac" class="form-control font-mono" value="{{ sys.txNAC or '' }}" placeholder="Leave blank to match RX">
+        <input type="text" name="tx_nac" id="p25-txnac-input" class="form-control font-mono" value="{{ sys.txNAC or '' }}" placeholder="Leave blank to match RX" oninput="updateP25CodeplugSummary()">
         <small class="form-hint">Leave blank to use primary NAC for transmit.</small>
       </div>
 
       <div class="form-group">
         <label class="form-label">WACN (Wide Area Net ID)</label>
-        <input type="text" name="wacn" class="form-control font-mono" value="{{ sys.netId or 'BB800' }}" required>
+        <input type="text" name="wacn" id="p25-wacn-input" class="form-control font-mono" value="{{ sys.netId or 'BB800' }}" oninput="updateP25CodeplugSummary()" required>
         <small class="form-hint">5-digit Hex P25 WACN (Default: <code>BB800</code>; DVMHost blocks <code>BEE00</code>&ndash;<code>BEEFF</code>).</small>
       </div>
     </div>
@@ -485,22 +817,22 @@
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">System ID (3-digit Hex)</label>
-        <input type="text" name="sys_id" class="form-control font-mono" value="{{ sys.sysId or '001' }}" required>
+        <input type="text" name="sys_id" id="p25-sysid-input" class="form-control font-mono" value="{{ sys.sysId or '001' }}" oninput="updateP25CodeplugSummary()" required>
       </div>
 
       <div class="form-group">
         <label class="form-label">RFSS ID (1 - 255)</label>
-        <input type="number" name="rfss_id" class="form-control" value="{{ sys.rfssId or 1 }}" required>
+        <input type="number" name="rfss_id" id="p25-rfss-input" class="form-control" value="{{ sys.rfssId or 1 }}" oninput="updateP25CodeplugSummary()" required>
       </div>
 
       <div class="form-group">
         <label class="form-label">Site ID (1 - 255)</label>
-        <input type="number" name="site_id" class="form-control" value="{{ sys.siteId or 1 }}" required>
+        <input type="number" name="site_id" id="p25-site-input" class="form-control" value="{{ sys.siteId or 1 }}" oninput="updateP25CodeplugSummary()" required>
       </div>
 
       <div class="form-group">
         <label class="form-label">Authoritative Site</label>
-        <select name="authoritative" class="form-control">
+        <select name="authoritative" id="p25-authoritative-select" class="form-control" onchange="updateP25CodeplugSummary()">
           <option value="true" {% if sys.authoritative is not defined or sys.authoritative %}selected{% endif %}>True (Authoritative Master)</option>
           <option value="false" {% if sys.authoritative is defined and not sys.authoritative %}selected{% endif %}>False (Subordinate)</option>
         </select>
@@ -888,6 +1220,204 @@ function updateP25CodeplugSummary() {
     `📻 <strong>${modeTag} &bull; NAC $${nacVal}:</strong> ` +
     `Hat RX (Radio TX) = <strong>${rxHz.toLocaleString()} Hz</strong> (${rxMhz.toFixed(6)} MHz)${rxToneStr} &bull; ` +
     `Hat TX (Radio RX) = <strong>${txHz.toLocaleString()} Hz</strong> (${txMhz.toFixed(6)} MHz)${txToneStr}`;
+
+  updateP25ProgrammingGuide(rxMhz, txMhz, spacingKhz, isDuplex, ccMode, nacVal);
+}
+
+function switchP25GuideTab(tabKey) {
+  document.querySelectorAll('.p25-guide-tab-pane').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.p25-guide-tab-btn').forEach(btn => {
+    if (btn.getAttribute('data-guide-tab') === tabKey) {
+      btn.className = 'btn btn-sm btn-primary p25-guide-tab-btn';
+    } else {
+      btn.className = 'btn btn-sm btn-secondary p25-guide-tab-btn';
+    }
+  });
+  const target = document.getElementById(`p25-guide-tab-${tabKey}`);
+  if (target) target.style.display = 'block';
+}
+
+function copyP25Param(text, label) {
+  if (!text) return;
+  const str = String(text);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(str).then(() => {
+      showToast(`${label || 'Value'} copied: ${str}`);
+    }).catch(() => fallbackCopy(str, label));
+  } else {
+    fallbackCopy(str, label);
+  }
+}
+
+function fallbackCopy(text, label) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast(`${label || 'Value'} copied: ${text}`);
+  } catch (e) {}
+  document.body.removeChild(ta);
+}
+
+function showToast(msg) {
+  const toastContainer = document.getElementById('toast-container');
+  if (!toastContainer) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-success';
+  toast.style.cssText = 'padding:0.6rem 0.95rem; margin-top:0.4rem; background:rgba(16, 185, 129, 0.95); color:#fff; border-radius:4px; font-size:0.82rem; box-shadow:0 4px 6px rgba(0,0,0,0.3);';
+  toast.textContent = msg;
+  toastContainer.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+function updateP25ProgrammingGuide(rxMhz, txMhz, spacingKhz, isDuplex, ccMode, nacVal) {
+  const wacnInput = document.getElementById('p25-wacn-input');
+  const sysidInput = document.getElementById('p25-sysid-input');
+  const rfssInput = document.getElementById('p25-rfss-input');
+  const siteInput = document.getElementById('p25-site-input');
+  const txnacInput = document.getElementById('p25-txnac-input');
+  const callsignInput = document.getElementById('p25-callsign-input');
+  const authSelect = document.getElementById('p25-authoritative-select');
+
+  const wacn = (wacnInput?.value || 'BB800').replace(/^0x/i, '').replace(/^\$/, '').toUpperCase();
+  const sysid = (sysidInput?.value || '001').replace(/^0x/i, '').replace(/^\$/, '').toUpperCase();
+  const rfss = parseInt(rfssInput?.value || '1', 10) || 1;
+  const site = parseInt(siteInput?.value || '1', 10) || 1;
+  const txnac = (txnacInput?.value || '').replace(/^0x/i, '').replace(/^\$/, '').toUpperCase() || nacVal;
+  const callsign = callsignInput?.value || 'NEXUS';
+  const isAuth = authSelect ? (authSelect.value !== 'false') : true;
+
+  const wacnDec = parseInt(wacn, 16) || 768000;
+  const sysDec = parseInt(sysid, 16) || 1;
+  const nacDec = parseInt(nacVal, 16) || 659;
+  const txNacDec = parseInt(txnac, 16) || nacDec;
+
+  const rxHz = Math.round(rxMhz * 1000000);
+  const txHz = Math.round(txMhz * 1000000);
+  const spacingHz = Math.round(spacingKhz * 1000);
+  const baseHz = txHz - spacingHz;
+  const baseMhz = (baseHz / 1000000).toFixed(6);
+  const offsetHz = rxHz - txHz;
+  const offsetMhz = isDuplex ? ((offsetHz) / 1000000).toFixed(6) : '0.000000';
+  const offsetSign = parseFloat(offsetMhz) >= 0 ? '+' : '';
+
+  // Radio RX = Hat TX; Radio TX = Hat RX
+  const radioRxMhz = txMhz.toFixed(6);
+  const radioRxHz = txHz;
+  const radioTxMhz = rxMhz.toFixed(6);
+  const radioTxHz = rxHz;
+
+  // 1. Update Quick Badges
+  const badgeWacn = document.getElementById('p25-badge-wacn');
+  const badgeSysid = document.getElementById('p25-badge-sysid');
+  const badgeSite = document.getElementById('p25-badge-site');
+  const badgeNac = document.getElementById('p25-badge-nac');
+  const badgeCcFreq = document.getElementById('p25-badge-cc-freq');
+  if (badgeWacn) badgeWacn.textContent = `WACN: $${wacn}`;
+  if (badgeSysid) badgeSysid.textContent = `Sys ID: $${sysid}`;
+  if (badgeSite) badgeSite.textContent = `Site: ${rfss}.${site}`;
+  if (badgeNac) badgeNac.textContent = `NAC: $${nacVal}`;
+  if (badgeCcFreq) badgeCcFreq.textContent = `CC RX: ${radioRxMhz} MHz`;
+
+  // 2. Update Tab 1 (Sites Table)
+  const tblWacnHex = document.getElementById('p25-tbl-wacn-hex');
+  const tblWacnDec = document.getElementById('p25-tbl-wacn-dec');
+  const tblSysidHex = document.getElementById('p25-tbl-sysid-hex');
+  const tblSysidDec = document.getElementById('p25-tbl-sysid-dec');
+  const tblRfssHex = document.getElementById('p25-tbl-rfss-hex');
+  const tblRfssDec = document.getElementById('p25-tbl-rfss-dec');
+  const tblSiteHex = document.getElementById('p25-tbl-site-hex');
+  const tblSiteDec = document.getElementById('p25-tbl-site-dec');
+  const tblNacHex = document.getElementById('p25-tbl-nac-hex');
+  const tblNacDec = document.getElementById('p25-tbl-nac-dec');
+  const tblTxnacHex = document.getElementById('p25-tbl-txnac-hex');
+  const tblTxnacDec = document.getElementById('p25-tbl-txnac-dec');
+  const tblCallsign = document.getElementById('p25-tbl-callsign');
+  const tblAuth = document.getElementById('p25-tbl-auth');
+
+  if (tblWacnHex) tblWacnHex.textContent = `$${wacn}`;
+  if (tblWacnDec) tblWacnDec.textContent = wacnDec.toString();
+  if (tblSysidHex) tblSysidHex.textContent = `$${sysid}`;
+  if (tblSysidDec) tblSysidDec.textContent = sysDec.toString();
+  if (tblRfssHex) tblRfssHex.textContent = `0x${rfss.toString(16).toUpperCase().padStart(2, '0')}`;
+  if (tblRfssDec) tblRfssDec.textContent = rfss.toString();
+  if (tblSiteHex) tblSiteHex.textContent = `0x${site.toString(16).toUpperCase().padStart(2, '0')}`;
+  if (tblSiteDec) tblSiteDec.textContent = site.toString();
+  if (tblNacHex) tblNacHex.textContent = `$${nacVal}`;
+  if (tblNacDec) tblNacDec.textContent = nacDec.toString();
+  if (tblTxnacHex) tblTxnacHex.textContent = `$${txnac}`;
+  if (tblTxnacDec) tblTxnacDec.textContent = txNacDec.toString();
+  if (tblCallsign) tblCallsign.textContent = callsign;
+  if (tblAuth) tblAuth.textContent = isAuth ? 'Authoritative Master (FNE Master Site)' : 'Subordinate (Linked Site)';
+
+  // 3. Update Tab 2 (Control Channels Table - Primary Row)
+  const primaryChRow = document.querySelector('.p25-channel-row[data-chno="1"]');
+  if (primaryChRow) {
+    const rxMhzEl = primaryChRow.querySelector('.p25-ch-rx-mhz');
+    const rxHzEl = primaryChRow.querySelector('.p25-ch-rx-hz');
+    const txMhzEl = primaryChRow.querySelector('.p25-ch-tx-mhz');
+    const txHzEl = primaryChRow.querySelector('.p25-ch-tx-hz');
+    const statusEl = primaryChRow.querySelector('.p25-ch-status');
+    const badgeEl = primaryChRow.querySelector('.p25-ch-badge');
+
+    if (rxMhzEl) rxMhzEl.textContent = `${radioRxMhz} MHz`;
+    if (rxHzEl) rxHzEl.textContent = `${radioRxHz.toLocaleString()} Hz`;
+    if (txMhzEl) txMhzEl.textContent = `${radioTxMhz} MHz`;
+    if (txHzEl) txHzEl.textContent = `${radioTxHz.toLocaleString()} Hz`;
+
+    if (statusEl) {
+      if (!isDuplex) {
+        statusEl.innerHTML = '<span>Simplex Direct Voice (No CC)</span>';
+      } else if (ccMode === 'dedicated') {
+        statusEl.innerHTML = '<span style="color:#f59e0b;">Continuous 24/7 TSBK Control Broadcast</span>';
+      } else if (ccMode === 'non_dedicated') {
+        statusEl.innerHTML = '<span style="color:#10b981;">Periodic TSBK bursts + Combined Voice</span>';
+      } else {
+        statusEl.innerHTML = '<span>Conventional Repeater Voice (No CC)</span>';
+      }
+    }
+    if (badgeEl) {
+      if (isDuplex && ccMode !== 'disabled') {
+        badgeEl.className = 'badge badge-indigo p25-ch-badge';
+        badgeEl.textContent = 'Control Channel';
+      } else {
+        badgeEl.className = 'badge badge-muted p25-ch-badge';
+        badgeEl.textContent = 'Voice Traffic';
+      }
+    }
+  }
+
+  // 4. Update Tab 3 (IDEN Bandplan Table - Row 1)
+  const idenRow = document.querySelector('.p25-iden-row[data-chid="1"]');
+  if (idenRow) {
+    const baseHzEl = idenRow.querySelector('.p25-iden-basehz');
+    const baseMhzEl = idenRow.querySelector('.p25-iden-basemhz');
+    const spacingEl = idenRow.querySelector('.p25-iden-spacing');
+    const offsetEl = idenRow.querySelector('.p25-iden-offset');
+
+    if (baseHzEl) baseHzEl.textContent = `${baseHz.toLocaleString()} Hz`;
+    if (baseMhzEl) baseMhzEl.textContent = `${baseMhz} MHz`;
+    if (spacingEl) spacingEl.textContent = `${spacingKhz} kHz (${spacingHz.toLocaleString()} Hz)`;
+    if (offsetEl) offsetEl.innerHTML = `${offsetSign}${offsetMhz} MHz<div style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">${offsetHz.toLocaleString()} Hz</div>`;
+  }
+
+  // 5. Update Tab 4 (Cheat-Sheet Classes)
+  document.querySelectorAll('.p25-sync-wacn').forEach(el => el.textContent = wacn);
+  document.querySelectorAll('.p25-sync-wacndec').forEach(el => el.textContent = wacnDec.toString());
+  document.querySelectorAll('.p25-sync-sysid').forEach(el => el.textContent = sysid);
+  document.querySelectorAll('.p25-sync-sysiddec').forEach(el => el.textContent = sysDec.toString());
+  document.querySelectorAll('.p25-sync-rfss').forEach(el => el.textContent = rfss.toString());
+  document.querySelectorAll('.p25-sync-site').forEach(el => el.textContent = site.toString());
+  document.querySelectorAll('.p25-sync-nac').forEach(el => el.textContent = `$${nacVal}`);
+  document.querySelectorAll('.p25-sync-txnac').forEach(el => el.textContent = `$${txnac}`);
+  document.querySelectorAll('.p25-sync-rxmhz').forEach(el => el.textContent = `${radioRxMhz} MHz`);
+  document.querySelectorAll('.p25-sync-txmhz').forEach(el => el.textContent = `${radioTxMhz} MHz`);
+  document.querySelectorAll('.p25-sync-basemhz').forEach(el => el.textContent = `${baseMhz} MHz`);
+  document.querySelectorAll('.p25-sync-basehz').forEach(el => el.textContent = baseHz.toLocaleString());
+  document.querySelectorAll('.p25-sync-spacing').forEach(el => el.textContent = `${spacingKhz} kHz`);
+  document.querySelectorAll('.p25-sync-offset').forEach(el => el.textContent = `${offsetSign}${offsetMhz} MHz`);
 }
 
 function onP25FreqInput(sourceField) {

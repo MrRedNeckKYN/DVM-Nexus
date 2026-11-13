@@ -11,7 +11,8 @@ from typing import List, Dict, Any, Optional
 
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.dvm_yaml import (
-    dvm_config_manager, is_banned_p25_wacn, sanitize_p25_wacn, normalize_p25_nac, normalize_p25_sys_id
+    dvm_config_manager, is_banned_p25_wacn, sanitize_p25_wacn, normalize_p25_nac, normalize_p25_sys_id,
+    parse_channel_no, format_channel_no,
 )
 from dvm_nexus.config_engine.network_validator import (
     validate_p25_settings, validate_frequencies, validate_int_range, validate_port,
@@ -29,6 +30,204 @@ from dvm_nexus.core.diagnostics import diagnostics_engine
 from dvm_nexus.core.database import log_audit
 
 router = APIRouter()
+
+
+def build_p25_programming_summary(
+    conf: Dict[str, Any],
+    rf_verify: Dict[str, Any],
+    iden_entries: List[IdenEntry],
+) -> Dict[str, Any]:
+    """
+    Construct a structured summary of P25 Sites, Control Channels, Channel IDs,
+    and Radio CPS codeplug values so users can easily program handheld/mobile radios.
+    """
+    sys_conf = conf.get("system", {}).get("config", {}) if isinstance(conf.get("system"), dict) else {}
+    p25_conf = conf.get("protocols", {}).get("p25", {}) if isinstance(conf.get("protocols"), dict) else {}
+    identity = conf.get("system", {}).get("identity", "NEXUS") if isinstance(conf.get("system"), dict) else "NEXUS"
+    duplex = bool(conf.get("system", {}).get("duplex", False)) if isinstance(conf.get("system"), dict) else False
+
+    cc_conf = p25_conf.get("control", {}) if isinstance(p25_conf, dict) else {}
+    cc_enabled = bool(cc_conf.get("enable", False))
+    cc_dedicated = bool(cc_conf.get("dedicated", False))
+
+    if not duplex:
+        cc_mode = "simplex"
+        cc_mode_label = "1-Antenna Simplex (Conventional Direct Voice)"
+    elif cc_dedicated:
+        cc_mode = "dedicated"
+        cc_mode_label = "Dedicated 24/7 Trunking Control Channel"
+    elif cc_enabled:
+        cc_mode = "non_dedicated"
+        cc_mode_label = "Non-Dedicated CC + Voice (Combined TSBK)"
+    else:
+        cc_mode = "duplex_conv"
+        cc_mode_label = "Full Duplex Conventional Repeater"
+
+    raw_wacn = sanitize_p25_wacn(sys_conf.get("netId", "BB800"))
+    try:
+        wacn_dec = int(raw_wacn, 16)
+    except ValueError:
+        wacn_dec = int("BB800", 16)
+
+    raw_sys = normalize_p25_sys_id(sys_conf.get("sysId", "001"))
+    try:
+        sys_dec = int(raw_sys, 16)
+    except ValueError:
+        sys_dec = 1
+
+    raw_nac = normalize_p25_nac(sys_conf.get("nac", "293"))
+    try:
+        nac_dec = int(raw_nac, 16)
+    except ValueError:
+        nac_dec = int("293", 16)
+
+    raw_tx_nac = normalize_p25_nac(sys_conf.get("txNAC")) if sys_conf.get("txNAC") else raw_nac
+    try:
+        tx_nac_dec = int(raw_tx_nac, 16)
+    except ValueError:
+        tx_nac_dec = nac_dec
+
+    rfss_id = int(sys_conf.get("rfssId", 1))
+    site_id = int(sys_conf.get("siteId", 1))
+    authoritative = bool(sys_conf.get("authoritative", True))
+
+    tx_freq_mhz = rf_verify.get("tx_freq_mhz", 462.618750)
+    rx_freq_mhz = rf_verify.get("rx_freq_mhz", 462.618750 if not duplex else 467.618750)
+    tx_freq_hz = rf_verify.get("tx_freq_hz", int(round(tx_freq_mhz * 1_000_000)))
+    rx_freq_hz = rf_verify.get("rx_freq_hz", int(round(rx_freq_mhz * 1_000_000)))
+
+    ch_id = rf_verify.get("channel_id", 1)
+    ch_no = rf_verify.get("channel_no", 1)
+    ch_no_hex = rf_verify.get("channel_no_hex", "$0001")
+    base_freq_hz = rf_verify.get("base_freq_hz", tx_freq_hz - 12500)
+    spacing_khz = rf_verify.get("spacing_khz", 12.5)
+    spacing_hz = rf_verify.get("spacing_hz", 12500)
+    tx_offset_mhz = rf_verify.get("tx_offset_mhz", 0.0 if not duplex else 5.0)
+    bandwidth_khz = rf_verify.get("bandwidth_khz", 12.5)
+
+    # Primary RF channel (MMDVM Hat TX -> Radio RX; MMDVM Hat RX <- Radio TX)
+    primary_role = "Primary Control Channel (TSBK)" if (duplex and cc_enabled) else ("Simplex Voice" if not duplex else "Repeater Voice")
+    channels_list = [{
+        "name": "Ch 1 (Primary CC / Traffic)",
+        "role": primary_role,
+        "is_control": bool(duplex and cc_enabled),
+        "channel_id": ch_id,
+        "channel_no": ch_no,
+        "channel_no_hex": ch_no_hex,
+        "radio_rx_mhz": tx_freq_mhz,
+        "radio_rx_hz": tx_freq_hz,
+        "radio_tx_mhz": rx_freq_mhz,
+        "radio_tx_hz": rx_freq_hz,
+        "offset_mhz": tx_offset_mhz,
+        "note": "MMDVM Hat TX -> Radio RX | MMDVM Hat RX <- Radio TX",
+    }]
+
+    # Additional Voice Channels if defined in voiceChNo
+    iden_map = {e.channel_id: e for e in iden_entries}
+    raw_vcs = sys_conf.get("voiceChNo", [])
+    if isinstance(raw_vcs, list):
+        for idx, vc in enumerate(raw_vcs, start=1):
+            if not isinstance(vc, dict):
+                continue
+            vc_ch_id = int(vc.get("channelId", ch_id))
+            vc_ch_no = parse_channel_no(vc.get("channelNo", 2))
+            entry = iden_map.get(vc_ch_id)
+            if entry:
+                vc_tx_hz, vc_rx_hz = calculate_frequency_from_channel(
+                    channel_no=vc_ch_no,
+                    base_freq_hz=entry.base_freq_hz,
+                    spacing_khz=entry.spacing_khz,
+                    offset_mhz=entry.offset_mhz,
+                    duplex=duplex,
+                    simplex_same_freq=not duplex,
+                )
+                vc_radio_rx_mhz = round(vc_tx_hz / 1_000_000.0, 6)
+                vc_radio_tx_mhz = round(vc_rx_hz / 1_000_000.0, 6)
+            else:
+                vc_tx_hz = tx_freq_hz
+                vc_rx_hz = rx_freq_hz
+                vc_radio_rx_mhz = tx_freq_mhz
+                vc_radio_tx_mhz = rx_freq_mhz
+            channels_list.append({
+                "name": f"Voice Channel {idx}",
+                "role": "Voice Channel (Payload)",
+                "is_control": False,
+                "channel_id": vc_ch_id,
+                "channel_no": vc_ch_no,
+                "channel_no_hex": format_channel_no(vc_ch_no),
+                "radio_rx_mhz": vc_radio_rx_mhz,
+                "radio_rx_hz": vc_tx_hz,
+                "radio_tx_mhz": vc_radio_tx_mhz,
+                "radio_tx_hz": vc_rx_hz,
+                "offset_mhz": round((vc_rx_hz - vc_tx_hz) / 1_000_000.0, 6),
+                "note": "Secondary voice channel grant target",
+            })
+
+    # IDEN Frequency Bandplan entries
+    iden_list = []
+    for e in iden_entries:
+        iden_list.append({
+            "channel_id": e.channel_id,
+            "base_freq_hz": e.base_freq_hz,
+            "base_freq_mhz": round(e.base_freq_hz / 1_000_000.0, 6),
+            "spacing_khz": e.spacing_khz,
+            "spacing_hz": int(round(e.spacing_khz * 1000.0)),
+            "offset_mhz": e.offset_mhz,
+            "offset_hz": int(round(e.offset_mhz * 1_000_000.0)),
+            "bandwidth_khz": e.bandwidth_khz,
+        })
+    if not iden_list:
+        iden_list.append({
+            "channel_id": ch_id,
+            "base_freq_hz": base_freq_hz,
+            "base_freq_mhz": round(base_freq_hz / 1_000_000.0, 6),
+            "spacing_khz": spacing_khz,
+            "spacing_hz": spacing_hz,
+            "offset_mhz": tx_offset_mhz,
+            "offset_hz": int(round(tx_offset_mhz * 1_000_000.0)),
+            "bandwidth_khz": bandwidth_khz,
+        })
+
+    return {
+        "callsign": identity,
+        "site_name": f"Site {site_id} (RFSS {rfss_id})",
+        "wacn": raw_wacn,
+        "wacn_hex": f"${raw_wacn}",
+        "wacn_dec": wacn_dec,
+        "sys_id": raw_sys,
+        "sys_id_hex": f"${raw_sys}",
+        "sys_id_dec": sys_dec,
+        "rfss_id": rfss_id,
+        "site_id": site_id,
+        "nac": raw_nac,
+        "nac_hex": f"${raw_nac}",
+        "nac_dec": nac_dec,
+        "tx_nac": raw_tx_nac,
+        "tx_nac_hex": f"${raw_tx_nac}",
+        "tx_nac_dec": tx_nac_dec,
+        "authoritative": authoritative,
+        "duplex": duplex,
+        "cc_mode": cc_mode,
+        "cc_mode_label": cc_mode_label,
+        "cc_enabled": cc_enabled,
+        "cc_dedicated": cc_dedicated,
+        "cc_interval": int(cc_conf.get("interval", 300)),
+        "cc_duration": int(cc_conf.get("duration", 1)),
+        "radio_rx_mhz": tx_freq_mhz,
+        "radio_rx_hz": tx_freq_hz,
+        "radio_tx_mhz": rx_freq_mhz,
+        "radio_tx_hz": rx_freq_hz,
+        "channel_id": ch_id,
+        "channel_no": ch_no,
+        "channel_no_hex": ch_no_hex,
+        "base_freq_hz": base_freq_hz,
+        "base_freq_mhz": round(base_freq_hz / 1_000_000.0, 6),
+        "spacing_khz": spacing_khz,
+        "offset_mhz": tx_offset_mhz,
+        "bandwidth_khz": bandwidth_khz,
+        "channels": channels_list,
+        "iden_tables": iden_list,
+    }
 
 
 @router.get("/p25", response_class=HTMLResponse)
@@ -59,6 +258,7 @@ async def p25_page(request: Request):
     modem_diag = diagnostics_engine.get_modem_firmware_summary(conf)
     talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
+    p25_prog = build_p25_programming_summary(conf, rf_verify, iden_entries)
 
     return render_template(
         request,
@@ -84,6 +284,7 @@ async def p25_page(request: Request):
             "duplex_rx_freq_mhz": iden_rx_freq_mhz,
             "spacing_khz": rf_verify.get("spacing_khz", 12.5),
             "rf_verify": rf_verify,
+            "p25_prog": p25_prog,
             "modem_diag": modem_diag,
             "talkgroups": talkgroups,
             "rids": rids,

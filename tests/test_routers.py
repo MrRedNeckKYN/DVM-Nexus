@@ -40,6 +40,76 @@ def test_p25_route(client):
     assert resp.status_code == 200
     assert "P25 Network Identity" in resp.text or "P25 Phase 1 Parameters" in resp.text
     assert "IDEN Frequency Bandplan Table" in resp.text
+    assert "Radio CPS Programming Guide" in resp.text
+    assert "Sites &amp; Identity" in resp.text or "Sites & Identity" in resp.text
+    assert "Control Channels" in resp.text
+    assert "Channel IDs &amp; IDEN Table" in resp.text or "Channel IDs & IDEN Table" in resp.text
+    assert "Motorola APX / Astro 25 CPS" in resp.text
+
+
+def test_p25_programming_guide_summary_helper():
+    """Verify build_p25_programming_summary generates accurate hex/dec and frequency values for CPS."""
+    from dvm_nexus.routers.p25 import build_p25_programming_summary
+    from dvm_nexus.config_engine.iden_calculator import IdenEntry
+
+    fake_conf = {
+        "system": {
+            "identity": "TEST_SYS",
+            "duplex": True,
+            "config": {
+                "netId": "BB800",
+                "sysId": "001",
+                "rfssId": 1,
+                "siteId": 2,
+                "nac": "293",
+                "authoritative": True,
+            },
+        },
+        "protocols": {
+            "p25": {
+                "control": {
+                    "enable": True,
+                    "dedicated": False,
+                    "interval": 300,
+                    "duration": 1,
+                }
+            }
+        }
+    }
+    fake_rf = {
+        "tx_freq_mhz": 444.0,
+        "rx_freq_mhz": 449.0,
+        "tx_freq_hz": 444000000,
+        "rx_freq_hz": 449000000,
+        "channel_id": 1,
+        "channel_no": 1,
+        "channel_no_hex": "1",
+        "base_freq_hz": 443987500,
+        "spacing_khz": 12.5,
+        "spacing_hz": 12500,
+        "tx_offset_mhz": 5.0,
+        "bandwidth_khz": 12.5,
+    }
+    iden_entries = [
+        IdenEntry(channel_id=1, base_freq_hz=443987500, spacing_khz=12.5, offset_mhz=5.0, bandwidth_khz=12.5)
+    ]
+
+    summary = build_p25_programming_summary(fake_conf, fake_rf, iden_entries)
+    assert summary["wacn"] == "BB800"
+    assert summary["wacn_dec"] == 768000
+    assert summary["sys_id"] == "001"
+    assert summary["sys_id_dec"] == 1
+    assert summary["rfss_id"] == 1
+    assert summary["site_id"] == 2
+    assert summary["nac"] == "293"
+    assert summary["nac_dec"] == 659
+    assert summary["cc_mode"] == "non_dedicated"
+    assert summary["radio_rx_mhz"] == 444.0
+    assert summary["radio_tx_mhz"] == 449.0
+    assert len(summary["channels"]) == 1
+    assert summary["channels"][0]["is_control"] is True
+    assert len(summary["iden_tables"]) == 1
+    assert summary["iden_tables"][0]["channel_id"] == 1
 
 
 def test_profiles_route(client):
