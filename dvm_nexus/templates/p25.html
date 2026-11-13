@@ -484,7 +484,8 @@
     <!-- Tab 3: Channel IDs & IDEN Bandplans -->
     <div id="p25-guide-tab-channelids" class="p25-guide-tab-pane" style="display:none; padding:0 1rem 0.5rem 1rem;">
       <div style="padding:0.65rem 0.85rem; margin-bottom:0.75rem; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.25); border-radius:var(--radius-sm); font-size:0.8rem; line-height:1.45;">
-        🔢 <strong>P25 Phase 1 IDEN Table (Frequency Bandplan):</strong> P25 trunked radios convert control channel TSBK channel grants into transmit/receive frequencies using the IDEN table. In DVMHost, this is computed deterministically in <code>iden_table.dat</code> (<code>Channel ID 1 &bull; Channel No 1</code>). Enter these exact IDEN parameters into your radio CPS <em>Trunking Bandplan / Frequency Table</em>.
+        🔢 <strong>P25 Phase 1 IDEN Table (Frequency Bandplan):</strong> P25 trunked radios convert control channel TSBK channel grants into transmit/receive frequencies using the IDEN table. In DVMHost, your active carrier uses <code>Channel ID 1</code>.
+        <div style="margin-top:0.35rem; color:#6ee7b7; font-weight:600;">👉 For Tait TP9900: In Tait CPS &rarr; <em>Channel ID List Members</em>, you only enter <code>CID 1</code> matching the highlighted <strong>Active IDEN 1</strong> row below. You do not need to enter the other unused preset rows!</div>
       </div>
       <div class="table-responsive">
         <table class="table" style="font-size:0.83rem; margin-bottom:0.5rem;">
@@ -501,8 +502,14 @@
           <tbody id="p25-tbl-iden-tbody">
             {% if p25_prog and p25_prog.iden_tables %}
               {% for iden in p25_prog.iden_tables %}
-              <tr class="p25-iden-row" data-chid="{{ iden.channel_id }}">
-                <td><strong class="badge badge-indigo">IDEN {{ iden.channel_id }}</strong></td>
+              <tr class="p25-iden-row" data-chid="{{ iden.channel_id }}" style="{% if iden.is_active %}background:rgba(16, 185, 129, 0.12); border-left:3px solid #10b981;{% else %}opacity:0.75;{% endif %}">
+                <td>
+                  {% if iden.is_active %}
+                    <strong class="badge badge-success" title="Currently tuned and active in DVMHost config.yml">IDEN {{ iden.channel_id }} (Active &bull; Tait CID 1)</strong>
+                  {% else %}
+                    <strong class="badge badge-muted" title="Inactive preset row in iden_table.dat">IDEN {{ iden.channel_id }} (Preset)</strong>
+                  {% endif %}
+                </td>
                 <td>
                   <strong class="p25-iden-basehz" style="color:var(--text-bright);">{{ '{:,}'.format(iden.base_freq_hz) }} Hz</strong>
                   <div class="p25-iden-basemhz" style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '%.6f'|format(iden.base_freq_mhz) }} MHz</div>
@@ -514,14 +521,19 @@
                 </td>
                 <td>{{ iden.bandwidth_khz }} kHz</td>
                 <td>
-                  <div>Ch 1 RX: <strong class="p25-sync-rxmhz">{{ '%.6f'|format(p25_prog.radio_rx_mhz) }} MHz</strong></div>
-                  <div>Ch 1 TX: <strong class="p25-sync-txmhz">{{ '%.6f'|format(p25_prog.radio_tx_mhz) }} MHz</strong></div>
+                  {% if iden.is_active %}
+                    <div>Ch 1 RX: <strong class="p25-sync-rxmhz" style="color:#6ee7b7;">{{ '%.6f'|format(iden.ch1_rx_mhz) }} MHz</strong></div>
+                    <div>Ch 1 TX: <strong class="p25-sync-txmhz" style="color:#fde047;">{{ '%.6f'|format(iden.ch1_tx_mhz) }} MHz</strong></div>
+                  {% else %}
+                    <div>Ch 1 RX: <strong>{{ '%.6f'|format(iden.ch1_rx_mhz) }} MHz</strong></div>
+                    <div>Ch 1 TX: <strong>{{ '%.6f'|format(iden.ch1_tx_mhz) }} MHz</strong></div>
+                  {% endif %}
                 </td>
               </tr>
               {% endfor %}
             {% else %}
-              <tr class="p25-iden-row" data-chid="1">
-                <td><strong class="badge badge-indigo">IDEN 1</strong></td>
+              <tr class="p25-iden-row" data-chid="1" style="background:rgba(16, 185, 129, 0.12); border-left:3px solid #10b981;">
+                <td><strong class="badge badge-success">IDEN 1 (Active &bull; Tait CID 1)</strong></td>
                 <td>
                   <strong class="p25-iden-basehz" style="color:var(--text-bright);">{{ '{:,}'.format(rf_verify.base_freq_hz) if rf_verify else '462,606,250' }} Hz</strong>
                   <div class="p25-iden-basemhz" style="font-size:0.75rem; color:var(--text-dim); font-family:var(--font-mono);">{{ '%.6f'|format(rf_verify.base_freq_hz / 1000000.0) if rf_verify else '462.606250' }} MHz</div>
@@ -530,8 +542,8 @@
                 <td class="p25-iden-offset">{% if rf_verify and rf_verify.tx_offset_mhz >= 0 %}+{% endif %}{{ '%.6f'|format(rf_verify.tx_offset_mhz) if rf_verify else '0.000000' }} MHz</td>
                 <td>12.5 kHz</td>
                 <td>
-                  <div>Ch 1 RX: <strong class="p25-sync-rxmhz">{{ '%.6f'|format(active_tx_mhz or 462.618750) }} MHz</strong></div>
-                  <div>Ch 1 TX: <strong class="p25-sync-txmhz">{{ '%.6f'|format(active_rx_mhz or 462.618750) }} MHz</strong></div>
+                  <div>Ch 1 RX: <strong class="p25-sync-rxmhz" style="color:#6ee7b7;">{{ '%.6f'|format(active_tx_mhz or 462.618750) }} MHz</strong></div>
+                  <div>Ch 1 TX: <strong class="p25-sync-txmhz" style="color:#fde047;">{{ '%.6f'|format(active_rx_mhz or 462.618750) }} MHz</strong></div>
                 </td>
               </tr>
             {% endif %}

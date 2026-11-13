@@ -187,15 +187,25 @@ def build_p25_programming_summary(
     # IDEN Frequency Bandplan entries
     iden_list = []
     for e in iden_entries:
+        is_active = (e.channel_id == ch_id)
+        calc_space = max(1, int(round(float(e.spacing_khz) / 0.125)))
+        e_spacing_hz = calc_space * 125
+        e_rx_hz = e.base_freq_hz + e_spacing_hz
+        e_tx_hz = e_rx_hz + int(round(float(e.offset_mhz) * 1_000_000.0))
         iden_list.append({
             "channel_id": e.channel_id,
             "base_freq_hz": e.base_freq_hz,
             "base_freq_mhz": round(e.base_freq_hz / 1_000_000.0, 6),
             "spacing_khz": e.spacing_khz,
-            "spacing_hz": int(round(e.spacing_khz * 1000.0)),
+            "spacing_hz": e_spacing_hz,
             "offset_mhz": e.offset_mhz,
             "offset_hz": int(round(e.offset_mhz * 1_000_000.0)),
             "bandwidth_khz": e.bandwidth_khz,
+            "ch1_rx_hz": e_rx_hz,
+            "ch1_rx_mhz": round(e_rx_hz / 1_000_000.0, 6),
+            "ch1_tx_hz": e_tx_hz,
+            "ch1_tx_mhz": round(e_tx_hz / 1_000_000.0, 6),
+            "is_active": is_active,
         })
     if not iden_list:
         iden_list.append({
@@ -207,6 +217,11 @@ def build_p25_programming_summary(
             "offset_mhz": tx_offset_mhz,
             "offset_hz": int(round(tx_offset_mhz * 1_000_000.0)),
             "bandwidth_khz": bandwidth_khz,
+            "ch1_rx_hz": tx_freq_hz,
+            "ch1_rx_mhz": tx_freq_mhz,
+            "ch1_tx_hz": rx_freq_hz,
+            "ch1_tx_mhz": rx_freq_mhz,
+            "is_active": True,
         })
 
     return {
