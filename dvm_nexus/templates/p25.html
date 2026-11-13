@@ -299,7 +299,7 @@
           <span>📋 Radio CPS Programming Guide (Sites, Control Channels &amp; Channel IDs)</span>
         </div>
         <span style="font-size:0.83rem; color:var(--text-dim);">
-          Exact reference parameters to program into Motorola APX / Astro 25, Harris, EFJohnson, Unication, and Uniden Scanners
+          Exact reference parameters to program into Motorola APX / Astro 25, Tait TP9900, Harris, EFJohnson, Unication, and Uniden Scanners
         </span>
       </div>
       <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;" id="p25-guide-quick-badges">
@@ -593,6 +593,37 @@
             <ul style="margin:0 0 0 1.1rem; padding:0;">
               <li>Receive: <span class="p25-sync-rxmhz">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</span> &bull; Transmit: <span class="p25-sync-txmhz">{{ '%.6f'|format(p25_prog.radio_tx_mhz) if p25_prog else '462.618750' }} MHz</span></li>
               <li>NAC Code: <code class="p25-sync-nac">${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Tait TP9900 / TP9000 Series -->
+        <div style="padding:0.85rem 1rem; border-radius:var(--radius-sm); background:rgba(15, 23, 42, 0.6); border:1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <strong style="font-size:0.88rem; color:#38bdf8;">📻 Tait TP9900 / TP9000 Series CPS</strong>
+            <span class="badge badge-indigo" style="background:rgba(56, 189, 248, 0.2); color:#38bdf8; border:1px solid rgba(56, 189, 248, 0.4);">Tait TP9900</span>
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.5;">
+            <div style="margin-bottom:0.3rem;"><strong>P25 Trunking Network &bull; Basic Setup:</strong></div>
+            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
+              <li>Network Type: <strong>P25 Trunked (Phase 1)</strong></li>
+              <li>WACN: <code class="p25-sync-wacn">{{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</code> (Dec: <span class="p25-sync-wacndec">{{ p25_prog.wacn_dec if p25_prog else 768000 }}</span>)</li>
+              <li>System ID: <code class="p25-sync-sysid">{{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</code> (Dec: <span class="p25-sync-sysiddec">{{ p25_prog.sys_id_dec if p25_prog else 1 }}</span>)</li>
+              <li>Site &bull; RFSS: Site <code class="p25-sync-site">{{ p25_prog.site_id if p25_prog else (sys.siteId or 1) }}</code> / RFSS <code class="p25-sync-rfss">{{ p25_prog.rfss_id if p25_prog else (sys.rfssId or 1) }}</code></li>
+              <li>Control Channel: <strong class="p25-sync-rxmhz" style="color:#6ee7b7;">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</strong></li>
+            </ul>
+            <div style="margin-bottom:0.3rem;"><strong>Frequency Band (IDEN / Bandplan):</strong></div>
+            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
+              <li>Band / Table ID: <strong>1</strong></li>
+              <li>Base Frequency: <strong class="p25-sync-basemhz">{{ '%.6f'|format(p25_prog.base_freq_mhz) if p25_prog else '462.606250' }} MHz</strong> (<span class="p25-sync-basehz">{{ '{:,}'.format(p25_prog.base_freq_hz) if p25_prog else '462,606,250' }}</span> Hz)</li>
+              <li>Channel Step: <strong class="p25-sync-spacing">{{ p25_prog.spacing_khz if p25_prog else 12.5 }} kHz</strong></li>
+              <li>TX Offset: <strong class="p25-sync-offset">{% if p25_prog and p25_prog.offset_mhz >= 0 %}+{% endif %}{{ '%.6f'|format(p25_prog.offset_mhz) if p25_prog else '0.000000' }} MHz</strong></li>
+            </ul>
+            <div style="margin-bottom:0.3rem;"><strong>P25 Conventional Channel (Simplex / Direct):</strong></div>
+            <ul style="margin:0 0 0 1.1rem; padding:0;">
+              <li>Rx Frequency: <span class="p25-sync-rxmhz">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</span> &bull; Tx Frequency: <span class="p25-sync-txmhz">{{ '%.6f'|format(p25_prog.radio_tx_mhz) if p25_prog else '462.618750' }} MHz</span></li>
+              <li>Rx NAC: <code class="p25-sync-nac">${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</code> &bull; Tx NAC: <code class="p25-sync-txnac">${{ p25_prog.tx_nac if p25_prog else (sys.txNAC or sys.nac or '293') }}</code></li>
+              <li>Signalling: <strong>P25 Digital</strong> (Default Talkgroup: <code>1</code>)</li>
             </ul>
           </div>
         </div>

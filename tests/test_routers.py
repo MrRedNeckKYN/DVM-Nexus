@@ -45,6 +45,7 @@ def test_p25_route(client):
     assert "Control Channels" in resp.text
     assert "Channel IDs &amp; IDEN Table" in resp.text or "Channel IDs & IDEN Table" in resp.text
     assert "Motorola APX / Astro 25 CPS" in resp.text
+    assert "Tait TP9900" in resp.text
 
 
 def test_p25_programming_guide_summary_helper():
