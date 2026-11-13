@@ -89,6 +89,7 @@
           Auto IDEN: Ch ID 1 &bull; Ch No $1
         </span>
         <span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px;">⚡ Auto-Reloads DVMHost on Save</span>
+        <button type="button" class="btn btn-sm btn-primary" onclick="document.querySelector('#p25-config-form [type=submit]').click()">💾 Quick Save</button>
       </div>
     </div>
 
@@ -708,7 +709,10 @@
         <div class="card-title">🗼 P25 Control Channel (TSBK) &amp; Trunking Architecture</div>
         <span style="font-size:0.85rem; color:var(--text-dim);">DVMHost <code>protocols.p25.control</code> &mdash; Options adapt automatically to your chosen Control Channel mode</span>
       </div>
-      <span class="badge badge-indigo" id="p25-cc-badge">Full Duplex Repeater Feature</span>
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <span class="badge badge-indigo" id="p25-cc-badge">Full Duplex Repeater Feature</span>
+        <button type="button" class="btn btn-sm btn-primary" onclick="document.querySelector('#p25-config-form [type=submit]').click()">💾 Quick Save</button>
+      </div>
     </div>
 
     <input type="hidden" name="cc_enable" id="p25-cc-enable-hidden" value="{{ 'true' if p25_cc_on else 'false' }}">
@@ -757,8 +761,8 @@
 
       <div class="form-group" id="p25-cc-interval-group">
         <label class="form-label">CC Broadcast Interval (seconds)</label>
-        <input type="number" name="cc_interval" class="form-control" min="5" max="3600" value="{{ (p25.control and p25.control.interval) or 300 }}">
-        <small class="form-hint">Time between non-dedicated CC broadcasts (default 300s).</small>
+        <input type="number" name="cc_interval" class="form-control" min="2" max="3600" value="{{ (p25.control and p25.control.interval) or 5 }}">
+        <small class="form-hint" style="color:#fde68a;">⚠️ Radios time out after ~2s of carrier loss and say "No Service". Use Mode 3 (Dedicated 24/7 CC) for continuous carrier, or set to 5s.</small>
       </div>
 
       <div class="form-group" id="p25-cc-duration-group">

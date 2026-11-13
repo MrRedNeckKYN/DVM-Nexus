@@ -3157,6 +3157,10 @@ html.device-desktop .restart-text {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
+  position: sticky;
+  bottom: 1rem;
+  z-index: 100;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
