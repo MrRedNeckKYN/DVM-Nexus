@@ -620,14 +620,25 @@
         </div>
 
         <!-- Tait TP9900 / TP9000 Series -->
-        <div style="padding:0.85rem 1rem; border-radius:var(--radius-sm); background:rgba(15, 23, 42, 0.6); border:1px solid var(--border-color);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-            <strong style="font-size:0.88rem; color:#38bdf8;">📻 Tait TP9900 / TP9000 Series CPS</strong>
-            <span class="badge badge-indigo" style="background:rgba(56, 189, 248, 0.2); color:#38bdf8; border:1px solid rgba(56, 189, 248, 0.4);">Tait TP9900</span>
+        <div style="padding:0.9rem 1.1rem; border-radius:var(--radius-sm); background:rgba(15, 23, 42, 0.65); border:1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.65rem;">
+            <strong style="font-size:0.92rem; color:#38bdf8;">📻 Tait TP9900 / TM9400 / TP9000 Series CPS Guide</strong>
+            <span class="badge badge-indigo" style="background:rgba(56, 189, 248, 0.2); color:#38bdf8; border:1px solid rgba(56, 189, 248, 0.4);">Official Tait Manual Verified</span>
           </div>
-          <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.5;">
+          <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.55;">
             
-            <div style="margin-bottom:0.25rem;"><strong>1. P25 Trunking &bull; Channel ID List Members:</strong></div>
+            <!-- Critical Traps Warning Box -->
+            <div style="padding:0.65rem 0.85rem; margin-bottom:0.75rem; background:rgba(239, 68, 68, 0.12); border:1px solid rgba(239, 68, 68, 0.45); border-radius:var(--radius-sm); font-size:0.78rem; color:#fca5a5; line-height:1.45;">
+              <strong style="color:#f87171; font-size:0.82rem;">🚨 Critical Traps: Why Tait Radios Get Stuck on "No Service":</strong>
+              <ul style="margin:0.35rem 0 0 1.1rem; padding:0;">
+                <li><strong>Trap 1 &bull; Radio Authentication:</strong> In <code>Channel Profiles &rarr; P25 Trunking &rarr; Setup tab</code>, <strong>UNCHECK "Radio Authentication"</strong>! This enables Link Layer Authentication requiring a cryptographic KMF challenge. DVMHost does not run a KMF server, so leaving this enabled causes authentication to fail and freezes the radio in <em>No Service</em>.</li>
+                <li><strong>Trap 2 &bull; Restrict NAC by System Identity:</strong> In <code>Channel Profiles &rarr; P25 Trunking &rarr; Advanced tab</code>, <strong>UNCHECK "Restrict NAC by System Identity"</strong> (or check <em>"Allow Alternate NAC"</em> and enter <code>$293</code>). DVMHost has SysID <code>001</code> and NAC <code>293</code>. If restricted, the radio rejects DVMHost's control channel because NAC 293 is not derived from SysID 001!</li>
+                <li><strong>Trap 3 &bull; Profile Assigned to Channel:</strong> In <code>Channel Setup &rarr; Channels form &rarr; Summary tab</code>, your active channel MUST have <strong>Profile</strong> set to your <em>P25 Trunking profile</em>. If left Conventional, the radio will not hunt or connect when you select that channel!</li>
+                <li><strong>Trap 4 &bull; Strict Talkgroup Checking:</strong> In <code>Channel Profiles &rarr; P25 Trunking &rarr; Setup tab</code>, <strong>UNCHECK "Strict Talkgroup Grant Checking"</strong> and <strong>"Anti-Cloning"</strong>.</li>
+              </ul>
+            </div>
+
+            <div style="margin-bottom:0.35rem;"><strong style="color:#bae6fd;">Step 1: P25 Digital &bull; Channel ID List Members (Bandplan):</strong></div>
             <div style="overflow-x:auto; margin-bottom:0.5rem;">
               <table style="width:100%; font-size:0.75rem; border:1px solid var(--border-color); border-collapse:collapse; background:rgba(15,23,42,0.85);">
                 <thead>
@@ -651,24 +662,28 @@
               </table>
             </div>
 
-            <div style="padding:0.45rem 0.65rem; margin-bottom:0.55rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.75rem; color:#fde68a; line-height:1.4;">
-              ⚠️ <strong>Tait CPS Offset Warning:</strong> In Tait CPS, <strong>Offset is in MHz</strong>, NOT kHz! For a +5.0 MHz UHF split, enter <code style="color:#fff;">5.000000</code>. For Simplex, enter <code style="color:#fff;">0.000000</code>. Entering <code style="color:#f87171;">0.025000</code> offsets only 25 kHz and will cause your radio to transmit off-frequency!
+            <div style="padding:0.45rem 0.65rem; margin-bottom:0.6rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.75rem; color:#fde68a; line-height:1.4;">
+              ⚠️ <strong>Tait Offset Units:</strong> In Tait CPS, <strong>Offset is in MHz</strong>! For a 25 kHz split (like 467.550 TX / 467.575 RX), enter <code>0.025000</code>. For a standard 5.0 MHz UHF split, enter <code>5.000000</code>. For Simplex, enter <code>0.000000</code>.
             </div>
 
-            <div style="margin-bottom:0.25rem;"><strong>2. P25 Trunking &bull; Basic Setup &amp; Site CC:</strong></div>
-            <ul style="margin:0 0 0.5rem 1.1rem; padding:0;">
-              <li>Network Type: <strong>P25 Trunked (Phase 1)</strong></li>
-              <li>WACN: <code class="p25-sync-wacn">{{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</code> (Dec: <span class="p25-sync-wacndec">{{ p25_prog.wacn_dec if p25_prog else 768000 }}</span>)</li>
-              <li>System ID: <code class="p25-sync-sysid">{{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</code> (Dec: <span class="p25-sync-sysiddec">{{ p25_prog.sys_id_dec if p25_prog else 1 }}</span>)</li>
-              <li>Site &bull; RFSS: Site <code class="p25-sync-site">{{ p25_prog.site_id if p25_prog else (sys.siteId or 1) }}</code> / RFSS <code class="p25-sync-rfss">{{ p25_prog.rfss_id if p25_prog else (sys.rfssId or 1) }}</code></li>
-              <li>Control Channel: <strong class="p25-sync-rxmhz" style="color:#6ee7b7;">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</strong> (Hat TX)</li>
+            <div style="margin-bottom:0.35rem;"><strong style="color:#bae6fd;">Step 2: P25 Digital &bull; Control Channel Lists &amp; Site Lists:</strong></div>
+            <ul style="margin:0 0 0.55rem 1.1rem; padding:0;">
+              <li><strong>Control Channel List Members:</strong> Channel Type: <code>Standard</code> &bull; Rx Freq: <strong class="p25-sync-rxmhz" style="color:#6ee7b7;">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</strong> (MMDVM Hat TX) &bull; Tx Freq: <strong class="p25-sync-txmhz" style="color:#38bdf8;">{{ '%.6f'|format(p25_prog.radio_tx_mhz) if p25_prog else '462.618750' }} MHz</strong> (MMDVM Hat RX).</li>
+              <li><strong>Site Lists Form:</strong> Member 1 &bull; WACN: <code class="p25-sync-wacn">{{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</code> &bull; System ID: <code class="p25-sync-sysid">{{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</code> &bull; RFSS ID: <code>{{ p25_prog.rfss_id if p25_prog else (sys.rfssId or 1) }}</code> &bull; Site ID: <code>{{ p25_prog.site_id if p25_prog else (sys.siteId or 1) }}</code> &bull; Preference: <code>Preferential</code>.</li>
             </ul>
 
-            <div style="margin-bottom:0.25rem;"><strong>3. P25 Conventional Channel (Simplex / Direct Voice):</strong></div>
+            <div style="margin-bottom:0.35rem;"><strong style="color:#bae6fd;">Step 3: Channel Profiles &bull; P25 Trunking Setup Form:</strong></div>
+            <ul style="margin:0 0 0.55rem 1.1rem; padding:0;">
+              <li>General Settings &rarr; Profile Type: <strong>P25 Trunking</strong> &bull; P25 Radio ID: <code>1001</code> (your Unit RID).</li>
+              <li>Setup tab &rarr; WACN: <code class="p25-sync-wacn">{{ p25_prog.wacn if p25_prog else (sys.netId or 'BB800') }}</code> &bull; Home System ID: <code class="p25-sync-sysid">{{ p25_prog.sys_id if p25_prog else (sys.sysId or '001') }}</code>.</li>
+              <li>Setup tab &rarr; Modulation: <strong>C4FM / FDMA</strong> &bull; Site List: <code>Site List 1</code> &bull; Control Channel List: <code>CC List 1</code> &bull; Channel ID List: <code>CID 1</code>.</li>
+            </ul>
+
+            <div style="margin-bottom:0.35rem;"><strong style="color:#bae6fd;">Step 4: Talkgroups, Channels &amp; Zones Setup:</strong></div>
             <ul style="margin:0 0 0 1.1rem; padding:0;">
-              <li>Rx Frequency: <span class="p25-sync-rxmhz">{{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</span> &bull; Tx Frequency: <span class="p25-sync-txmhz">{{ '%.6f'|format(p25_prog.radio_tx_mhz) if p25_prog else '462.618750' }} MHz</span></li>
-              <li>Rx NAC: <code class="p25-sync-nac">${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</code> &bull; Tx NAC: <code class="p25-sync-txnac">${{ p25_prog.tx_nac if p25_prog else (sys.txNAC or sys.nac or '293') }}</code></li>
-              <li>Signalling: <strong>P25 Digital</strong> (Default Talkgroup: <code>1</code>)</li>
+              <li><strong>Talkgroup Lists form:</strong> Group ID: <code>1</code> (Decimal) &bull; Label: <code>DVM P25 TG1</code> &bull; Encryption: <code>Clear</code>.</li>
+              <li><strong>Channels form &rarr; Summary tab:</strong> Add Channel 1 &bull; <strong>Profile:</strong> Select your <em>P25 Trunking Profile</em> &bull; <strong>Talkgroup:</strong> Select <code>TG 1</code>.</li>
+              <li><strong>Zones &rarr; Zone Setup:</strong> Place Channel 1 into Zone 1, Position 1 so selecting Channel Knob 1 tunes your P25 Trunked System.</li>
             </ul>
           </div>
         </div>
