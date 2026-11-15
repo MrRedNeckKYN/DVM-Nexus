@@ -212,10 +212,13 @@ class DVMConfigManager:
                     log_blk[k] = "/opt/dvm"
                     modified = True
 
-        # Heal modem 'null' trap when include_policy is True
-        if include_policy:
-            modem_blk = data.get("system", {}).get("modem", {}) if isinstance(data.get("system"), dict) else {}
-            if isinstance(modem_blk, dict):
+        # Heal modem config area warning & 'null' trap
+        modem_blk = data.get("system", {}).get("modem", {}) if isinstance(data.get("system"), dict) else {}
+        if isinstance(modem_blk, dict):
+            if modem_blk.get("ignoreModemConfigArea") is not True:
+                modem_blk["ignoreModemConfigArea"] = True
+                modified = True
+            if include_policy:
                 proto_blk = modem_blk.get("protocol", {})
                 if isinstance(proto_blk, dict):
                     curr_type = str(proto_blk.get("type", "")).strip().lower()
@@ -223,9 +226,14 @@ class DVMConfigManager:
                         proto_blk["type"] = "uart"
                         modified = True
 
-        # Heal system.config: netId (BEE00 panic), nac, sysId, channelNo (base-16 hex), and voiceChNo
+        # Heal system.config: netId (BEE00 panic), nac, sysId, channelNo (base-16 hex), controlCh.notifyEnable, and voiceChNo
         sys_config = data.get("system", {}).get("config", {}) if isinstance(data.get("system"), dict) else {}
         if isinstance(sys_config, dict):
+            ctrl_ch = sys_config.get("controlCh")
+            if isinstance(ctrl_ch, dict) and int(ctrl_ch.get("rpcPort", 0) or 0) == 0:
+                if ctrl_ch.get("notifyEnable") is not False:
+                    ctrl_ch["notifyEnable"] = False
+                    modified = True
             raw_net_id = sys_config.get("netId", "BB800")
             safe_net_id = sanitize_p25_wacn(raw_net_id)
             if not isinstance(raw_net_id, str) or raw_net_id != safe_net_id:
@@ -314,7 +322,7 @@ class DVMConfigManager:
 
         return modified
 
-    def ensure_active_config_exists(self):
+    def ensure_active_config_exists(self, force_heal: bool = False):
         """Ensure active directory has baseline configuration files."""
         self.dvm_dir.mkdir(parents=True, exist_ok=True)
         if not self.config_path.exists():
@@ -344,9 +352,9 @@ class DVMConfigManager:
             if src.exists():
                 backup_manager.atomic_write(self.rid_acl_path, src.read_text(encoding="utf-8"))
 
-        # Safety block: One-time per process self-heal of active configuration if legacy traps are present.
+        # Safety block: One-time per process (or explicit pre-flight) self-heal of active configuration.
         # Do NOT re-write config.yml on every read poll cycle, which would bump st_mtime after dvmhost start.
-        if not DVMConfigManager._active_config_healed:
+        if force_heal or not DVMConfigManager._active_config_healed:
             DVMConfigManager._active_config_healed = True
             try:
                 if self.config_path.exists():
@@ -481,6 +489,9 @@ class DVMConfigManager:
         if not modem_blk["protocol"]["uart"].get("speed"):
             modem_blk["protocol"]["uart"]["speed"] = 115200
 
+        # Suppress false-positive MMDVM_HS EEPROM warning ("Modem configuration area does not contain a valid configuration!")
+        modem_blk["ignoreModemConfigArea"] = True
+
         # Safety Net: Authoritative Standalone Mode and Voice Channel RPC conflict prevention
         # Prevents: "W: (HOST) Detected possible misconfiguration! Voice Channel RPC Address/Port and the configured RPC Address/Port are the same!"
         # Prevents: "W: (HOST) Host is non-authoritative! This requires a second instance configured in site controller mode."
@@ -489,6 +500,11 @@ class DVMConfigManager:
             # Enforce authoritative master mode unless explicitly configured otherwise
             if "authoritative" not in sys_config:
                 sys_config["authoritative"] = True
+
+            # Prevent "We are configured as a dedicated trunked voice channel but, have control data enabled"
+            ctrl_ch = sys_config.get("controlCh")
+            if isinstance(ctrl_ch, dict) and int(ctrl_ch.get("rpcPort", 0) or 0) == 0:
+                ctrl_ch["notifyEnable"] = False
 
             # Safety Net: Prevent DVMHost FATAL PANIC error 4 / error 38258 on 0xBEE00..0xBEEFF WACN
             raw_net_id = sys_config.get("netId", "BB800")

@@ -219,10 +219,21 @@ class TelemetryService:
         return clear_connected_radios(simulated_only=simulated_only)
 
     def sync_affiliations_now(self) -> Dict[str, Any]:
-        """Poll DVMHost REST API for P25 and DMR affiliation tables and merge into roster."""
+        """
+        Poll DVMHost REST API for the active protocol's affiliation table ONLY.
+        Never query the inactive protocol's /report-affiliations endpoint because upstream
+        DVMHost RESTAPI.cpp dereferences m_dmr / m_p25 without a nullptr check (SIGSEGV).
+        """
         synced = 0
         errors: List[str] = []
-        for proto, getter in (("P25", dvm_client.get_p25_affiliations), ("DMR", dvm_client.get_dmr_affiliations)):
+        active_proto = self._active_protocol_cached()
+        targets = []
+        if active_proto == "P25":
+            targets.append(("P25", dvm_client.get_p25_affiliations))
+        elif active_proto == "DMR":
+            targets.append(("DMR", dvm_client.get_dmr_affiliations))
+
+        for proto, getter in targets:
             try:
                 res = getter()
                 if not res.get("success"):
@@ -642,7 +653,12 @@ class TelemetryService:
 
         if cur_pid is not None and cur_pid != self._last_dvm_pid:
             self._last_dvm_pid = cur_pid
+            self._dvm_pid_seen_at = time.time()
             dvm_client.invalidate_token()
+
+        # Give newly-started dvmhost 2.5s to finish constructing m_p25/m_dmr and calling m_RESTAPI->setProtocols()
+        if getattr(self, "_dvm_pid_seen_at", 0.0) and (time.time() - self._dvm_pid_seen_at) < 2.5:
+            return
 
         try:
             status_res = dvm_client.get_status()
@@ -650,6 +666,7 @@ class TelemetryService:
             if not isinstance(data, dict):
                 raise RuntimeError(status_res.get("error") or "REST API returned no data")
 
+            dvm_state_num = int(data.get("state", 0) or 0)
             with self._lock:
                 st = self._rf_state
                 st["rest_ok"] = True
@@ -669,8 +686,8 @@ class TelemetryService:
                     st["last_active_time"] = time.time()
                     st["hold_sec"] = 3.0
 
-            # Poll DVMHost affiliation tables every 3 seconds when REST is online
-            if (time.time() - self._last_affil_sync) >= 3.0:
+            # Poll DVMHost affiliation table only after DVMHost has entered STATE_DMR (1) or STATE_P25 (2)
+            if dvm_state_num in (1, 2) and (time.time() - self._last_affil_sync) >= 5.0:
                 self.sync_affiliations_now()
         except Exception as exc:
             logger.debug("DVMHost REST status poll failed: %s", exc)

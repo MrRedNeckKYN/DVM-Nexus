@@ -347,9 +347,41 @@ class DVMHostClient:
         return res
 
     def get_dmr_affiliations(self) -> Dict[str, Any]:
+        """
+        Safely query DMR affiliations.
+        Upstream DVMHost bug guard: RESTAPI::restAPI_GetDMRAffList (src/host/restapi/RESTAPI.cpp:458)
+        dereferences m_dmr->affiliations() without checking m_dmr != nullptr, causing an immediate
+        SIGSEGV (status=11/SEGV) if called when DMR is disabled or before m_RESTAPI->setProtocols() runs.
+        """
+        try:
+            from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+            if str(dvm_config_manager.get_active_protocol() or "").lower() != "dmr":
+                return {"success": False, "skipped": True, "error": "DMR protocol is not active", "status": 503}
+            st = self.get_status()
+            st_data = st.get("data") if st.get("success") else None
+            if not isinstance(st_data, dict) or int(st_data.get("state", 0) or 0) != 1:
+                return {"success": False, "skipped": True, "error": "DVMHost is not yet in STATE_DMR", "status": 503}
+        except Exception as exc:
+            return {"success": False, "skipped": True, "error": str(exc), "status": 503}
         return self.request("GET", "/dmr/report-affiliations")
 
     def get_p25_affiliations(self) -> Dict[str, Any]:
+        """
+        Safely query P25 affiliations.
+        Upstream DVMHost bug guard: RESTAPI::restAPI_GetP25AffList (src/host/restapi/RESTAPI.cpp:832)
+        dereferences m_p25->affiliations() without checking m_p25 != nullptr, causing an immediate
+        SIGSEGV (status=11/SEGV) if called when P25 is disabled or before m_RESTAPI->setProtocols() runs.
+        """
+        try:
+            from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+            if str(dvm_config_manager.get_active_protocol() or "").lower() != "p25":
+                return {"success": False, "skipped": True, "error": "P25 protocol is not active", "status": 503}
+            st = self.get_status()
+            st_data = st.get("data") if st.get("success") else None
+            if not isinstance(st_data, dict) or int(st_data.get("state", 0) or 0) != 2:
+                return {"success": False, "skipped": True, "error": "DVMHost is not yet in STATE_P25", "status": 503}
+        except Exception as exc:
+            return {"success": False, "skipped": True, "error": str(exc), "status": 503}
         return self.request("GET", "/p25/report-affiliations")
 
     def release_affiliations(self) -> Dict[str, Any]:

@@ -461,7 +461,7 @@ system:
             # RPC access password for control channel.
             rpcPassword: "ULTRA-VERY-SECURE-DEFAULT"
             # Flag indicating voice channels will notify the control channel of traffic status.
-            notifyEnable: true
+            notifyEnable: false
             # Amount of time between network presence announcements. (seconds)
             # NOTE: This value applies to VC -> CC and CC -> FNE presence notification messages.
             presence: 120
@@ -704,7 +704,7 @@ system:
         # Flag indicating that modem resets due to ADC or DAC overflows is disabled.
         disableOFlowReset: false
         # Flag indicating that the modem configuration area data should be ignored.
-        ignoreModemConfigArea: false
+        ignoreModemConfigArea: true
         # Flag indicating whether verbose dumping of the modem status is enabled.
         dumpModemStatus: false
         # Flag indicating whether or not modem debug messages are displayed to the log.

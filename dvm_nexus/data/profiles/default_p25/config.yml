@@ -173,7 +173,7 @@ system:
       rpcAddress: 127.0.0.1
       rpcPort: 0
       rpcPassword: ULTRA-VERY-SECURE-DEFAULT
-      notifyEnable: true
+      notifyEnable: false
       presence: 120
     voiceChNo:
       - channelId: 1
@@ -260,7 +260,7 @@ system:
     rssiMappingFile: RSSI.dat
     packetPlayoutTime: 10
     disableOFlowReset: false
-    ignoreModemConfigArea: false
+    ignoreModemConfigArea: true
     dumpModemStatus: false
     displayModemDebugMessages: false
     trace: false

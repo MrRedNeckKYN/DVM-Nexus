@@ -219,7 +219,7 @@ class ServiceController:
         """
         try:
             from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
-            dvm_config_manager.ensure_active_config_exists()
+            dvm_config_manager.ensure_active_config_exists(force_heal=True)
         except Exception:
             logger.exception("Preflight: could not ensure active config exists")
 

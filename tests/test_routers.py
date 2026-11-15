@@ -702,7 +702,71 @@ def test_pending_restart_banner_clears_after_restart_and_never_triggers_on_read(
     assert "not live yet" not in resp_banner_after.text
 
 
+def test_dvmhost_segfault_guard_and_config_healer(monkeypatch):
+    """
+    Verify:
+    1. dvm_client.get_dmr_affiliations() refuses to call /dmr/report-affiliations when P25 is active
+       (preventing the upstream DVMHost RESTAPI.cpp m_dmr == nullptr SIGSEGV crash).
+    2. dvm_client.get_p25_affiliations() refuses to call /p25/report-affiliations when DMR is active
+       or when dvmhost state is not yet initialized (state != 2).
+    3. _heal_yaml_dict() heals controlCh.notifyEnable to False (when rpcPort == 0) and
+       modem.ignoreModemConfigArea to True.
+    """
+    from dvm_nexus.core.dvm_client import dvm_client
+    from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 
+    called_endpoints = []
 
+    def fake_request(method: str, endpoint: str, data=None, retry_auth=True):
+        called_endpoints.append(endpoint)
+        if endpoint == "/status":
+            return {"success": True, "status": 200, "data": {"status": 200, "state": 2}}  # STATE_P25
+        return {"success": True, "status": 200, "data": {"status": 200, "affiliations": []}}
 
+    monkeypatch.setattr(dvm_client, "request", fake_request)
+    monkeypatch.setattr(dvm_config_manager, "get_active_protocol", lambda: "p25")
+
+    # In P25 mode, get_dmr_affiliations MUST NOT hit /dmr/report-affiliations
+    dmr_res = dvm_client.get_dmr_affiliations()
+    assert dmr_res.get("skipped") is True
+    assert "/dmr/report-affiliations" not in called_endpoints
+
+    # In P25 mode with state == 2, get_p25_affiliations is allowed
+    p25_res = dvm_client.get_p25_affiliations()
+    assert p25_res.get("success") is True
+    assert "/p25/report-affiliations" in called_endpoints
+
+    # If dvmhost is still starting (state == 0), get_p25_affiliations must also skip
+    called_endpoints.clear()
+
+    def fake_request_starting(method: str, endpoint: str, data=None, retry_auth=True):
+        called_endpoints.append(endpoint)
+        if endpoint == "/status":
+            return {"success": True, "status": 200, "data": {"status": 200, "state": 0}}  # STATE_IDLE / uninitialized
+        return {"success": True, "status": 200, "data": {"status": 200, "affiliations": []}}
+
+    monkeypatch.setattr(dvm_client, "request", fake_request_starting)
+    p25_starting_res = dvm_client.get_p25_affiliations()
+    assert p25_starting_res.get("skipped") is True
+    assert "/p25/report-affiliations" not in called_endpoints
+
+    # Verify _heal_yaml_dict fixes both P25 controlCh.notifyEnable warning and ignoreModemConfigArea warning
+    raw_cfg = {
+        "system": {
+            "config": {
+                "controlCh": {
+                    "rpcAddress": "127.0.0.1",
+                    "rpcPort": 0,
+                    "notifyEnable": True,
+                }
+            },
+            "modem": {
+                "ignoreModemConfigArea": False,
+            },
+        }
+    }
+    changed = dvm_config_manager._heal_yaml_dict(raw_cfg)
+    assert changed is True
+    assert raw_cfg["system"]["config"]["controlCh"]["notifyEnable"] is False
+    assert raw_cfg["system"]["modem"]["ignoreModemConfigArea"] is True
 
