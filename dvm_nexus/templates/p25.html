@@ -19,15 +19,15 @@
 </div>
 {% endif %}
 
-<!-- Top Live OTA P25 Commands -->
+<!-- Top Live OTA P25 Commands (Progressive Disclosure Drawer) -->
 {% set p25_cc_on = (p25.control and p25.control.enable) %}
 {% set p25_cc_ded = (p25.control and p25.control.dedicated) %}
 {% set p25_cc_mode = 'dedicated' if (p25_cc_on and p25_cc_ded) else ('non_dedicated' if p25_cc_on else 'disabled') %}
 {% set p25_arch_mode = 'simplex' if not duplex else ('duplex_dedicated' if p25_cc_mode == 'dedicated' else ('duplex_nondedicated' if p25_cc_mode == 'non_dedicated' else 'duplex_conv')) %}
 {% set p25_ota_ready = (duplex and p25_cc_on) %}
-<div class="card" style="border-left:4px solid var(--accent-indigo);">
-  <div class="card-header">
-    <div class="card-title">⚡ Live Over-The-Air P25 TSBK Commands</div>
+<details class="engineering-drawer" style="margin-bottom: 1rem;">
+  <summary class="engineering-drawer-summary">
+    <span>⚡ Advanced Over-The-Air P25 TSBK Commands (Check / Page / Inhibit / Dynamic Regroup)</span>
     {% if is_standby %}
       <span class="badge badge-muted">Standby (Radio in DMR Mode)</span>
     {% elif p25_ota_ready %}
@@ -35,44 +35,46 @@
     {% else %}
       <span id="p25-ota-mode-badge" class="badge badge-warning">⚠️ Requires Full Duplex + P25 Control Channel</span>
     {% endif %}
+  </summary>
+  <div class="engineering-drawer-body">
+    <div id="p25-ota-cc-warn" style="margin-bottom:0.85rem; padding:0.75rem 1rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.45); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-main); {% if p25_ota_ready or is_standby %}display:none;{% endif %}">
+      ⚠️ <strong>DVMHost Prerequisite Notice:</strong> In <code>DVMHost</code> (<code>p25::packet::ControlSignaling.cpp</code>), P25 TSBK Over-The-Air commands are only transmitted over RF when <strong>Full Duplex</strong> (<code>duplex: true</code>) <em>and</em> the <strong>P25 Control Channel</strong> (<code>protocols.p25.control.enable: true</code>) are active. Click <strong>3. Full Duplex + Non-Dedicated CC</strong> or <strong>4. Full Duplex + Dedicated 24/7 CC</strong> below and press <strong>Save</strong> to transmit OTA commands.
+    </div>
+    <form hx-post="/p25/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
+      <div class="ota-cmd-field">
+        <label class="form-label">Command</label>
+        <select name="action" id="p25-ota-action-select" class="form-control" onchange="syncP25OtaCommand()" {% if is_standby %}disabled{% endif %}>
+          <option value="check">Radio Check (TSBK Radio Unit Monitor)</option>
+          <option value="page">Radio Page / Call Alert (TSBK Call Alert)</option>
+          <option value="inhibit">Inhibit (Stun / Kill Radio)</option>
+          <option value="uninhibit">Uninhibit (Revive Radio)</option>
+          <option value="unit-reg">Force Unit Registration Request</option>
+          <option value="group-aff-req">Query Group Affiliation (GAQ)</option>
+          <option value="dyn-regrp">Dynamic Regroup (Assign TGID)</option>
+          <option value="dyn-regrp-cancel">Cancel Dynamic Regroup</option>
+          <option value="dyn-regrp-lock">Lock Dynamic Regroup Selector</option>
+          <option value="dyn-regrp-unlock">Unlock Dynamic Regroup Selector</option>
+          <option value="cc-burst">🗼 Fire P25 Control Channel Burst Now</option>
+        </select>
+      </div>
+      <div class="ota-cmd-field" id="p25-ota-rid-group">
+        <label class="form-label">Target Radio ID (RID)</label>
+        <input type="number" name="rid" id="p25-ota-rid-input" class="form-control" placeholder="e.g. 1234567" value="1" min="1" {% if is_standby %}disabled{% endif %} required>
+      </div>
+      <div class="ota-cmd-field" id="p25-ota-tgid-group" style="display:none;">
+        <label class="form-label">Regroup TGID</label>
+        <input type="number" name="tg_id" id="p25-ota-tgid-input" class="form-control" placeholder="e.g. 10100" value="1" min="1" {% if is_standby %}disabled{% endif %}>
+      </div>
+      <div class="ota-cmd-btn-wrap">
+        {% if is_standby %}
+          <button type="button" class="btn btn-secondary ota-send-btn" disabled title="Switch radio to P25 to transmit live OTA commands">DMR Active (Standby)</button>
+        {% else %}
+          <button type="submit" class="btn btn-primary ota-send-btn">Send Command</button>
+        {% endif %}
+      </div>
+    </form>
   </div>
-  <div id="p25-ota-cc-warn" style="margin-bottom:0.85rem; padding:0.75rem 1rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.45); border-radius:var(--radius-sm); font-size:0.82rem; color:var(--text-main); {% if p25_ota_ready or is_standby %}display:none;{% endif %}">
-    ⚠️ <strong>DVMHost Prerequisite Notice:</strong> In <code>DVMHost</code> (<code>p25::packet::ControlSignaling.cpp</code>), P25 TSBK Over-The-Air commands are only transmitted over RF when <strong>Full Duplex</strong> (<code>duplex: true</code>) <em>and</em> the <strong>P25 Control Channel</strong> (<code>protocols.p25.control.enable: true</code>) are active. Click <strong>3. Full Duplex + Non-Dedicated CC</strong> or <strong>4. Full Duplex + Dedicated 24/7 CC</strong> below and press <strong>Save</strong> to transmit OTA commands.
-  </div>
-  <form hx-post="/p25/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
-    <div class="ota-cmd-field">
-      <label class="form-label">Command</label>
-      <select name="action" id="p25-ota-action-select" class="form-control" onchange="syncP25OtaCommand()" {% if is_standby %}disabled{% endif %}>
-        <option value="check">Radio Check (TSBK Radio Unit Monitor)</option>
-        <option value="page">Radio Page / Call Alert (TSBK Call Alert)</option>
-        <option value="inhibit">Inhibit (Stun / Kill Radio)</option>
-        <option value="uninhibit">Uninhibit (Revive Radio)</option>
-        <option value="unit-reg">Force Unit Registration Request</option>
-        <option value="group-aff-req">Query Group Affiliation (GAQ)</option>
-        <option value="dyn-regrp">Dynamic Regroup (Assign TGID)</option>
-        <option value="dyn-regrp-cancel">Cancel Dynamic Regroup</option>
-        <option value="dyn-regrp-lock">Lock Dynamic Regroup Selector</option>
-        <option value="dyn-regrp-unlock">Unlock Dynamic Regroup Selector</option>
-        <option value="cc-burst">🗼 Fire P25 Control Channel Burst Now</option>
-      </select>
-    </div>
-    <div class="ota-cmd-field" id="p25-ota-rid-group">
-      <label class="form-label">Target Radio ID (RID)</label>
-      <input type="number" name="rid" id="p25-ota-rid-input" class="form-control" placeholder="e.g. 1234567" value="1" min="1" {% if is_standby %}disabled{% endif %} required>
-    </div>
-    <div class="ota-cmd-field" id="p25-ota-tgid-group" style="display:none;">
-      <label class="form-label">Regroup TGID</label>
-      <input type="number" name="tg_id" id="p25-ota-tgid-input" class="form-control" placeholder="e.g. 10100" value="1" min="1" {% if is_standby %}disabled{% endif %}>
-    </div>
-    <div class="ota-cmd-btn-wrap">
-      {% if is_standby %}
-        <button type="button" class="btn btn-secondary ota-send-btn" disabled title="Switch radio to P25 to transmit live OTA commands">DMR Active (Standby)</button>
-      {% else %}
-        <button type="submit" class="btn btn-primary ota-send-btn">Send Command</button>
-      {% endif %}
-    </div>
-  </form>
-</div>
+</details>
 
 <!-- P25 Parameters Form -->
 <form id="p25-config-form" hx-post="/p25/save" hx-trigger="submit" hx-target="#toast-container" hx-swap="beforeend" data-dirty-guard>
@@ -292,15 +294,13 @@
     </div>
   </div>
 
-  <!-- P25 Radio CPS Programming Guide (Sites, Control Channels & Channel IDs) -->
-  <div class="card" id="p25-programming-guide-card" style="border-left:4px solid #38bdf8; margin-bottom:1.5rem;">
-    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+  <!-- P25 Radio CPS Programming Guide (Progressive Disclosure Drawer) -->
+  <details class="engineering-drawer" id="p25-programming-guide-card" style="margin-bottom:1.25rem;">
+    <summary class="engineering-drawer-summary">
       <div>
-        <div class="card-title" style="display:flex; align-items:center; gap:0.5rem;">
-          <span>📋 Radio CPS Programming Guide (Sites, Control Channels &amp; Channel IDs)</span>
-        </div>
-        <span style="font-size:0.83rem; color:var(--text-dim);">
-          Exact reference parameters to program into Motorola APX / Astro 25, Tait TP9900, Harris, EFJohnson, Unication, and Uniden Scanners
+        <span>📋 Radio CPS Programming Guide (Sites, Control Channels &amp; Channel IDs)</span>
+        <span style="font-size:0.78rem; color:var(--text-dim); font-weight:normal; margin-left:0.5rem;">
+          Motorola APX / Astro 25, Tait TP9900, Harris, EFJohnson &amp; Scanners
         </span>
       </div>
       <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;" id="p25-guide-quick-badges">
@@ -310,7 +310,8 @@
         <span class="badge badge-emerald" title="Network Access Code" id="p25-badge-nac">NAC: ${{ p25_prog.nac if p25_prog else (sys.nac or '293') }}</span>
         <span class="badge badge-warning" id="p25-badge-cc-freq">CC RX: {{ '%.6f'|format(p25_prog.radio_rx_mhz) if p25_prog else '462.618750' }} MHz</span>
       </div>
-    </div>
+    </summary>
+    <div class="engineering-drawer-body">
 
     <!-- Tab navigation inside guide -->
     <div style="display:flex; gap:0.4rem; border-bottom:1px solid var(--border-color); padding:0 1rem 0.65rem 1rem; margin-bottom:1rem; flex-wrap:wrap;">
@@ -713,7 +714,8 @@
 
       </div>
     </div>
-  </div>
+    </div>
+  </details>
 
   <!-- Section 1B: P25 Control Channel (TSBK) & Trunking Architecture (Visible ONLY in Full Duplex) -->
   {% set p25_cc_on = (p25.control and p25.control.enable) %}
@@ -1026,7 +1028,7 @@
   </div>
 
   <!-- Expert / Advanced Engineering Calibration Drawer -->
-  <details class="advanced-drawer" style="margin-bottom: 1.5rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden;">
+  <details class="advanced-drawer engineering-drawer" style="margin-bottom: 1.5rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden;">
     <summary style="padding: 1.1rem 1.25rem; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; background: rgba(255,255,255,0.02); border-left: 4px solid var(--accent-indigo);">
       <div style="display: flex; align-items: center; gap: 0.5rem;">
         <span>🔬</span>

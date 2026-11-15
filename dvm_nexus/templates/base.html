@@ -7,11 +7,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>{{ title }} - DVM Nexus</title>
-  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.5') }}">
+  <link rel="stylesheet" href="/static/css/nexus.css?v={{ app_version|default('1.0.64') }}">
   <script src="/static/js/htmx.min.js"></script>
   <script>
-    // Immediate Device Detection (executes before paint to prevent layout flashes)
-    // Matches CSS @media (max-width: 1023px) breakpoint so 769-1023px tablets keep navigation controls.
     (function() {
       function evaluateDevice() {
         const isMobileScreen = window.innerWidth <= 1023;
@@ -35,7 +33,7 @@
   <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
   <div class="app-container">
-    <!-- Sidebar / Off-Canvas Mobile Drawer -->
+    <!-- Streamlined Left Sidebar (Desktop >= 1024px: 4 Primary Categories) -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="brand">
@@ -48,154 +46,174 @@
         <button type="button" class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Close navigation">&times;</button>
       </div>
 
+      {% set radio_tabs = ('dmr', 'p25', 'modem', 'profiles', 'wizard') %}
+      {% set net_tabs = ('network', 'meshtastic') %}
+      {% set sys_tabs = ('diagnostics', 'config', 'terminal', 'updates') %}
+
       <div class="nav-menu">
-        <div class="nav-section-label">OVERVIEW</div>
-        <ul class="nav-list">
+        <ul class="nav-list nav-primary-categories">
+          <!-- Category 1: Dashboard -->
           <li class="nav-item">
             <a href="/" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}">
-              <span class="nav-icon">📊</span> <span class="nav-label">Dashboard</span>
+              <span class="nav-icon">📊</span>
+              <span class="nav-label">Dashboard</span>
             </a>
           </li>
-        </ul>
 
-        <div class="nav-section-label">RADIO PROTOCOLS</div>
-        <ul class="nav-list">
-          <li class="nav-item">
-            <a href="/dmr" class="nav-link {% if active_tab == 'dmr' %}active{% endif %}">
+          <!-- Category 2: Radio Config -->
+          <li class="nav-item nav-category-group {% if active_tab in radio_tabs %}expanded{% endif %}">
+            <a href="{% if active_protocol == 'p25' %}/p25{% else %}/dmr{% endif %}" class="nav-link {% if active_tab in radio_tabs %}active{% endif %}">
               <span class="nav-icon">📻</span>
-              <span class="nav-label">DMR Management</span>
-              {% if active_protocol == 'dmr' %}
-                <span class="nav-pill nav-pill-active" title="DMR Duplex is Active">ACTIVE</span>
-              {% else %}
-                <span class="nav-pill nav-pill-standby" title="DMR in Standby">STANDBY</span>
-              {% endif %}
+              <span class="nav-label">Radio Config</span>
+              <span class="nav-pill nav-pill-active">{{ active_protocol|upper }}</span>
             </a>
+            <div class="nav-sublinks">
+              <a href="/p25" class="nav-sublink {% if active_tab == 'p25' %}active{% endif %}">
+                P25 Phase 1 {% if active_protocol == 'p25' %}<span class="sublink-dot"></span>{% endif %}
+              </a>
+              <a href="/dmr" class="nav-sublink {% if active_tab == 'dmr' %}active{% endif %}">
+                DMR Duplex {% if active_protocol == 'dmr' %}<span class="sublink-dot"></span>{% endif %}
+              </a>
+              <a href="/modem" class="nav-sublink {% if active_tab == 'modem' %}active{% endif %}">
+                Modem &amp; RF Tuning
+              </a>
+              <a href="/profiles" class="nav-sublink {% if active_tab == 'profiles' %}active{% endif %}">
+                Saved Profiles
+              </a>
+            </div>
           </li>
-          <li class="nav-item">
-            <a href="/p25" class="nav-link {% if active_tab == 'p25' %}active{% endif %}">
-              <span class="nav-icon">⚡</span>
-              <span class="nav-label">P25 Management</span>
-              {% if active_protocol == 'p25' %}
-                <span class="nav-pill nav-pill-active" title="P25 Phase 1 is Active">ACTIVE</span>
-              {% else %}
-                <span class="nav-pill nav-pill-standby" title="P25 in Standby">STANDBY</span>
-              {% endif %}
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="/profiles" class="nav-link {% if active_tab == 'profiles' %}active{% endif %}">
-              <span class="nav-icon">🔄</span> <span class="nav-label">Radio Profiles</span>
-            </a>
-          </li>
-        </ul>
 
-        <div class="nav-section-label">HARDWARE &amp; NETWORK</div>
-        <ul class="nav-list">
-          <li class="nav-item">
-            <a href="/network" class="nav-link {% if active_tab == 'network' %}active{% endif %}">
-              <span class="nav-icon">📶</span> <span class="nav-label">Wi-Fi &amp; Hotspot</span>
+          <!-- Category 3: Network & Wi-Fi -->
+          <li class="nav-item nav-category-group {% if active_tab in net_tabs %}expanded{% endif %}">
+            <a href="/network" class="nav-link {% if active_tab in net_tabs %}active{% endif %}">
+              <span class="nav-icon">📶</span>
+              <span class="nav-label">Network &amp; Wi-Fi</span>
             </a>
+            <div class="nav-sublinks">
+              <a href="/network" class="nav-sublink {% if active_tab == 'network' %}active{% endif %}">
+                Wi-Fi &amp; Field Hotspot
+              </a>
+              <a href="/meshtastic" class="nav-sublink {% if active_tab == 'meshtastic' %}active{% endif %}">
+                Meshtastic Bridge
+              </a>
+            </div>
           </li>
-          <li class="nav-item">
-            <a href="/modem" class="nav-link {% if active_tab == 'modem' %}active{% endif %}">
-              <span class="nav-icon">📡</span> <span class="nav-label">Modem &amp; RF Tuning</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="/meshtastic" class="nav-link {% if active_tab == 'meshtastic' %}active{% endif %}">
-              <span class="nav-icon">🌐</span> <span class="nav-label">Meshtastic Bridge</span>
-            </a>
-          </li>
-        </ul>
 
-        <div class="nav-section-label">SYSTEM &amp; MAINTENANCE</div>
-        <ul class="nav-list">
-          <li class="nav-item">
-            <a href="/config" class="nav-link {% if active_tab == 'config' %}active{% endif %}">
-              <span class="nav-icon">⚙️</span> <span class="nav-label">Config &amp; History</span>
+          <!-- Category 4: System & Logs -->
+          <li class="nav-item nav-category-group {% if active_tab in sys_tabs %}expanded{% endif %}">
+            <a href="/diagnostics" class="nav-link {% if active_tab in sys_tabs %}active{% endif %}">
+              <span class="nav-icon">🩺</span>
+              <span class="nav-label">System &amp; Logs</span>
             </a>
-          </li>
-          <li class="nav-item">
-            <a href="/diagnostics" class="nav-link {% if active_tab == 'diagnostics' %}active{% endif %}">
-              <span class="nav-icon">🩺</span> <span class="nav-label">Diagnostics &amp; Logs</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="/terminal" class="nav-link {% if active_tab == 'terminal' %}active{% endif %}">
-              <span class="nav-icon">💻</span> <span class="nav-label">Web Terminal</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="/updates" class="nav-link {% if active_tab == 'updates' %}active{% endif %}">
-              <span class="nav-icon">🔄</span> <span class="nav-label">System Updates</span>
-            </a>
+            <div class="nav-sublinks">
+              <a href="/diagnostics" class="nav-sublink {% if active_tab == 'diagnostics' %}active{% endif %}">
+                Diagnostics &amp; Live Logs
+              </a>
+              <a href="/config" class="nav-sublink {% if active_tab == 'config' %}active{% endif %}">
+                YAML Config &amp; Backups
+              </a>
+              <a href="/terminal" class="nav-sublink {% if active_tab == 'terminal' %}active{% endif %}">
+                Web Terminal
+              </a>
+              <a href="/updates" class="nav-sublink {% if active_tab == 'updates' %}active{% endif %}">
+                System Updates
+              </a>
+            </div>
           </li>
         </ul>
       </div>
+
       <div class="sidebar-footer">
-        <div>Hardware: Raspberry Pi 5</div>
-        <div>Target: MMDVM Duplex Hat</div>
-        <div style="margin-top: 0.25rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.14') }}</div>
+        <div>Hardware: Raspberry Pi 5 &bull; MMDVM Duplex</div>
+        <div style="margin-top: 0.2rem; color: var(--accent-cyan); font-weight: 600;">DVM Nexus v{{ app_version|default('1.0.64') }}</div>
       </div>
     </aside>
 
     <!-- Main Content Area -->
     <div class="main-content">
-      <header class="top-header">
-        <div class="header-left">
+      <!-- ZONE 1: Top Status Strip (Callsign, Active Mode, Live RF State Pill, Master/Network Connection Indicator) -->
+      <header class="top-header top-status-strip">
+        <div class="status-strip-left">
           <button type="button" class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Open navigation menu">
             <span class="hamburger-bar"></span>
             <span class="hamburger-bar"></span>
             <span class="hamburger-bar"></span>
           </button>
-          <div class="header-brand-mobile">
-            <span class="mobile-logo-icon">N</span>
-          </div>
-          <div class="header-title-group">
-            <h1 class="page-title">{{ title }}</h1>
-            <span class="header-node-badge {% if service and service.is_running %}badge-node-online{% else %}badge-node-offline{% endif %}">
-              <span class="pulse-dot-small"></span>
-              <span class="node-badge-text">{% if service and service.is_running %}ONLINE &bull; {{ active_protocol|upper }}{% else %}OFFLINE{% endif %}</span>
-            </span>
-          </div>
-        </div>
-        <div class="header-right">
-          <!-- Protocol Mode Switcher Capsule -->
-          <div class="protocol-header-capsule" id="header-protocol-capsule">
-            {% if active_protocol == 'dmr' %}
-              <div class="protocol-tag protocol-tag-active" title="Current Mode: DMR Duplex">
-                <span class="pulse-dot"></span>
-                <span class="tag-title"><span class="proto-text-full">DMR ACTIVE</span><span class="proto-text-short">DMR</span></span>
-              </div>
-              <button type="button" class="btn btn-switch-mode" onclick="openModeSwitchModal('p25', 'P25 Phase 1')" title="Switch radio to P25 Phase 1">
-                <span class="switch-arrow">⇄</span> <span class="switch-btn-text">Switch to P25</span>
-              </button>
-            {% elif active_protocol == 'p25' %}
-              <div class="protocol-tag protocol-tag-active" title="Current Mode: P25 Phase 1">
-                <span class="pulse-dot"></span>
-                <span class="tag-title"><span class="proto-text-full">P25 ACTIVE</span><span class="proto-text-short">P25</span></span>
-              </div>
-              <button type="button" class="btn btn-switch-mode" onclick="openModeSwitchModal('dmr', 'DMR Duplex')" title="Switch radio to DMR Duplex">
-                <span class="switch-arrow">⇄</span> <span class="switch-btn-text">Switch to DMR</span>
-              </button>
-            {% else %}
-              <div class="protocol-tag" title="Multi-Mode">
-                <span class="tag-title">{{ active_protocol|upper }}</span>
-              </div>
-            {% endif %}
-          </div>
 
-          <div id="service-badge-container" hx-get="/components/service-badge" hx-trigger="every 6s [document.visibilityState==='visible']">
+          <!-- Station Callsign -->
+          <a href="/" class="strip-callsign-badge" title="Station Callsign &amp; Dashboard">
+            <span class="strip-callsign">{{ (dvm.callsign if dvm and dvm.callsign else 'N0CALL') }}</span>
+            <span class="strip-freq font-mono hide-mobile">
+              {{ (dvm.tx_freq_mhz if dvm and dvm.tx_freq_mhz else '441.00000') }} MHz
+            </span>
+          </a>
+
+          <!-- Active Mode Pill (DMR / P25) -->
+          <span class="strip-mode-pill {% if active_protocol == 'p25' %}mode-pill-p25{% else %}mode-pill-dmr{% endif %}" title="Active Radio Protocol">
+            <span class="pulse-dot-small"></span>
+            <span>{{ active_protocol|upper }}</span>
+            <span class="hide-mobile">{% if dvm and dvm.duplex %}DUPLEX{% else %}SIMPLEX{% endif %}</span>
+          </span>
+        </div>
+
+        <div class="status-strip-right">
+          <!-- Live RF State Pill (IDLE / RX / TX) -->
+          {% set rf_state = (hud.state if hud and hud.state else 'IDLE') %}
+          <span id="top-rf-state-pill" class="strip-rf-pill {% if not (service and service.is_running) %}rf-pill-offline{% elif rf_state == 'TX' %}rf-pill-tx{% elif rf_state == 'RX' %}rf-pill-rx{% else %}rf-pill-idle{% endif %}">
+            <span class="rf-pill-dot"></span>
+            {% if not (service and service.is_running) %}
+              <span>STOPPED</span>
+            {% elif rf_state == 'TX' %}
+              <span>RF TX</span>
+            {% elif rf_state == 'RX' %}
+              <span>RF RX</span>
+            {% else %}
+              <span>IDLE</span>
+            {% endif %}
+          </span>
+
+          <!-- Master / Network Connection Indicator -->
+          <a href="/network" class="strip-net-indicator" title="Network &amp; FNE Master Link Status">
+            {% if net and net.mode == 'hotspot' %}
+              <span class="net-dot net-dot-hotspot"></span>
+              <span class="net-label">AP: <span class="hide-mobile">{{ net.hotspot_ssid|default('MMDVM-Field-AP') }}</span></span>
+            {% elif dvm and dvm.network_enabled %}
+              <span class="net-dot net-dot-online"></span>
+              <span class="net-label">FNE <span class="hide-mobile">#{{ dvm.network_peer_id }}</span></span>
+            {% else %}
+              <span class="net-dot net-dot-standalone"></span>
+              <span class="net-label"><span class="hide-mobile">Standalone</span> RF</span>
+            {% endif %}
+          </a>
+
+          <!-- Service Health Badge (HTMX live poll) -->
+          <div id="service-badge-container" class="hide-xs" hx-get="/components/service-badge" hx-trigger="every 6s [document.visibilityState==='visible']">
             {% include "components/status_badge.html" %}
           </div>
-          <form hx-post="/api/service/restart-quick" hx-target="#toast-container" hx-swap="beforeend" hx-confirm="Restart DVMHost service now? Any active call will be interrupted." hx-disabled-elt="find button" style="display:inline;">
-            <button type="submit" class="btn btn-secondary btn-sm restart-btn" title="Restart DVMHost Service">
-              <span class="restart-icon">🔄</span>
-              <span class="restart-text">Restart Radio</span>
-            </button>
-          </form>
         </div>
       </header>
+
+      <!-- Category Sub-Navigation Bar (shown on non-dashboard pages for 1-click switching within category) -->
+      {% if active_tab in radio_tabs %}
+      <nav class="category-subnav" aria-label="Radio Configuration Sections">
+        <a href="/p25" class="subnav-tab {% if active_tab == 'p25' %}active{% endif %}">⚡ P25 Phase 1</a>
+        <a href="/dmr" class="subnav-tab {% if active_tab == 'dmr' %}active{% endif %}">📻 DMR Duplex</a>
+        <a href="/modem" class="subnav-tab {% if active_tab == 'modem' %}active{% endif %}">📡 Modem &amp; RF</a>
+        <a href="/profiles" class="subnav-tab {% if active_tab == 'profiles' %}active{% endif %}">🔄 Profiles</a>
+      </nav>
+      {% elif active_tab in net_tabs %}
+      <nav class="category-subnav" aria-label="Network Sections">
+        <a href="/network" class="subnav-tab {% if active_tab == 'network' %}active{% endif %}">📶 Wi-Fi &amp; Hotspot</a>
+        <a href="/meshtastic" class="subnav-tab {% if active_tab == 'meshtastic' %}active{% endif %}">🌐 Meshtastic Bridge</a>
+      </nav>
+      {% elif active_tab in sys_tabs %}
+      <nav class="category-subnav" aria-label="System &amp; Logs Sections">
+        <a href="/diagnostics" class="subnav-tab {% if active_tab == 'diagnostics' %}active{% endif %}">🩺 Diagnostics &amp; Logs</a>
+        <a href="/config" class="subnav-tab {% if active_tab == 'config' %}active{% endif %}">⚙️ YAML Config</a>
+        <a href="/terminal" class="subnav-tab {% if active_tab == 'terminal' %}active{% endif %}">💻 Terminal</a>
+        <a href="/updates" class="subnav-tab {% if active_tab == 'updates' %}active{% endif %}">🔄 Updates</a>
+      </nav>
+      {% endif %}
 
       <!-- Global Connection Lost & Pending Restart Alerts -->
       <div id="connection-lost-banner" class="connection-lost-banner" style="display:none;" role="alert">
@@ -209,34 +227,25 @@
     </div>
   </div>
 
-  <!-- Mobile Bottom Navigation Bar (Hidden on Desktop via CSS & Device Detection) -->
-  <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
+  <!-- Mobile Persistent Bottom Tab Bar (< 1024px) with safe-area padding -->
+  <nav class="mobile-bottom-nav pb-[env(safe-area-inset-bottom)]" aria-label="Mobile Navigation">
     <a href="/" class="mobile-nav-link {% if active_tab == 'dashboard' %}active{% endif %}">
       <span class="mobile-nav-icon">📊</span>
-      <span class="mobile-nav-text">Dash</span>
+      <span class="mobile-nav-text">Dashboard</span>
     </a>
-    <a href="/dmr" class="mobile-nav-link {% if active_tab == 'dmr' %}active{% endif %}">
+    <a href="{% if active_protocol == 'p25' %}/p25{% else %}/dmr{% endif %}" class="mobile-nav-link {% if active_tab in radio_tabs %}active{% endif %}">
       <span class="mobile-nav-icon">📻</span>
-      <span class="mobile-nav-text">DMR</span>
-      {% if active_protocol == 'dmr' %}
-        <span class="mobile-active-pip" title="Active"></span>
-      {% endif %}
+      <span class="mobile-nav-text">Radio ({{ active_protocol|upper }})</span>
+      <span class="mobile-active-pip" title="Active"></span>
     </a>
-    <a href="/p25" class="mobile-nav-link {% if active_tab == 'p25' %}active{% endif %}">
-      <span class="mobile-nav-icon">⚡</span>
-      <span class="mobile-nav-text">P25</span>
-      {% if active_protocol == 'p25' %}
-        <span class="mobile-active-pip" title="Active"></span>
-      {% endif %}
+    <a href="/network" class="mobile-nav-link {% if active_tab in net_tabs %}active{% endif %}">
+      <span class="mobile-nav-icon">📶</span>
+      <span class="mobile-nav-text">Wi-Fi / AP</span>
     </a>
-    <a href="/meshtastic" class="mobile-nav-link {% if active_tab == 'meshtastic' %}active{% endif %}">
-      <span class="mobile-nav-icon">🌐</span>
-      <span class="mobile-nav-text">Mesh</span>
+    <a href="/diagnostics" class="mobile-nav-link {% if active_tab in sys_tabs %}active{% endif %}">
+      <span class="mobile-nav-icon">🩺</span>
+      <span class="mobile-nav-text">System</span>
     </a>
-    <button type="button" class="mobile-nav-link" id="mobile-menu-trigger">
-      <span class="mobile-nav-icon">☰</span>
-      <span class="mobile-nav-text">Menu</span>
-    </button>
   </nav>
 
   <!-- Safe Radio Mode Switch Modal -->
@@ -281,7 +290,6 @@
       const overlay = document.getElementById('sidebar-overlay');
       const toggleBtn = document.getElementById('mobile-nav-toggle');
       const closeBtn = document.getElementById('sidebar-close-btn');
-      const menuTrigger = document.getElementById('mobile-menu-trigger');
 
       function openDrawer() {
         if (!sidebar || !overlay) return;
@@ -298,16 +306,13 @@
       }
 
       if (toggleBtn) toggleBtn.addEventListener('click', openDrawer);
-      if (menuTrigger) menuTrigger.addEventListener('click', openDrawer);
       if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
       if (overlay) overlay.addEventListener('click', closeDrawer);
 
-      // Auto-close on link click
-      document.querySelectorAll('#sidebar .nav-link').forEach(link => {
+      document.querySelectorAll('#sidebar .nav-link, #sidebar .nav-sublink').forEach(link => {
         link.addEventListener('click', closeDrawer);
       });
 
-      // Escape key closes drawer and modals
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
           closeDrawer();
@@ -315,6 +320,20 @@
         }
       });
     })();
+
+    // Inline Alias Editor for Connected Radios Roster
+    window.openAliasEditor = function(rid, currentAlias) {
+      const form = document.getElementById('roster-alias-form');
+      const ridInput = document.getElementById('alias-edit-rid');
+      const ridDisp = document.getElementById('alias-edit-rid-display');
+      const callInput = document.getElementById('alias-edit-callsign');
+      if (!form || !ridInput || !callInput) return;
+      ridInput.value = rid;
+      if (ridDisp) ridDisp.textContent = rid;
+      callInput.value = (currentAlias && !currentAlias.startsWith('Radio ')) ? currentAlias : '';
+      form.style.display = 'flex';
+      callInput.focus();
+    };
 
     // Programmatic toast helper + auto-dismiss timer tracking
     function attachToastDismiss(toastEl) {
@@ -347,7 +366,7 @@
       document.querySelectorAll('.toast:not([data-dismiss-attached])').forEach(attachToastDismiss);
     });
 
-    // Global HTMX Error Interception, Loading Cleanup & Connection Watchdog
+    // Global HTMX Error Interception, Loading Spinners & Connection Watchdog
     (function() {
       function clearLoadingButtons(elt) {
         if (elt && elt.querySelectorAll) {
@@ -358,6 +377,17 @@
         }
         document.querySelectorAll('.btn-loading').forEach(b => b.classList.remove('btn-loading'));
       }
+
+      document.body.addEventListener('htmx:beforeRequest', function(evt) {
+        const elt = evt.detail && evt.detail.elt;
+        if (!elt) return;
+        if (elt.tagName === 'FORM') {
+          const submitBtn = elt.querySelector('button[type="submit"]');
+          if (submitBtn) submitBtn.classList.add('btn-loading');
+        } else if (elt.tagName === 'BUTTON' && elt.hasAttribute('hx-post')) {
+          elt.classList.add('btn-loading');
+        }
+      });
 
       document.body.addEventListener('htmx:sendError', function(evt) {
         const banner = document.getElementById('connection-lost-banner');
@@ -380,7 +410,6 @@
           if (banner && banner.style.display !== 'none') {
             banner.style.display = 'none';
           }
-          // If a dirty-guarded form just saved cleanly, mark it clean and refresh pending-restart banner
           const elt = detail.elt;
           const form = elt && (elt.tagName === 'FORM' ? elt : elt.closest && elt.closest('form[data-dirty-guard]'));
           if (form && form.hasAttribute('data-dirty-guard')) {
@@ -388,7 +417,7 @@
             const bar = form.querySelector('.save-bar');
             if (bar) bar.classList.remove('is-dirty');
             const statusEl = form.querySelector('[data-save-status]');
-            if (statusEl) statusEl.textContent = 'All changes saved to disk.';
+            if (statusEl) statusEl.textContent = '✓ Saved & Applied to disk.';
             const pendingEl = document.getElementById('pending-restart-container');
             if (pendingEl && window.htmx) {
               htmx.ajax('GET', '/components/pending-restart', { target: '#pending-restart-container', swap: 'innerHTML' });
@@ -397,7 +426,6 @@
         }
       });
 
-      // Dirty-form tracking & beforeunload guard for explicit-save config forms
       document.addEventListener('input', function(evt) {
         const form = evt.target && evt.target.closest && evt.target.closest('form[data-dirty-guard]');
         if (!form) return;

@@ -23,7 +23,16 @@ import threading
 import subprocess
 from typing import Dict, Any, List, Optional, Tuple
 
-from dvm_nexus.core.database import record_last_heard, get_recent_last_heard
+from dvm_nexus.core.database import (
+    record_last_heard,
+    get_recent_last_heard,
+    upsert_connected_radio,
+    set_radio_call_ended,
+    remove_connected_radio,
+    clear_connected_radios,
+    get_connected_radios,
+    resolve_radio_alias,
+)
 from dvm_nexus.core.dvm_client import dvm_client
 from dvm_nexus.core.service_controller import service_controller
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
@@ -38,39 +47,68 @@ HW_STALE_SEC = 10.0
 PROTOCOL_CACHE_SEC = 5.0
 
 # --------------------------------------------------------------------------------------
-# DVMHost log patterns.
-# Upstream (MMDVMHost lineage) style:  "DMR Slot 1, received RF voice header from 3120101 to TG 3100"
-#                                      "DMR Slot 1, RF end of voice transmission, 4.2 seconds, BER: 0.5%"
-# Older Nexus-style lines are still accepted so existing logs and tests keep working.
+# DVMHost log patterns (Upstream DVMHost 3.x/4.x ActivityLog, LogInfoEx & MMDVMHost style)
 # --------------------------------------------------------------------------------------
 _TO = r"to\s+(?:TG\s*)?(?P<dst>\d+)"
 _SRC = r"from\s+(?P<src>[A-Za-z0-9_-]+)"
 
 _DMR_RF_START = [
-    re.compile(r"DMR\s+Slot\s*(?P<slot>[12]),?\s+received\s+RF\s+voice\s+(?:header|transmission)\s+" + _SRC + r"\s+" + _TO, re.I),
+    re.compile(r"DMR\s+Slot\s*(?P<slot>[12]),?\s+(?:received\s+)?RF\s+(?:encrypted\s+)?voice\s+(?:header|transmission|late\s+entry)\s+" + _SRC + r"\s+" + _TO, re.I),
     re.compile(r"DMR.*received RF voice.*" + _SRC + r" " + _TO + r".*slot\s*=\s*(?P<slot>[12])", re.I),
+    re.compile(r"\(RF\)\s+DMR\s+Voice\s+Call,\s*slot\s*=\s*(?P<slot>[12]),\s*srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
 ]
 _DMR_NET_START = [
-    re.compile(r"DMR\s+Slot\s*(?P<slot>[12]),?\s+received\s+network\s+voice\s+(?:header|transmission)\s+" + _SRC + r"\s+" + _TO, re.I),
+    re.compile(r"DMR\s+Slot\s*(?P<slot>[12]),?\s+(?:received\s+)?(?:network|net)\s+(?:encrypted\s+)?voice\s+(?:header|transmission|late\s+entry)\s+" + _SRC + r"\s+" + _TO, re.I),
     re.compile(r"DMR.*received (?:network|net) voice.*" + _SRC + r" " + _TO + r".*slot\s*=\s*(?P<slot>[12])", re.I),
+    re.compile(r"\(NET\)\s+DMR\s+Voice\s+Call,\s*slot\s*=\s*(?P<slot>[12]),\s*srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
 ]
 _DMR_END = [
-    re.compile(r"DMR\s+Slot\s*(?P<slot>[12]),?\s+(?:received\s+)?(?P<kind>RF|network)\s+end of voice transmission(?:,?\s+from\s+\S+\s+to\s+(?:TG\s*)?\d+)?,?\s+(?P<dur>[\d.]+)\s+seconds?(?:.*?BER:\s*(?P<ber>[\d.]+)%)?", re.I),
+    re.compile(r"DMR\s+Slot\s*(?P<slot>[12]),?\s+(?:received\s+)?(?P<kind>RF|network)\s+end of (?:voice\s+)?transmission(?:,?\s+from\s+\S+\s+to\s+(?:TG\s*)?\d+)?,?\s+(?P<dur>[\d.]+)\s+seconds?(?:.*?BER:\s*(?P<ber>[\d.]+)%)?", re.I),
     re.compile(r"DMR.*call end.*duration\s*=\s*(?P<dur>[\d.]+)s.*BER\s*=\s*(?P<ber>[\d.]+)%", re.I),
 ]
 _P25_RF_START = [
-    re.compile(r"P25.*?received\s+RF\s+voice\s+(?:transmission|HDU)?.*?" + _SRC + r"\s+" + _TO, re.I),
+    re.compile(r"P25.*?(?:received\s+)?RF\s+(?:encrypted\s+)?voice\s+(?:transmission|HDU|header)?.*?" + _SRC + r"\s+" + _TO, re.I),
+    re.compile(r"\(RF\)\s+P25\s+Voice\s+Call,\s*srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+    re.compile(r"\(RF\)\s+P25,\s+LDU1.*?srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
 ]
 _P25_NET_START = [
-    re.compile(r"P25.*?received\s+(?:network|net)\s+voice\s+(?:transmission|HDU)?.*?" + _SRC + r"\s+" + _TO, re.I),
+    re.compile(r"P25.*?(?:received\s+)?(?:network|net)\s+(?:encrypted\s+)?voice\s+(?:transmission|HDU|header)?.*?" + _SRC + r"\s+" + _TO, re.I),
+    re.compile(r"\(NET\)\s+P25\s+Voice\s+Call,\s*srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
 ]
 _P25_END = [
-    re.compile(r"P25.*?(?:received\s+)?(?P<kind>RF|network)\s+end of voice transmission(?:,?\s+from\s+\S+\s+to\s+(?:TG\s*)?\d+)?,?\s+(?P<dur>[\d.]+)\s+seconds?(?:.*?BER:\s*(?P<ber>[\d.]+)%)?", re.I),
+    re.compile(r"P25.*?(?:received\s+)?(?P<kind>RF|network)\s+end of (?:voice\s+)?transmission(?:,?\s+from\s+\S+\s+to\s+(?:TG\s*)?\d+)?,?\s+(?P<dur>[\d.]+)\s+seconds?(?:.*?BER:\s*(?P<ber>[\d.]+)%)?", re.I),
     re.compile(r"P25.*call end.*duration\s*=\s*(?P<dur>[\d.]+)s", re.I),
 ]
+
+# Subscriber Affiliation, Registration, Deregistration & Channel Grant patterns
+_AFFIL_GRANT = [
+    re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+granting\s+channel,\s*chNo\s*=\s*\d+(?:,\s*slot\s*=\s*(?P<slot>[12]))?,\s*dstId\s*=\s*(?P<dst>\d+),\s*srcId\s*=\s*(?P<src>\d+)", re.I),
+    re.compile(r"(?P<proto>P25|DMR)\s+RF\s+(?:group|individual)\s+grant\s+request\s+from\s+(?P<src>\d+)\s+to\s+(?:TG\s*)?(?P<dst>\d+)", re.I),
+    re.compile(r"P25,\s+TSDU.*?(?:I?OSP|ISP)_GRP_VCH.*?srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+]
+_AFFIL_GROUP = [
+    re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+group\s+affiliation,\s*srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+    re.compile(r"(?P<proto>P25|DMR)\s+RF\s+group\s+affiliation\s+request\s+from\s+(?P<src>\d+)\s+to\s+(?:TG\s*)?(?P<dst>\d+)", re.I),
+    re.compile(r"P25,\s+TSDU.*?(?:I?OSP|ISP)_GRP_AFF.*?srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+]
+_AFFIL_REG = [
+    re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+unit\s+registration,\s*srcId\s*=\s*(?P<src>\d+)", re.I),
+    re.compile(r"(?P<proto>P25|DMR).*?unit\s+registration\s+request\s+from\s+(?P<src>\d+)(?!\s+denied)", re.I),
+    re.compile(r"P25,\s+TSDU.*?(?:I?OSP|ISP)_U_REG.*?srcId\s*=\s*(?P<src>\d+)", re.I),
+]
+_AFFIL_DEREG = [
+    re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+unit\s+deregistration,\s*srcId\s*=\s*(?P<src>\d+)", re.I),
+    re.compile(r"(?P<proto>P25|DMR).*?unit\s+deregistration\s+request\s+from\s+(?P<src>\d+)", re.I),
+    re.compile(r"P25,\s+TSDU.*?ISP_U_DEREG_REQ.*?srcId\s*=\s*(?P<src>\d+)", re.I),
+]
+_AFFIL_RELEASE = [
+    re.compile(r"P25,\s+TDULC.*?CALL_TERM.*?srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+    re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+releasing\s+channel\s+grant,\s*chNo\s*=\s*\d+(?:,\s*slot\s*=\s*(?P<slot>[12]))?,\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+]
+
 _RSSI = re.compile(r"RSSI\s*[:=]\s*(?P<rssi>-?\d+)", re.I)
-_P25_ERRS = re.compile(r"P25.*(?:LDU|errs).*errs\s*=\s*(?P<errs>\d+)/(?P<total>\d+)", re.I)
-_VOICE_HINT = re.compile(r"voice (?:header|transmission|HDU)|end of voice", re.I)
+_P25_ERRS = re.compile(r"(?:P25|DMR).*(?:LDU|VOICE|errs).*errs\s*=\s*(?P<errs>\d+)/(?P<total>\d+)", re.I)
+_VOICE_HINT = re.compile(r"voice (?:header|transmission|HDU)|end of (?:voice )?transmission", re.I)
 
 
 def _first_match(patterns: List["re.Pattern"], line: str):
@@ -127,6 +165,7 @@ class TelemetryService:
         self._unparsed_count = 0
         self._unparsed_last_warn = 0.0
         self._last_dvm_pid: Optional[int] = None
+        self._last_affil_sync: float = 0.0
 
     # ------------------------------------------------------------------ HUD / feed accessors
     def _active_protocol_cached(self) -> str:
@@ -165,6 +204,54 @@ class TelemetryService:
         """Retrieve recent Last Heard entries (real traffic only - nothing is fabricated)."""
         return get_recent_last_heard(limit=limit)
 
+    def get_connected_radios(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retrieve currently affiliated, registered, or active subscriber radios."""
+        return get_connected_radios(limit=limit)
+
+    def clear_roster(self, simulated_only: bool = False) -> int:
+        """Clear the Connected Radios roster and optionally release DVMHost affiliations."""
+        if not simulated_only:
+            try:
+                if self._rf_state.get("rest_ok"):
+                    dvm_client.release_affiliations()
+            except Exception as exc:
+                logger.debug("Release affiliations via REST failed: %s", exc)
+        return clear_connected_radios(simulated_only=simulated_only)
+
+    def sync_affiliations_now(self) -> Dict[str, Any]:
+        """Poll DVMHost REST API for P25 and DMR affiliation tables and merge into roster."""
+        synced = 0
+        errors: List[str] = []
+        for proto, getter in (("P25", dvm_client.get_p25_affiliations), ("DMR", dvm_client.get_dmr_affiliations)):
+            try:
+                res = getter()
+                if not res.get("success"):
+                    continue
+                data = res.get("data") or {}
+                affs = data.get("affiliations") if isinstance(data, dict) else None
+                if not isinstance(affs, list):
+                    continue
+                for item in affs:
+                    if not isinstance(item, dict):
+                        continue
+                    src_id = int(item.get("srcId") or item.get("rid") or 0)
+                    grp_id = int(item.get("grpId") or item.get("dstId") or item.get("tgid") or 0)
+                    slot = int(item["slot"]) if item.get("slot") in (1, 2, "1", "2") else None
+                    if src_id > 0:
+                        upsert_connected_radio(
+                            radio_id=src_id,
+                            protocol=proto,
+                            talkgroup_id=grp_id if grp_id > 0 else None,
+                            slot=slot,
+                            status="Affiliated",
+                            touch_activity=False,
+                        )
+                        synced += 1
+            except Exception as exc:
+                errors.append(f"{proto}: {exc}")
+        self._last_affil_sync = time.time()
+        return {"synced": synced, "errors": errors}
+
     def get_parser_stats(self) -> Dict[str, Any]:
         """Diagnostics: count of voice-related journal lines the parser could not understand."""
         return {"unparsed_voice_lines": self._unparsed_count}
@@ -183,7 +270,7 @@ class TelemetryService:
         src_str = str(src).strip()
         if src_str.isdigit():
             src_id = int(src_str)
-            src_alias = f"{alias_prefix} {src_id}"
+            src_alias = resolve_radio_alias(src_id, f"{alias_prefix} {src_id}")
         else:
             src_id = 0
             src_alias = src_str
@@ -203,6 +290,18 @@ class TelemetryService:
                 "last_active_time": now,
                 "hold_sec": CALL_WATCHDOG_SEC,
             })
+        if src_id > 0:
+            try:
+                upsert_connected_radio(
+                    radio_id=src_id,
+                    protocol=protocol.upper(),
+                    callsign=src_alias,
+                    talkgroup_id=dest_id if dest_id > 0 else None,
+                    slot=slot,
+                    status="Active TX",
+                )
+            except Exception as exc:
+                logger.debug("Failed to upsert connected radio on call start: %s", exc)
 
     def _end_call(self, protocol: str, slot: Optional[int], duration: float,
                   ber: Optional[float], kind_hint: Optional[str]):
@@ -212,7 +311,7 @@ class TelemetryService:
             src_id = st.get("source_id") or 0
             dest_id = st.get("dest_id") or 0
             slot = slot or st.get("active_slot")
-            alias = st.get("source_alias") or f"Radio {src_id}"
+            alias = st.get("source_alias") or resolve_radio_alias(src_id, f"Radio {src_id}")
             was_rx = (st.get("state") == "RX")
             if kind_hint:
                 was_rx = (kind_hint.lower() == "rf")
@@ -224,6 +323,11 @@ class TelemetryService:
                 st["ber_percent"] = ber
             self._to_idle_locked()
             st["last_active_time"] = time.time()
+        if src_id > 0:
+            try:
+                set_radio_call_ended(radio_id=src_id, ber_percent=ber, rssi_dbm=rssi)
+            except Exception as exc:
+                logger.debug("Failed to update connected radio on call end: %s", exc)
         record_last_heard(
             protocol=protocol.lower(),
             direction=direction,
@@ -252,13 +356,14 @@ class TelemetryService:
         simulated: bool = False,
     ) -> int:
         """Record completed radio transmission and update live HUD state."""
+        resolved_alias = resolve_radio_alias(src_id, src_alias or f"Radio {src_id}")
         with self._lock:
             self._rf_state.update({
                 "state": "RX" if direction.lower() == "rf_rx" else "TX",
                 "protocol": protocol.upper(),
                 "active_slot": slot,
                 "source_id": src_id,
-                "source_alias": src_alias or f"Radio {src_id}",
+                "source_alias": resolved_alias,
                 "dest_id": dest_id,
                 "call_type": call_type.capitalize(),
                 "rssi_dbm": rssi_dbm,
@@ -270,12 +375,28 @@ class TelemetryService:
                 "hold_sec": max(3.0, min(float(duration_sec or 3.0), 8.0)) if simulated else CALL_WATCHDOG_SEC,
             })
 
+        if src_id > 0:
+            try:
+                upsert_connected_radio(
+                    radio_id=src_id,
+                    protocol=protocol.upper(),
+                    callsign=resolved_alias,
+                    talkgroup_id=dest_id if dest_id > 0 else None,
+                    slot=slot if protocol.lower() == "dmr" else None,
+                    status="Active TX",
+                    rssi_dbm=rssi_dbm,
+                    ber_percent=ber_percent,
+                    simulated=simulated,
+                )
+            except Exception as exc:
+                logger.debug("Failed to upsert connected radio on record_call_event: %s", exc)
+
         return record_last_heard(
             protocol=protocol,
             direction=direction,
             call_type=call_type,
             src_id=src_id,
-            src_alias=src_alias or f"Radio {src_id}",
+            src_alias=resolved_alias,
             dest_id=dest_id,
             slot=slot,
             duration_sec=duration_sec,
@@ -296,7 +417,7 @@ class TelemetryService:
         rssi_dbm: int = -79
     ):
         """Simulate an RF call for testing the UI. Rows are flagged as simulated."""
-        alias = f"Unit {src_id % 10000}"
+        alias = resolve_radio_alias(src_id, f"Unit {src_id % 10000}")
         return self.record_call_event(
             protocol=protocol,
             direction=direction,
@@ -340,6 +461,20 @@ class TelemetryService:
         m = _first_match(_P25_RF_START, line)
         if m:
             self._begin_call("RX", "P25", m["src"], int(m["dst"]), None, "Radio", now)
+            m_err = _P25_ERRS.search(line)
+            if m_err:
+                errs, total = int(m_err["errs"]), int(m_err["total"])
+                if total > 0:
+                    ber_val = round((errs / total) * 100.0, 1)
+                    with self._lock:
+                        self._rf_state["ber_percent"] = ber_val
+                    if str(m["src"]).isdigit():
+                        upsert_connected_radio(
+                            radio_id=int(m["src"]),
+                            protocol="P25",
+                            status="Active TX",
+                            ber_percent=ber_val,
+                        )
             return
 
         m = _first_match(_P25_NET_START, line)
@@ -354,21 +489,121 @@ class TelemetryService:
             self._end_call("p25", None, float(groups["dur"]), ber, groups.get("kind"))
             return
 
+        # Affiliation & Trunking Control Channel Events (P25 & DMR)
+        m = _first_match(_AFFIL_GRANT, line)
+        if m:
+            groups = m.groupdict()
+            proto = (groups.get("proto") or "P25").upper()
+            src_id = int(groups["src"])
+            dst_id = int(groups["dst"])
+            slot = int(groups["slot"]) if groups.get("slot") else None
+            upsert_connected_radio(
+                radio_id=src_id,
+                protocol=proto,
+                talkgroup_id=dst_id,
+                slot=slot,
+                status="Active TX",
+            )
+            with self._lock:
+                if self._rf_state["state"] == "IDLE":
+                    self._rf_state.update({
+                        "state": "RX",
+                        "protocol": proto,
+                        "active_slot": slot,
+                        "source_id": src_id,
+                        "source_alias": resolve_radio_alias(src_id, f"Radio {src_id}"),
+                        "dest_id": dst_id,
+                        "call_type": "Group",
+                        "slot1_active": (slot == 1) if slot else True,
+                        "slot2_active": (slot == 2) if slot else False,
+                        "last_active_time": now,
+                        "hold_sec": CALL_WATCHDOG_SEC,
+                    })
+            return
+
+        m = _first_match(_AFFIL_GROUP, line)
+        if m:
+            groups = m.groupdict()
+            proto = (groups.get("proto") or "P25").upper()
+            src_id = int(groups["src"])
+            dst_id = int(groups["dst"])
+            slot = int(groups["slot"]) if groups.get("slot") else None
+            upsert_connected_radio(
+                radio_id=src_id,
+                protocol=proto,
+                talkgroup_id=dst_id,
+                slot=slot,
+                status="Affiliated",
+            )
+            return
+
+        m = _first_match(_AFFIL_REG, line)
+        if m:
+            groups = m.groupdict()
+            proto = (groups.get("proto") or "P25").upper()
+            src_id = int(groups["src"])
+            upsert_connected_radio(
+                radio_id=src_id,
+                protocol=proto,
+                status="Registered",
+            )
+            return
+
+        m = _first_match(_AFFIL_DEREG, line)
+        if m:
+            src_id = int(m.groupdict()["src"])
+            remove_connected_radio(src_id)
+            return
+
+        m = _first_match(_AFFIL_RELEASE, line)
+        if m:
+            groups = m.groupdict()
+            src_id = int(groups["src"]) if groups.get("src") else 0
+            if src_id > 0:
+                set_radio_call_ended(radio_id=src_id)
+            return
+
         m = _RSSI.search(line)
         if m:
+            rssi_val = int(m["rssi"])
+            active_src = 0
             with self._lock:
-                self._rf_state["rssi_dbm"] = int(m["rssi"])
+                self._rf_state["rssi_dbm"] = rssi_val
                 if self._rf_state["state"] in ("RX", "TX"):
                     self._rf_state["last_active_time"] = now
+                    active_src = int(self._rf_state.get("source_id") or 0)
+            if active_src > 0:
+                try:
+                    upsert_connected_radio(
+                        radio_id=active_src,
+                        protocol=self._rf_state.get("protocol", "P25"),
+                        status="Active TX",
+                        rssi_dbm=rssi_val,
+                    )
+                except Exception:
+                    pass
 
         m = _P25_ERRS.search(line)
         if m:
             errs, total = int(m["errs"]), int(m["total"])
             if total > 0:
+                ber_val = round((errs / total) * 100.0, 1)
+                active_src = 0
                 with self._lock:
-                    self._rf_state["ber_percent"] = round((errs / total) * 100.0, 1)
+                    self._rf_state["ber_percent"] = ber_val
                     if self._rf_state["state"] in ("RX", "TX"):
                         self._rf_state["last_active_time"] = now
+                        active_src = int(self._rf_state.get("source_id") or 0)
+                if active_src > 0:
+                    try:
+                        upsert_connected_radio(
+                            radio_id=active_src,
+                            protocol=self._rf_state.get("protocol", "P25"),
+                            status="Active TX",
+                            ber_percent=ber_val,
+                        )
+                    except Exception:
+                        pass
             return
 
         # A voice-looking line we could not parse: surface it (rate limited) so a log-format
@@ -433,6 +668,10 @@ class TelemetryService:
                     st["state"] = "TX"
                     st["last_active_time"] = time.time()
                     st["hold_sec"] = 3.0
+
+            # Poll DVMHost affiliation tables every 3 seconds when REST is online
+            if (time.time() - self._last_affil_sync) >= 3.0:
+                self.sync_affiliations_now()
         except Exception as exc:
             logger.debug("DVMHost REST status poll failed: %s", exc)
             with self._lock:

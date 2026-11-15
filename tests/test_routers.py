@@ -585,5 +585,86 @@ def test_dvmhost_error_4_wacn_and_hex_channel_no_guard(client):
     assert rf_p25["effective_tx_hz"] == 446031250 + 100
 
 
+def test_connected_radios_roster_and_3_zone_dashboard(client):
+    """
+    Verify:
+    1. Rebuilt 3-Zone Dashboard layout (Top Status Strip, Quick Action Bar, Main Operational View with Connected Radios & 2x2 Hardware HUD).
+    2. Real DVMHost 3.x/4.x P25 TSBK affiliation, unit registration, channel grant, LDU1/LDU2 audio BER, and end-of-transmission log parsing into the Connected Radios roster.
+    3. Roster HTMX & JSON endpoints (/components/connected-radios, /api/radios/roster, /api/radios/alias, /api/radios/refresh, /api/radios/clear).
+    """
+    from dvm_nexus.core.telemetry_service import telemetry_service
+
+    # Clear roster first
+    resp_clear = client.post("/api/radios/clear")
+    assert resp_clear.status_code == 200
+
+    # 1. Simulate real DVMHost P25 TSBK unit registration + group affiliation + voice call logs (RID 11 -> TG 1)
+    telemetry_service.process_log_line(
+        "Nov 14 20:31:10 raspberrypi DVM[1393]: I: (RF) P25, TSDU (Trunking System Data Unit), ISP_U_REG_REQ, sysId = $001, netId = $BB800, srcId = 11"
+    )
+    radios = telemetry_service.get_connected_radios()
+    assert any(r["radio_id"] == 11 and r["status"] == "Registered" for r in radios)
+
+    telemetry_service.process_log_line(
+        "Nov 14 20:31:12 raspberrypi DVM[1393]: I: (RF) P25, TSDU (Trunking System Data Unit), OSP_GRP_AFF_RSP, srcId = 11, dstId = 1"
+    )
+    radios = telemetry_service.get_connected_radios()
+    assert any(r["radio_id"] == 11 and r["status"] == "Affiliated" and r["talkgroup_id"] == 1 for r in radios)
+
+    # Voice transmission start & LDU BER update
+    telemetry_service.process_log_line(
+        "Nov 14 20:31:16 raspberrypi DVM[1393]: A: 2026-11-15 01:31:16.925 P25 RF RF voice transmission from 11 to TG 1"
+    )
+    telemetry_service.process_log_line(
+        "Nov 14 20:31:17 raspberrypi DVM[1393]: I: (RF) P25, LDU1 (Logical Link Data Unit 1), audio, mfId = $00 srcId = 11, dstId = 1, group = 1, emerg = 0, encrypt = 0, prio = 4, errs = 2/1233 (0.2%)"
+    )
+    radios = telemetry_service.get_connected_radios()
+    r11 = next(r for r in radios if r["radio_id"] == 11)
+    assert r11["status"] == "Active TX"
+    assert r11["is_transmitting"] is True
+    assert r11["talkgroup_id"] == 1
+    assert r11["ber_percent"] == 0.2
+
+    # Assign a custom callsign/alias to RID 11 via /api/radios/alias
+    resp_alias = client.post("/api/radios/alias", data={"radio_id": 11, "callsign": "Tait TP9900"})
+    assert resp_alias.status_code == 200
+    assert "Tait TP9900" in resp_alias.text
+    assert "ACTIVE TX" in resp_alias.text
+
+    # End of transmission transitions radio back to Affiliated
+    telemetry_service.process_log_line(
+        "Nov 14 20:31:26 raspberrypi DVM[1393]: A: 2026-11-15 01:31:26.256 P25 RF RF end of transmission, 9.5 seconds, BER: 0.2%"
+    )
+    radios_after = telemetry_service.get_connected_radios()
+    r11_after = next(r for r in radios_after if r["radio_id"] == 11)
+    assert r11_after["status"] == "Affiliated"
+    assert r11_after["is_transmitting"] is False
+    assert r11_after["callsign"] == "Tait TP9900"
+
+    # Check JSON endpoint /api/radios/roster
+    resp_json = client.get("/api/radios/roster")
+    assert resp_json.status_code == 200
+    data_json = resp_json.json()
+    assert data_json["count"] >= 1
+    assert any(r["radio_id"] == 11 and r["callsign"] == "Tait TP9900" for r in data_json["radios"])
+
+    # Check Dashboard 3-zone layout & Connected Radios component
+    resp_dash = client.get("/")
+    assert resp_dash.status_code == 200
+    assert "top-status-strip" in resp_dash.text
+    assert "quick-action-bar" in resp_dash.text
+    assert "operational-split-layout" in resp_dash.text
+    assert "Connected Radios" in resp_dash.text
+    assert "Tait TP9900" in resp_dash.text
+    assert "engineering-drawer" in resp_dash.text
+
+    # Unit deregistration removes radio from active roster
+    telemetry_service.process_log_line(
+        "Nov 14 20:32:00 raspberrypi DVM[1393]: I: (RF) P25 Affiliation, unit deregistration, srcId = 11"
+    )
+    assert not any(r["radio_id"] == 11 for r in telemetry_service.get_connected_radios())
+
+
+
 
 

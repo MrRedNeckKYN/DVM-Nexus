@@ -42,8 +42,10 @@ def get_global_template_context(force: bool = False) -> Dict[str, Any]:
     try:
         from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
         proto = dvm_config_manager.get_active_protocol()
+        dvm_quick = dvm_config_manager.get_quick_status()
     except Exception:
         proto = "dmr"
+        dvm_quick = {}
 
     try:
         from dvm_nexus.config_engine.profile_manager import profile_manager
@@ -63,11 +65,26 @@ def get_global_template_context(force: bool = False) -> Dict[str, Any]:
     except Exception:
         service_info = None
 
+    try:
+        from dvm_nexus.core.telemetry_service import telemetry_service
+        hud_info = telemetry_service.get_hud_status()
+    except Exception:
+        hud_info = {"state": "IDLE", "protocol": proto.upper()}
+
+    try:
+        from dvm_nexus.core.network_manager import network_controller
+        net_info = network_controller.get_status()
+    except Exception:
+        net_info = {"mode": "client", "connected": True, "ssid": "LAN"}
+
     _global_ctx_cache = {
         "active_protocol": proto,
         "active_profile": prof,
         "app_version": ver,
         "service": service_info,
+        "dvm": dvm_quick,
+        "hud": hud_info,
+        "net": net_info,
     }
     _global_ctx_timestamp = now
     return dict(_global_ctx_cache)

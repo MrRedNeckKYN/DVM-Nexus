@@ -19,13 +19,10 @@
 </div>
 {% endif %}
 
-<!-- Top Header & Live OTA Command Bar -->
-<div class="card" style="border-left:4px solid var(--accent-cyan);">
-  <div class="card-header">
-    <div>
-      <div class="card-title">📡 Live Over-The-Air DMR Subscriber Commands</div>
-      <div style="font-size:0.78rem; color:var(--text-dim);">Transmits live DMR CSBK control signaling via DVMHost REST API (<code>PUT /dmr/rid</code> &amp; <code>GET /dmr/beacon</code>)</div>
-    </div>
+<!-- Top Header & Live OTA Command Bar (Progressive Disclosure Drawer) -->
+<details class="engineering-drawer" style="margin-bottom: 1rem;">
+  <summary class="engineering-drawer-summary">
+    <span>📡 Advanced Over-The-Air DMR Subscriber Commands (Check / Page / Inhibit / Beacon)</span>
     {% if is_standby %}
       <span class="badge badge-muted">Standby (Radio in P25 Mode)</span>
     {% elif not duplex %}
@@ -33,41 +30,43 @@
     {% else %}
       <span class="badge badge-cyan" id="dmr-ota-mode-badge">REST API Direct (Full Duplex Ready)</span>
     {% endif %}
+  </summary>
+  <div class="engineering-drawer-body">
+    <div id="dmr-ota-simplex-warn" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.55rem 0.85rem; margin-bottom:0.85rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.8rem; color:#fde68a;">
+      ⚠️ <strong>DVMHost Duplex Requirement:</strong> In upstream <code>dvmhost</code> (<code>ControlSignaling.cpp:290</code>), DMR CSBK Over-The-Air commands only queue RF frames when <strong>Full Duplex (<code>system.duplex: true</code>)</strong> is active. Select <strong>Full Duplex</strong> below, click <strong>Save</strong>, and restart the radio to transmit OTA commands.
+    </div>
+    <form hx-post="/dmr/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
+      <div class="ota-cmd-field">
+        <label class="form-label">Command</label>
+        <select name="action" id="dmr-ota-action-select" class="form-control" onchange="syncDmrOtaCommand()" {% if is_standby %}disabled{% endif %}>
+          <option value="check">Radio Check (CSBK Ext Func)</option>
+          <option value="page">Radio Page / Call Alert (CSBK)</option>
+          <option value="inhibit">Inhibit (Stun / Kill Radio)</option>
+          <option value="uninhibit">Uninhibit (Revive Radio)</option>
+          <option value="beacon">🗼 Fire Roaming / TSCC Beacon Burst</option>
+        </select>
+      </div>
+      <div class="ota-cmd-field" id="dmr-ota-rid-group">
+        <label class="form-label">Target Radio ID (RID)</label>
+        <input type="number" name="rid" id="dmr-ota-rid-input" class="form-control" placeholder="e.g. 1234567" {% if is_standby %}disabled{% endif %} required>
+      </div>
+      <div class="ota-cmd-slot" id="dmr-ota-slot-group">
+        <label class="form-label">Time Slot</label>
+        <select name="slot" class="form-control" {% if is_standby %}disabled{% endif %}>
+          <option value="1">Slot 1</option>
+          <option value="2">Slot 2</option>
+        </select>
+      </div>
+      <div class="ota-cmd-btn-wrap">
+        {% if is_standby %}
+          <button type="button" class="btn btn-secondary ota-send-btn" disabled title="Switch radio to DMR to transmit live OTA commands">P25 Active (Standby)</button>
+        {% else %}
+          <button type="submit" class="btn btn-primary ota-send-btn">Send Command</button>
+        {% endif %}
+      </div>
+    </form>
   </div>
-  <div id="dmr-ota-simplex-warn" style="{% if duplex %}display:none;{% else %}display:block;{% endif %} padding:0.55rem 0.85rem; margin-bottom:0.85rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.8rem; color:#fde68a;">
-    ⚠️ <strong>DVMHost Duplex Requirement:</strong> In upstream <code>dvmhost</code> (<code>ControlSignaling.cpp:290</code>), DMR CSBK Over-The-Air commands only queue RF frames when <strong>Full Duplex (<code>system.duplex: true</code>)</strong> is active. Select <strong>Full Duplex</strong> below, click <strong>Save</strong>, and restart the radio to transmit OTA commands.
-  </div>
-  <form hx-post="/dmr/rids/action" hx-target="#toast-container" hx-swap="beforeend" class="ota-command-bar">
-    <div class="ota-cmd-field">
-      <label class="form-label">Command</label>
-      <select name="action" id="dmr-ota-action-select" class="form-control" onchange="syncDmrOtaCommand()" {% if is_standby %}disabled{% endif %}>
-        <option value="check">Radio Check (CSBK Ext Func)</option>
-        <option value="page">Radio Page / Call Alert (CSBK)</option>
-        <option value="inhibit">Inhibit (Stun / Kill Radio)</option>
-        <option value="uninhibit">Uninhibit (Revive Radio)</option>
-        <option value="beacon">🗼 Fire Roaming / TSCC Beacon Burst</option>
-      </select>
-    </div>
-    <div class="ota-cmd-field" id="dmr-ota-rid-group">
-      <label class="form-label">Target Radio ID (RID)</label>
-      <input type="number" name="rid" id="dmr-ota-rid-input" class="form-control" placeholder="e.g. 1234567" {% if is_standby %}disabled{% endif %} required>
-    </div>
-    <div class="ota-cmd-slot" id="dmr-ota-slot-group">
-      <label class="form-label">Time Slot</label>
-      <select name="slot" class="form-control" {% if is_standby %}disabled{% endif %}>
-        <option value="1">Slot 1</option>
-        <option value="2">Slot 2</option>
-      </select>
-    </div>
-    <div class="ota-cmd-btn-wrap">
-      {% if is_standby %}
-        <button type="button" class="btn btn-secondary ota-send-btn" disabled title="Switch radio to DMR to transmit live OTA commands">P25 Active (Standby)</button>
-      {% else %}
-        <button type="submit" class="btn btn-primary ota-send-btn">Send Command</button>
-      {% endif %}
-    </div>
-  </form>
-</div>
+</details>
 
 <!-- Main DMR Configuration Form -->
 <form id="dmr-config-form" hx-post="/dmr/save" hx-trigger="submit" hx-target="#toast-container" hx-swap="beforeend" data-dirty-guard>

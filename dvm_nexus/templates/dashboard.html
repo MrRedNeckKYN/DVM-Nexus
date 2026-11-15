@@ -1,232 +1,231 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- Top Area: Service Crash / Diagnostic Alert Banner (shows only when failed or errored) -->
-<div id="crash-banner-container" style="margin-bottom: 1.25rem;">
+<!-- Service Crash / Diagnostic Alert Banner (shows only when failed or errored) -->
+<div id="crash-banner-container">
   {% include "components/service_error_banner.html" %}
 </div>
 
-<!-- Top Area: Real-Time RF Transceiver State HUD (Live 1.5s Auto-Sync) -->
-<div id="rf-hud-container" hx-get="/components/rf-hud" hx-trigger="every 1.5s [document.visibilityState==='visible']" hx-swap="innerHTML">
-  {% include "components/rf_hud.html" %}
-</div>
+<!-- =========================================================================
+     ZONE 2: QUICK ACTION BAR (Strictly the 3 Core Operator Controls)
+     1. Switch Mode/Protocol   2. Restart Radio Service   3. Hotspot/Wi-Fi Toggle
+     ========================================================================= -->
+<section class="quick-action-bar" aria-label="Quick Operator Controls">
+  <div class="quick-station-summary">
+    <div class="quick-station-id">
+      <span class="quick-callsign">{{ dvm.callsign|default('N0CALL') }}</span>
+      <span class="quick-proto-badge {% if dvm.protocol == 'p25' %}badge-indigo{% else %}badge-cyan{% endif %}">
+        {{ dvm.protocol|upper }} {% if dvm.duplex %}DUPLEX{% else %}SIMPLEX{% endif %}
+      </span>
+    </div>
+    <div class="quick-freq-summary font-mono">
+      TX {{ dvm.tx_freq_mhz or '441.00000' }} / RX {{ dvm.rx_freq_mhz or '446.00000' }} MHz
+      &bull;
+      {% if dvm.protocol == 'p25' %}
+        NAC 0x{{ dvm.nac }} &bull; WACN {{ dvm.net_id }}
+      {% else %}
+        CC {{ dvm.color_code }} &bull; TS1/TS2
+      {% endif %}
+    </div>
+  </div>
 
-<!-- Live Last Heard Activity Stream -->
-<div style="margin-bottom: 1.25rem;">
-  {% include "components/last_heard.html" %}
-</div>
+  <div class="quick-actions-grid">
+    <!-- Control 1: Switch Mode / Protocol -->
+    <button type="button" class="btn quick-action-btn quick-btn-mode"
+            onclick="openModeSwitchModal('{% if dvm.protocol == 'dmr' %}p25{% else %}dmr{% endif %}', '{% if dvm.protocol == 'dmr' %}P25 Phase 1{% else %}DMR Duplex{% endif %}')">
+      <span class="qa-icon">⇄</span>
+      <span class="qa-label">Switch to {{ 'P25' if dvm.protocol == 'dmr' else 'DMR' }}</span>
+    </button>
 
-<div class="dashboard-grid">
-  <!-- Area 1: Hero Radio Status (Desktop Left 2/3 / Mobile Top) -->
-  <div class="dash-hero">
-    <div class="card station-hero-card">
-      <div class="station-hero-main">
-        <div class="station-callsign-group">
-          <div class="station-callsign-badge">
-            <span class="station-callsign-text">{{ dvm.callsign|default('N0CALL') }}</span>
-            <span class="station-status-pill {% if service.is_running %}pill-online{% else %}pill-offline{% endif %}">
-              <span class="pulse-dot"></span>
-              {{ 'ONLINE' if service.is_running else 'OFFLINE' }}
-            </span>
+    <!-- Control 2: Restart Radio Service -->
+    <form hx-post="/api/service/restart-quick"
+          hx-target="#toast-container"
+          hx-swap="beforeend"
+          hx-disabled-elt="find button"
+          class="quick-action-form">
+      <button type="submit" class="btn quick-action-btn quick-btn-restart">
+        <span class="qa-icon">🔄</span>
+        <span class="qa-label">Restart Radio Service</span>
+      </button>
+    </form>
+
+    <!-- Control 3: Hotspot / Wi-Fi Toggle -->
+    {% set is_hotspot = (net and net.mode == 'hotspot') %}
+    <form hx-post="/api/dashboard/hotspot-toggle"
+          hx-target="#toast-container"
+          hx-swap="beforeend"
+          hx-disabled-elt="find button"
+          class="quick-action-form">
+      <input type="hidden" name="enable" value="{{ 'false' if is_hotspot else 'true' }}">
+      <button type="submit" class="btn quick-action-btn {% if is_hotspot %}quick-btn-hotspot-active{% else %}quick-btn-hotspot{% endif %}">
+        <span class="qa-icon">📶</span>
+        <span class="qa-label">{{ 'Hotspot ON (Switch to Wi-Fi)' if is_hotspot else 'Enable Field Hotspot' }}</span>
+      </button>
+    </form>
+  </div>
+</section>
+
+<!-- =========================================================================
+     ZONE 3: MAIN OPERATIONAL VIEW
+     Split cleanly into:
+     - Left/Top: Unified Live RF & Connected Radios Panel
+     - Right/Bottom: Compact 2x2 Hardware HUD + Station Config Summary
+     ========================================================================= -->
+<div class="operational-split-layout">
+
+  <!-- LEFT / TOP: Live RF & Connected Radios Unified Panel -->
+  <div class="ops-primary-column">
+    <div class="unified-panel">
+      <!-- Live RF Transceiver HUD (1.5s Auto-Sync) -->
+      <div id="rf-hud-container"
+           hx-get="/components/rf-hud"
+           hx-trigger="every 1.5s [document.visibilityState==='visible']"
+           hx-swap="innerHTML">
+        {% include "components/rf_hud.html" %}
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <!-- Live Connected Radios / Active Subscribers Roster (2s Auto-Sync) -->
+      <div id="connected-radios-container"
+           hx-get="/components/connected-radios"
+           hx-trigger="every 2s [document.visibilityState==='visible']"
+           hx-swap="innerHTML">
+        {% include "components/connected_radios.html" %}
+      </div>
+    </div>
+
+    <!-- Progressive Disclosure: Call History & Advanced Telemetry Drawer -->
+    <details class="engineering-drawer" style="margin-top: 1rem;">
+      <summary class="engineering-drawer-summary">
+        <span>📜 Call History (Last Heard) &amp; Advanced RF Audit Log</span>
+        <span class="drawer-chevron">▾</span>
+      </summary>
+      <div class="engineering-drawer-body">
+        {% include "components/last_heard.html" %}
+
+        <!-- Advanced Hardware / Engineering Parameters -->
+        <div class="card" style="margin-top: 1rem;">
+          <div class="card-header">
+            <div class="card-title">🛠️ Advanced / Engineering Parameters &amp; Recent Audit Trail</div>
+            <a href="/diagnostics" class="btn btn-secondary btn-xs">Full Diagnostics →</a>
+          </div>
+          <div class="engineering-kv-grid">
+            <div class="eng-kv-item">
+              <span class="eng-kv-label">Active Protocol</span>
+              <span class="eng-kv-val">{{ dvm.protocol|upper }} ({% if dvm.duplex %}Duplex Repeater{% else %}Simplex{% endif %})</span>
+            </div>
+            <div class="eng-kv-item">
+              <span class="eng-kv-label">Modem Serial Interface</span>
+              <span class="eng-kv-val font-mono">{{ dvm.modem_port }} @ {{ dvm.modem_speed }} baud</span>
+            </div>
+            <div class="eng-kv-item">
+              <span class="eng-kv-label">REST Telemetry Socket</span>
+              <span class="eng-kv-val font-mono">{% if dvm.rest_enabled %}127.0.0.1:{{ dvm.rest_port }}{% else %}Disabled{% endif %}</span>
+            </div>
+            <div class="eng-kv-item">
+              <span class="eng-kv-label">FNE Peer ID</span>
+              <span class="eng-kv-val font-mono">#{{ dvm.network_peer_id }} ({% if dvm.network_enabled %}Enabled{% else %}Standalone{% endif %})</span>
+            </div>
           </div>
 
-          <div class="station-meta-chips">
-            {% if dvm.protocol == 'dmr' %}
-              <span class="meta-chip chip-dmr"><span class="chip-icon">📻</span> DMR Tier II Duplex</span>
-            {% elif dvm.protocol == 'p25' %}
-              <span class="meta-chip chip-p25"><span class="chip-icon">⚡</span> P25 Phase 1 Conventional</span>
-            {% else %}
-              <span class="meta-chip chip-neutral">{{ dvm.protocol|upper }}</span>
-            {% endif %}
-
-            <span class="meta-chip chip-profile">
-              Profile: <strong>{{ profile.name if profile else 'Custom' }}</strong>
-            </span>
-
-            <span class="meta-chip chip-hardware">
-              {% if dvm.duplex %}
-                MMDVM Duplex (Dual ADF7021)
-              {% else %}
-                MMDVM Simplex
-              {% endif %}
-            </span>
+          {% if logs %}
+          <div class="table-container" style="margin-top: 0.75rem;">
+            <table class="table-clean">
+              <thead>
+                <tr>
+                  <th>UTC Time</th>
+                  <th>Category</th>
+                  <th>Action</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for log in logs[:5] %}
+                <tr>
+                  <td class="font-mono text-dim" style="font-size:0.75rem;">{{ log.timestamp }}</td>
+                  <td><span class="badge badge-cyan">{{ log.category }}</span></td>
+                  <td><strong>{{ log.action }}</strong></td>
+                  <td style="font-size:0.8rem;">{{ log.details }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
+          {% endif %}
         </div>
+      </div>
+    </details>
+  </div>
 
-        <div class="station-actions-group">
-          <a href="{% if dvm.protocol == 'dmr' %}/dmr{% else %}/p25{% endif %}" class="btn btn-primary btn-sm station-action-btn">
+  <!-- RIGHT / BOTTOM: Compact 2x2 Hardware HUD & Quick Config Links -->
+  <aside class="ops-secondary-column">
+    <div class="unified-panel hardware-hud-panel">
+      <div class="panel-section-header">
+        <span class="panel-section-title">🖥️ Compact 2&times;2 Hardware HUD</span>
+        <span class="badge badge-secondary" style="font-size:0.7rem;">Pi 5 Telemetry</span>
+      </div>
+
+      <div id="sys-stats-container"
+           hx-get="/components/system-stats"
+           hx-trigger="every 8s [document.visibilityState==='visible']">
+        {% include "components/sys_stats.html" %}
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <!-- Compact Station Summary & Direct Editor Shortcut -->
+      <div class="compact-station-box">
+        <div class="compact-station-row">
+          <span class="text-dim">Active Profile</span>
+          <strong>{{ profile.name if profile else 'Custom Station' }}</strong>
+        </div>
+        <div class="compact-station-row">
+          <span class="text-dim">Radio Mode</span>
+          <span>
+            {% if dvm.protocol == 'p25' %}
+              P25 Phase 1 (NAC 0x{{ dvm.nac }})
+            {% else %}
+              DMR Tier II (CC {{ dvm.color_code }})
+            {% endif %}
+          </span>
+        </div>
+        <div class="compact-station-row">
+          <span class="text-dim">Wi-Fi / Network</span>
+          <span>
+            {% if net and net.mode == 'hotspot' %}
+              Field AP ({{ net.hotspot_ssid|default('MMDVM-Field-AP') }})
+            {% elif net and net.connected %}
+              {{ net.ssid or 'LAN Connected' }} ({{ net.ip_address or 'DHCP' }})
+            {% else %}
+              Standalone Local
+            {% endif %}
+          </span>
+        </div>
+        <div class="compact-station-actions">
+          <a href="{% if dvm.protocol == 'p25' %}/p25{% else %}/dmr{% endif %}" class="btn btn-primary btn-sm" style="flex:1; text-align:center;">
             Configure {{ dvm.protocol|upper }} →
           </a>
-          <button type="button" class="btn btn-secondary btn-sm station-action-btn" onclick="openModeSwitchModal('{% if dvm.protocol == 'dmr' %}p25{% else %}dmr{% endif %}', '{% if dvm.protocol == 'dmr' %}P25 Phase 1{% else %}DMR Duplex{% endif %}')">
-            ⇄ Switch Mode
-          </button>
+          <a href="/modem" class="btn btn-secondary btn-sm" style="flex:1; text-align:center;">
+            RF &amp; Modem
+          </a>
         </div>
       </div>
 
-      <!-- Station Quick Telemetry Strip -->
-      <div class="station-telemetry-strip">
-        <div class="telemetry-strip-item">
-          <span class="strip-label">Tuned RF Frequencies</span>
-          <span class="strip-value font-mono truncate" style="color:var(--accent-cyan); font-weight:600;">
-            TX: {{ dvm.tx_freq_mhz or '462.61875' }} &bull; RX: {{ dvm.rx_freq_mhz or '467.61875' }} MHz
-          </span>
+      <!-- Progressive Disclosure: Direct Daemon Start/Stop Controls -->
+      <details class="engineering-drawer" style="margin-top: 0.75rem;">
+        <summary class="engineering-drawer-summary">
+          <span>⚙️ Advanced Daemon Process Control</span>
+          <span class="drawer-chevron">▾</span>
+        </summary>
+        <div class="engineering-drawer-body" id="service-controls-container"
+             hx-get="/components/service-controls"
+             hx-trigger="every 10s [document.visibilityState==='visible']">
+          {% include "components/service_controls.html" %}
         </div>
-        <div class="telemetry-strip-item">
-          <span class="strip-label">FNE / Master Network</span>
-          <span class="strip-value truncate">
-            {% if dvm.network_enabled %}
-              <span class="dot-online"></span> Peer #{{ dvm.network_peer_id }}
-            {% else %}
-              <span class="dot-muted"></span> Standalone RF
-            {% endif %}
-          </span>
-        </div>
-        <div class="telemetry-strip-item">
-          <span class="strip-label">{% if dvm.protocol == 'dmr' %}Color Code / Slots{% else %}NAC / WACN{% endif %}</span>
-          <span class="strip-value font-mono truncate">
-            {% if dvm.protocol == 'dmr' %}
-              CC {{ dvm.color_code }} &bull; Slot 1 &amp; 2
-            {% else %}
-              0x{{ dvm.nac }} &bull; {{ dvm.net_id }}
-            {% endif %}
-          </span>
-        </div>
-        <div class="telemetry-strip-item">
-          <span class="strip-label">Modem Interface</span>
-          <span class="strip-value font-mono truncate" title="{{ dvm.modem_port }} @ {{ dvm.modem_speed }}">
-            <span class="modem-port-badge">{{ dvm.modem_port }}</span> <span class="modem-speed-subtext">@ {{ dvm.modem_speed }}</span>
-          </span>
-        </div>
-        <div class="telemetry-strip-item">
-          <span class="strip-label">REST API Telemetry</span>
-          <span class="strip-value truncate">
-            {% if dvm.rest_enabled %}
-              <span class="badge badge-success">Port {{ dvm.rest_port }}</span>
-            {% else %}
-              <span class="badge badge-muted">Inactive</span>
-            {% endif %}
-          </span>
-        </div>
-      </div>
+      </details>
     </div>
-  </div>
+  </aside>
 
-  <!-- Area 2: Hardware Telemetry HUD (Desktop Right 1/3 / Mobile #2) -->
-  <div class="dash-telemetry">
-    <div id="sys-stats-container" hx-get="/components/system-stats" hx-trigger="every 8s [document.visibilityState==='visible']">
-      {% include "components/sys_stats.html" %}
-    </div>
-  </div>
-
-  <!-- Area 3: Service Controls (Desktop Right 1/3 / Mobile #3) -->
-  <div class="dash-service">
-    <div id="service-controls-container" hx-get="/components/service-controls" hx-trigger="every 8s [document.visibilityState==='visible']">
-      {% include "components/service_controls.html" %}
-    </div>
-  </div>
-
-  <!-- Area 4: Parameter Highlights & Network Connection (Desktop Left 2/3 / Mobile #4) -->
-  <div class="dash-params">
-    <div class="card station-params-card">
-      <div class="card-header">
-        <div class="card-title">📡 Station Parameter Highlights</div>
-        <a href="{% if dvm.protocol == 'dmr' %}/dmr{% else %}/p25{% endif %}" class="btn btn-secondary btn-sm">Full Editor →</a>
-      </div>
-
-      <div class="table-container">
-        <table class="table-clean">
-          <tbody>
-            <tr>
-              <td class="text-dim">Active Protocol</td>
-              <td><strong>{{ dvm.protocol|upper }}</strong> ({% if dvm.duplex %}Duplex Repeater{% else %}Simplex Hotspot{% endif %})</td>
-            </tr>
-            {% if dvm.protocol == 'dmr' %}
-            <tr>
-              <td class="text-dim">DMR Color Code</td>
-              <td><span class="badge badge-cyan">CC {{ dvm.color_code }}</span></td>
-            </tr>
-            <tr>
-              <td class="text-dim">DMR Network ID</td>
-              <td><code class="font-mono">{{ dvm.network_peer_id }}</code></td>
-            </tr>
-            <tr>
-              <td class="text-dim">Active Timeslots</td>
-              <td>TS1 (Wide / Repeater) &bull; TS2 (Local / Cluster)</td>
-            </tr>
-            {% elif dvm.protocol == 'p25' %}
-            <tr>
-              <td class="text-dim">Network Access Code (NAC)</td>
-              <td><span class="badge badge-indigo">0x{{ dvm.nac }}</span></td>
-            </tr>
-            <tr>
-              <td class="text-dim">P25 WACN / System ID</td>
-              <td>WACN: <code class="font-mono">{{ dvm.net_id }}</code> &bull; SysID: <code class="font-mono">001</code></td>
-            </tr>
-            {% endif %}
-            <tr>
-              <td class="text-dim">Modem Serial Port</td>
-              <td><code class="font-mono">{{ dvm.modem_port }}</code> @ {{ dvm.modem_speed }} baud</td>
-            </tr>
-            <tr>
-              <td class="text-dim">REST Management Link</td>
-              <td>
-                {% if dvm.rest_enabled %}
-                  <span class="badge badge-success">Port {{ dvm.rest_port }} (Listening)</span>
-                {% else %}
-                  <span class="badge badge-muted">Disabled in config</span>
-                {% endif %}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- Area 5: Recent Events & Audit Log (Desktop Left 2/3 / Mobile #5) -->
-  <div class="dash-logs">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">📋 Recent System &amp; Radio Events</div>
-        <span style="font-size:0.8rem; color:var(--text-dim);">Audit Trail</span>
-      </div>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Timestamp (UTC)</th>
-              <th>Category</th>
-              <th>Action</th>
-              <th>Details</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for log in logs %}
-            <tr>
-              <td style="color:var(--text-dim); font-size:0.8rem;" class="font-mono">{{ log.timestamp }}</td>
-              <td><span class="badge badge-cyan">{{ log.category }}</span></td>
-              <td><strong>{{ log.action }}</strong></td>
-              <td>{{ log.details }}</td>
-              <td>
-                {% if log.status == 'success' %}
-                  <span class="badge badge-success">OK</span>
-                {% elif log.status == 'warning' %}
-                  <span class="badge badge-warning">WARN</span>
-                {% else %}
-                  <span class="badge badge-danger">ERR</span>
-                {% endif %}
-              </td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="5" style="text-align:center; color:var(--text-dim);">No recent activity recorded.</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %}

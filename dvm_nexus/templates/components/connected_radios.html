@@ -1,0 +1,172 @@
+<div id="connected-radios-panel" class="roster-subpanel">
+  <div class="roster-header">
+    <div class="roster-title-group">
+      <div class="roster-title">
+        <span class="roster-icon">📻</span>
+        <span>Connected Radios &amp; Active Subscribers</span>
+        <span class="roster-count-pill">{{ connected_radios|length if connected_radios else 0 }}</span>
+      </div>
+      <div class="roster-subtitle">Live P25 TSBK / DMR Affiliation &amp; Voice Activity Roster</div>
+    </div>
+
+    <div class="roster-actions">
+      <button type="button" class="btn btn-secondary btn-xs"
+              hx-post="/api/radios/refresh"
+              hx-target="#connected-radios-container"
+              hx-swap="innerHTML"
+              hx-disabled-elt="this"
+              title="Poll DVMHost affiliation table and refresh roster">
+        🔄 Refresh Roster
+      </button>
+      <button type="button" class="btn btn-secondary btn-xs"
+              hx-post="/api/telemetry/simulate-call"
+              hx-target="#last-heard-container"
+              hx-swap="outerHTML"
+              hx-on::after-request="htmx.ajax('GET', '/components/connected-radios', {target:'#connected-radios-container', swap:'innerHTML'}); htmx.ajax('GET', '/components/rf-hud', {target:'#rf-hud-container', swap:'innerHTML'});"
+              hx-disabled-elt="this"
+              title="Simulate a test subscriber transmission">
+        ⚡ Test Radio TX
+      </button>
+      <button type="button" class="btn btn-secondary btn-xs"
+              hx-post="/api/radios/clear"
+              hx-target="#connected-radios-container"
+              hx-swap="innerHTML"
+              hx-confirm="Clear the Connected Radios roster and release stale channel grants?"
+              hx-disabled-elt="this"
+              title="Clear connected radios roster">
+        🧹 Clear Roster
+      </button>
+    </div>
+  </div>
+
+  {% if connected_radios and connected_radios|length > 0 %}
+  <div class="table-container roster-table-wrap">
+    <table class="table-clean roster-table">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Subscriber (Callsign / RID)</th>
+          <th>Mode</th>
+          <th>Affiliated TG</th>
+          <th>Signal (RSSI / BER)</th>
+          <th>Activity / Timeout</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in connected_radios %}
+        <tr class="roster-row {% if r.is_transmitting %}roster-row-tx{% endif %}">
+          <td>
+            {% if r.is_transmitting %}
+              <span class="roster-badge roster-badge-tx">
+                <span class="tx-pulse-dot"></span>
+                ACTIVE TX
+                {% if r.tx_elapsed_display %}
+                  <span class="tx-elapsed-timer font-mono">{{ r.tx_elapsed_display }}</span>
+                {% endif %}
+              </span>
+            {% elif r.status == 'Affiliated' %}
+              <span class="roster-badge roster-badge-affiliated">
+                <span class="affil-dot"></span> Affiliated
+              </span>
+            {% elif r.status == 'Registered' %}
+              <span class="roster-badge roster-badge-registered">
+                ● Registered
+              </span>
+            {% else %}
+              <span class="roster-badge roster-badge-heard">
+                ◌ Recently Heard
+              </span>
+            {% endif %}
+            {% if r.simulated %}
+              <span class="badge badge-warning" style="font-size:0.65rem; padding:0.1rem 0.35rem; margin-left:0.25rem;">SIM</span>
+            {% endif %}
+          </td>
+
+          <td>
+            <div class="subscriber-cell">
+              <div class="subscriber-primary">
+                <strong class="subscriber-alias">{{ r.callsign or ('Radio ' ~ r.radio_id) }}</strong>
+                <span class="subscriber-rid font-mono">RID {{ r.radio_id }}</span>
+                <button type="button" class="btn-alias-edit"
+                        onclick="openAliasEditor({{ r.radio_id }}, '{{ (r.callsign or '')|replace("'", "\\'") }}')"
+                        title="Edit Callsign / Alias for RID {{ r.radio_id }}">
+                  ✎
+                </button>
+              </div>
+            </div>
+          </td>
+
+          <td>
+            <span class="mode-tag {% if r.protocol == 'P25' %}mode-tag-p25{% else %}mode-tag-dmr{% endif %}">
+              {{ r.protocol }}
+              {% if r.protocol == 'DMR' and r.slot %}
+                <span class="slot-sub">TS{{ r.slot }}</span>
+              {% endif %}
+            </span>
+          </td>
+
+          <td>
+            {% if r.talkgroup_id %}
+              <div class="tg-pill-group">
+                <span class="tg-tag {% if r.is_transmitting %}tg-tag-live{% endif %} font-mono">
+                  TG {{ r.talkgroup_id }}
+                </span>
+                {% if r.talkgroup_name %}
+                  <span class="tg-name-sub">{{ r.talkgroup_name }}</span>
+                {% endif %}
+              </div>
+            {% else %}
+              <span class="text-dim font-mono">Control Ch</span>
+            {% endif %}
+          </td>
+
+          <td class="font-mono">
+            {% if r.rssi_dbm is not none %}
+              <span class="sig-rssi">{{ r.rssi_dbm }} dBm</span>
+            {% else %}
+              <span class="text-dim">-- dBm</span>
+            {% endif %}
+            <span class="text-dim">&bull;</span>
+            {% if r.ber_percent is not none %}
+              <span class="{% if r.ber_percent < 1.0 %}sig-good{% elif r.ber_percent < 3.0 %}sig-warn{% else %}sig-bad{% endif %}">
+                {{ '%.1f'|format(r.ber_percent) }}% BER
+              </span>
+            {% else %}
+              <span class="text-dim">--%</span>
+            {% endif %}
+          </td>
+
+          <td>
+            <div class="timeout-indicator {% if r.activity_state == 'active' %}timeout-active{% elif r.activity_state == 'recent' %}timeout-recent{% else %}timeout-stale{% endif %}">
+              <span class="timeout-label">{{ r.timeout_label }}</span>
+              <span class="timeout-ts font-mono">{{ r.last_activity_utc[-8:] if r.last_activity_utc and r.last_activity_utc|length >= 8 else r.last_activity_utc }}</span>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="roster-empty-state">
+    <div class="roster-empty-icon">📡</div>
+    <div class="roster-empty-title">No Subscriber Radios Currently Affiliated</div>
+    <div class="roster-empty-desc">
+      Waiting for P25 TSBK unit registration / group affiliation (`OSP_GRP_AFF_RSP`) or DMR voice activity.
+      Key up a radio or click <strong>⚡ Test Radio TX</strong> to verify live roster tracking.
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Inline Alias Editor Bar (hidden by default) -->
+  <form id="roster-alias-form" class="roster-alias-editor" style="display:none;"
+        hx-post="/api/radios/alias"
+        hx-target="#connected-radios-container"
+        hx-swap="innerHTML">
+    <input type="hidden" name="radio_id" id="alias-edit-rid" value="">
+    <span class="alias-editor-label">Set Alias for RID <strong id="alias-edit-rid-display" class="font-mono"></strong>:</span>
+    <input type="text" name="callsign" id="alias-edit-callsign" class="form-input form-input-sm" placeholder="e.g. Tait TP9900 / W8ABC" maxlength="32" required>
+    <button type="submit" class="btn btn-primary btn-xs">Save Alias</button>
+    <button type="button" class="btn btn-secondary btn-xs" onclick="document.getElementById('roster-alias-form').style.display='none'">Cancel</button>
+  </form>
+</div>

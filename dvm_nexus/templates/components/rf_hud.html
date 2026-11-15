@@ -1,12 +1,13 @@
-<div class="rf-hud-widget" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--shadow-sm);">
+<div class="rf-hud-panel">
   {% set svc_down = (hud.service_running is sameas false) %}
   {% set ber = hud.ber_percent if (hud.ber_percent is number) else none %}
-  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
-    <div style="display: flex; align-items: center; gap: 0.75rem; min-width: 0;">
-      <span style="font-size: 1.25rem;">📡</span>
-      <div style="min-width: 0;">
-        <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.75px; color: var(--text-dim); font-weight: 600;">Live RF Transceiver Telemetry</div>
-        <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-bright);">
+
+  <div class="rf-hud-header">
+    <div class="rf-hud-title-group">
+      <span class="rf-hud-icon">📡</span>
+      <div>
+        <div class="rf-hud-eyebrow">Live RF Transceiver Telemetry</div>
+        <div class="rf-hud-headline">
           {% if svc_down %}
             <span style="color: var(--accent-danger);">⛔ DVMHost stopped &bull; no RF activity</span>
           {% elif hud.state == 'RX' %}
@@ -20,75 +21,50 @@
       </div>
     </div>
 
-    <!-- Live Status Pill with Animation -->
-    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+    <div class="rf-hud-badges">
       {% if svc_down %}
-        <span class="badge badge-danger" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">● SERVICE STOPPED</span>
+        <span class="badge badge-danger">● SERVICE STOPPED</span>
       {% elif hud.state == 'RX' %}
-        <span class="badge badge-warning" style="animation: pulse 1s infinite; font-size: 0.85rem; padding: 0.4rem 0.8rem;">
-          ● ACTIVE CALL IN PROGRESS
-        </span>
+        <span class="badge badge-warning" style="animation: pulse 1s infinite;">● ACTIVE CALL IN PROGRESS</span>
       {% elif hud.state == 'TX' %}
-        <span class="badge badge-danger" style="animation: pulse 1s infinite; font-size: 0.85rem; padding: 0.4rem 0.8rem;">
-          ● RF TX KEYED
-        </span>
+        <span class="badge badge-danger" style="animation: pulse 1s infinite;">● RF TX KEYED</span>
       {% else %}
-        <span class="badge badge-success" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">
-          ● IDLE &bull; CHANNEL CLEAR
-        </span>
+        <span class="badge badge-success">● IDLE &bull; CHANNEL CLEAR</span>
       {% endif %}
-      <span class="badge badge-secondary" style="font-size: 0.75rem;">Auto-Sync 1.5s</span>
     </div>
   </div>
 
-  <!-- HUD Grid: Active Talker, Target TG, Slot Activity, Signal & Quality -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 0.75rem; background: var(--bg-surface-2); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
-
-    <!-- Active Talker -->
-    <div style="min-width: 0;">
-      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">CURRENT TALKER</div>
-      <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--accent-cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+  <!-- Dense Unified 4-Column Telemetry Strip -->
+  <div class="rf-hud-metrics-strip">
+    <div class="rf-metric-cell">
+      <div class="rf-metric-label">CURRENT TALKER</div>
+      <div class="rf-metric-value font-mono" style="color: var(--accent-cyan);">
         {% if hud.source_id and hud.state in ('RX', 'TX') %}
           {{ hud.source_alias or 'Radio' }} ({{ hud.source_id }})
         {% else %}
-          <span style="color: var(--text-dim); font-weight: normal;">None (Standby)</span>
+          <span class="text-dim" style="font-weight:normal;">None (Standby)</span>
         {% endif %}
       </div>
     </div>
 
-    <!-- Target Talkgroup -->
-    <div>
-      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">TARGET TALKGROUP</div>
-      <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--text-bright);">
+    <div class="rf-metric-cell">
+      <div class="rf-metric-label">TARGET TALKGROUP</div>
+      <div class="rf-metric-value font-mono">
         {% if hud.dest_id and hud.state in ('RX', 'TX') %}
-          TG {{ hud.dest_id }} <span style="font-size: 0.75rem; color: var(--text-dim);">({{ hud.call_type or 'Group' }})</span>
+          TG {{ hud.dest_id }} <span class="text-dim" style="font-size:0.75rem;">({{ hud.call_type or 'Group' }})</span>
         {% else %}
-          <span style="color: var(--text-dim); font-weight: normal;">--</span>
+          <span class="text-dim" style="font-weight:normal;">--</span>
         {% endif %}
       </div>
     </div>
 
-    <!-- Timeslot Occupancy -->
-    <div>
-      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">TIMESLOT OCCUPANCY</div>
-      <div style="display: flex; gap: 0.4rem;">
-        <span class="badge {% if hud.slot1_active %}badge-cyan{% else %}badge-secondary{% endif %}" style="font-size: 0.75rem; flex: 1; text-align: center;">
-          TS1: {% if hud.slot1_active %}BUSY{% else %}IDLE{% endif %}
-        </span>
-        <span class="badge {% if hud.slot2_active %}badge-cyan{% else %}badge-secondary{% endif %}" style="font-size: 0.75rem; flex: 1; text-align: center;">
-          TS2: {% if hud.slot2_active %}BUSY{% else %}IDLE{% endif %}
-        </span>
-      </div>
-    </div>
-
-    <!-- Signal & BER Quality (last call) -->
-    <div>
-      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">RF SIGNAL &amp; QUALITY</div>
-      <div style="font-size: 0.85rem; font-weight: 600;">
+    <div class="rf-metric-cell">
+      <div class="rf-metric-label">RF SIGNAL &amp; QUALITY</div>
+      <div class="rf-metric-value font-mono">
         {% if hud.rssi_dbm is number %}
           <span style="color: var(--accent-emerald);">{{ hud.rssi_dbm }} dBm</span>
         {% else %}
-          <span style="color: var(--text-dim);">-- dBm</span>
+          <span class="text-dim">-- dBm</span>
         {% endif %}
         &bull;
         {% if ber is not none %}
@@ -96,28 +72,41 @@
             BER: {{ '%.1f'|format(ber) }}%
           </span>
         {% else %}
-          <span style="color: var(--text-dim);">BER: --</span>
+          <span class="text-dim">BER: --</span>
         {% endif %}
       </div>
     </div>
 
-    <!-- Modem Hardware Registers (only shown when DVMHost REST telemetry is live) -->
-    <div>
-      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem;">MODEM HARDWARE</div>
-      <div style="font-size: 0.8rem; color: var(--text-dim);">
-        {% if hud.rest_ok and hud.adc_overflow is not none %}
-          Overf:
-          <span style="color: {% if hud.adc_overflow > 0 or (hud.dac_overflow or 0) > 0 %}var(--accent-danger){% else %}var(--accent-emerald){% endif %};">
-            A:{{ hud.adc_overflow }} D:{{ hud.dac_overflow if hud.dac_overflow is not none else '--' }}
+    <div class="rf-metric-cell">
+      <div class="rf-metric-label">CHANNEL / TIMESLOTS</div>
+      <div class="rf-metric-slots">
+        {% if hud.protocol == 'DMR' %}
+          <span class="badge {% if hud.slot1_active %}badge-cyan{% else %}badge-secondary{% endif %}">
+            TS1: {% if hud.slot1_active %}BUSY{% else %}IDLE{% endif %}
           </span>
-          {% if hud.dmr_free_space is not none %}&bull; Buf: <span class="font-mono">{{ hud.dmr_free_space }}B</span>{% endif %}
-        {% elif svc_down %}
-          Service stopped
+          <span class="badge {% if hud.slot2_active %}badge-cyan{% else %}badge-secondary{% endif %}">
+            TS2: {% if hud.slot2_active %}BUSY{% else %}IDLE{% endif %}
+          </span>
         {% else %}
-          <span title="DVMHost REST API is not answering, so live modem registers are unavailable.">Telemetry unavailable</span>
+          <span class="badge {% if hud.state in ('RX', 'TX') %}badge-indigo{% else %}badge-secondary{% endif %}">
+            P25 FDMA: {% if hud.state in ('RX', 'TX') %}GRANTED{% else %}CC IDLE{% endif %}
+          </span>
         {% endif %}
       </div>
     </div>
-
   </div>
 </div>
+
+<!-- OOB Swap: Keep Top Status Strip RF State Pill in sync every 1.5s -->
+<span id="top-rf-state-pill" hx-swap-oob="true" class="strip-rf-pill {% if svc_down %}rf-pill-offline{% elif hud.state == 'TX' %}rf-pill-tx{% elif hud.state == 'RX' %}rf-pill-rx{% else %}rf-pill-idle{% endif %}">
+  <span class="rf-pill-dot"></span>
+  {% if svc_down %}
+    <span>STOPPED</span>
+  {% elif hud.state == 'TX' %}
+    <span>RF TX</span>
+  {% elif hud.state == 'RX' %}
+    <span>RF RX</span>
+  {% else %}
+    <span>IDLE</span>
+  {% endif %}
+</span>

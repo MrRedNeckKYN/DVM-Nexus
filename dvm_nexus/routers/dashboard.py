@@ -17,9 +17,15 @@ from dvm_nexus.core.system_monitor import get_system_metrics
 from dvm_nexus.core.service_controller import service_controller
 from dvm_nexus.core.dvm_client import dvm_client
 from dvm_nexus.core.telemetry_service import telemetry_service
+from dvm_nexus.core.network_manager import network_controller
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 from dvm_nexus.config_engine.profile_manager import profile_manager
-from dvm_nexus.core.database import get_recent_audit_logs, clear_simulated_last_heard
+from dvm_nexus.core.database import (
+    get_recent_audit_logs,
+    clear_simulated_last_heard,
+    set_radio_alias,
+    log_audit,
+)
 from dvm_nexus.core.diagnostics import diagnostics_engine
 
 router = APIRouter()
@@ -36,6 +42,8 @@ def dashboard_page(request: Request):
     health = diagnostics_engine.run_health_checks()
     hud_status = telemetry_service.get_hud_status()
     last_heard = telemetry_service.get_last_heard(limit=25)
+    connected_radios = telemetry_service.get_connected_radios(limit=50)
+    net_status = network_controller.get_status()
 
     # Attempt live query from DVMHost REST API
     live_rest = None
@@ -59,8 +67,112 @@ def dashboard_page(request: Request):
             "health": health,
             "hud": hud_status,
             "last_heard": last_heard,
+            "connected_radios": connected_radios,
+            "net": net_status,
         }
     )
+
+
+@router.get("/components/connected-radios", response_class=HTMLResponse)
+def connected_radios_component(request: Request):
+    """HTMX polling fragment for the live Connected Radios / Active Subscribers roster."""
+    radios = telemetry_service.get_connected_radios(limit=50)
+    hud_status = telemetry_service.get_hud_status()
+    return render_template(
+        request,
+        "components/connected_radios.html",
+        {"connected_radios": radios, "hud": hud_status}
+    )
+
+
+@router.post("/api/radios/refresh", response_class=HTMLResponse)
+def refresh_connected_radios(request: Request):
+    """Force an immediate affiliation table sync from DVMHost REST API and return updated roster."""
+    telemetry_service.sync_affiliations_now()
+    radios = telemetry_service.get_connected_radios(limit=50)
+    hud_status = telemetry_service.get_hud_status()
+    return render_template(
+        request,
+        "components/connected_radios.html",
+        {"connected_radios": radios, "hud": hud_status}
+    )
+
+
+@router.post("/api/radios/clear", response_class=HTMLResponse)
+def clear_connected_radios_endpoint(request: Request):
+    """Clear the Connected Radios roster and release stale channel grants."""
+    telemetry_service.clear_roster(simulated_only=False)
+    radios = telemetry_service.get_connected_radios(limit=50)
+    hud_status = telemetry_service.get_hud_status()
+    return render_template(
+        request,
+        "components/connected_radios.html",
+        {"connected_radios": radios, "hud": hud_status}
+    )
+
+
+@router.post("/api/radios/alias", response_class=HTMLResponse)
+def update_radio_alias_endpoint(
+    request: Request,
+    radio_id: int = Form(...),
+    callsign: str = Form(""),
+    notes: str = Form(""),
+):
+    """Assign or update a human-readable Callsign/Alias for a Radio ID (RID)."""
+    set_radio_alias(int(radio_id), callsign.strip(), notes.strip())
+    log_audit("ROSTER", "SET_ALIAS", f"Updated alias for RID {radio_id} -> '{callsign.strip()}'")
+    radios = telemetry_service.get_connected_radios(limit=50)
+    hud_status = telemetry_service.get_hud_status()
+    return render_template(
+        request,
+        "components/connected_radios.html",
+        {"connected_radios": radios, "hud": hud_status}
+    )
+
+
+@router.post("/api/dashboard/switch-protocol", response_class=HTMLResponse)
+async def quick_switch_protocol(request: Request, protocol: str = Form(...)):
+    """Quick Action Bar control: switch active radio protocol (DMR <-> P25) and restart DVMHost."""
+    proto = protocol.strip().lower()
+    if proto not in ("dmr", "p25"):
+        return render_template(
+            request,
+            "components/toast.html",
+            {"type": "error", "message": f"Unsupported protocol: {protocol}"}
+        )
+    ok = await asyncio.to_thread(dvm_config_manager.set_active_protocol, proto)
+    if ok:
+        await asyncio.to_thread(service_controller.restart)
+        log_audit("RADIO", "QUICK_PROTOCOL_SWITCH", f"Switched active protocol to {proto.upper()}")
+        resp = render_template(
+            request,
+            "components/toast.html",
+            {"type": "success", "message": f"Switched active mode to {proto.upper()} & restarted DVMHost"}
+        )
+        resp.headers["HX-Refresh"] = "true"
+        return resp
+    return render_template(
+        request,
+        "components/toast.html",
+        {"type": "error", "message": f"Failed to switch protocol to {proto.upper()}"}
+    )
+
+
+@router.post("/api/dashboard/hotspot-toggle", response_class=HTMLResponse)
+async def quick_hotspot_toggle(request: Request, enable: str = Form("true")):
+    """Quick Action Bar control: toggle Field Hotspot / Wi-Fi client mode."""
+    is_enable = enable.strip().lower() in ("true", "1", "yes", "on")
+    res = await asyncio.to_thread(network_controller.toggle_hotspot, is_enable)
+    ok = bool(res.get("success"))
+    msg = res.get("message") or res.get("error") or ("Field Hotspot toggled" if ok else "Hotspot toggle failed")
+    log_audit("NETWORK", "QUICK_HOTSPOT_TOGGLE", msg)
+    resp = render_template(
+        request,
+        "components/toast.html",
+        {"type": "success" if ok else "error", "message": msg}
+    )
+    resp.headers["HX-Refresh"] = "true"
+    return resp
 
 
 @router.get("/components/rf-hud", response_class=HTMLResponse)
@@ -130,8 +242,9 @@ def simulate_call_endpoint(request: Request):
 
 @router.post("/api/telemetry/clear-simulated", response_class=HTMLResponse)
 def clear_simulated_endpoint(request: Request):
-    """Remove all simulated rows from the Last Heard feed."""
+    """Remove all simulated rows from the Last Heard feed and Connected Radios roster."""
     clear_simulated_last_heard()
+    telemetry_service.clear_roster(simulated_only=True)
     last_heard = telemetry_service.get_last_heard(limit=25)
     return render_template(
         request,

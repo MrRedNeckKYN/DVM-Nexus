@@ -352,5 +352,8 @@ class DVMHostClient:
     def get_p25_affiliations(self) -> Dict[str, Any]:
         return self.request("GET", "/p25/report-affiliations")
 
+    def release_affiliations(self) -> Dict[str, Any]:
+        return self.request("GET", "/release-affs")
+
 
 dvm_client = DVMHostClient()

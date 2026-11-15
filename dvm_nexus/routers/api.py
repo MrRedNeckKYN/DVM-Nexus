@@ -11,6 +11,7 @@ from starlette.responses import StreamingResponse
 
 from dvm_nexus.core.system_monitor import get_system_metrics
 from dvm_nexus.core.service_controller import service_controller
+from dvm_nexus.core.telemetry_service import telemetry_service
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
 from dvm_nexus.config_engine.profile_manager import profile_manager
 
@@ -22,12 +23,27 @@ router = APIRouter(prefix="/api")
 
 @router.get("/status")
 async def api_status():
-    """Return JSON system status."""
+    """Return JSON system status, live RF HUD state, and Connected Radios roster."""
+    radios = telemetry_service.get_connected_radios(limit=50)
     return JSONResponse({
         "system": get_system_metrics(),
         "service": service_controller.get_status(),
         "dvm": dvm_config_manager.get_quick_status(),
         "active_profile": profile_manager.get_active_profile(),
+        "hud": telemetry_service.get_hud_status(),
+        "connected_radios": radios,
+        "connected_radios_count": len(radios),
+    })
+
+
+@router.get("/radios/roster")
+async def api_radios_roster():
+    """Return JSON list of currently affiliated, registered, or active subscriber radios."""
+    radios = telemetry_service.get_connected_radios(limit=100)
+    return JSONResponse({
+        "radios": radios,
+        "count": len(radios),
+        "hud": telemetry_service.get_hud_status(),
     })
 
 
@@ -41,6 +57,8 @@ def _collect_stream_payload() -> dict:
     return {
         "sys": get_system_metrics(),
         "service": service_controller.get_status(),
+        "hud": telemetry_service.get_hud_status(),
+        "connected_radios": telemetry_service.get_connected_radios(limit=50),
     }
 
 
