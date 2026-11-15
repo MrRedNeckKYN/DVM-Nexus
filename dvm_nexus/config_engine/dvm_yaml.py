@@ -159,6 +159,7 @@ class DVMConfigManager:
 
     _permissions_fixed = False
     _profiles_healed = False
+    _active_config_healed = False
 
     def __init__(self, dvm_dir: Optional[Path] = None):
         self.dvm_dir = dvm_dir or settings.dvm_dir
@@ -227,19 +228,19 @@ class DVMConfigManager:
         if isinstance(sys_config, dict):
             raw_net_id = sys_config.get("netId", "BB800")
             safe_net_id = sanitize_p25_wacn(raw_net_id)
-            if str(raw_net_id) != safe_net_id:
+            if not isinstance(raw_net_id, str) or raw_net_id != safe_net_id:
                 sys_config["netId"] = safe_net_id
                 modified = True
 
             raw_nac = sys_config.get("nac", "293")
             safe_nac = normalize_p25_nac(raw_nac)
-            if str(raw_nac) != safe_nac:
+            if not isinstance(raw_nac, str) or raw_nac != safe_nac:
                 sys_config["nac"] = safe_nac
                 modified = True
 
             raw_sys_id = sys_config.get("sysId", "001")
             safe_sys_id = normalize_p25_sys_id(raw_sys_id)
-            if str(raw_sys_id) != safe_sys_id:
+            if not isinstance(raw_sys_id, str) or raw_sys_id != safe_sys_id:
                 sys_config["sysId"] = safe_sys_id
                 modified = True
 
@@ -343,17 +344,21 @@ class DVMConfigManager:
             if src.exists():
                 backup_manager.atomic_write(self.rid_acl_path, src.read_text(encoding="utf-8"))
 
-        # Safety block: Self-heal active configuration if legacy traps (BEE00, decimal channelNo, multi-protocol) are present
-        try:
-            if self.config_path.exists():
-                raw = self.config_path.read_text(encoding="utf-8")
-                data = yaml.safe_load(raw)
-                if isinstance(data, dict) and self._heal_yaml_dict(data):
-                    content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
-                    backup_manager.atomic_write(self.config_path, content)
-                    log_audit("SAFETY", "AUTO_HEAL_ACTIVE_CONFIG", "Self-healed active config.yml (WACN/channelNo/protocol safety)")
-        except Exception:
-            logger.exception("Could not self-heal active config.yml")
+        # Safety block: One-time per process self-heal of active configuration if legacy traps are present.
+        # Do NOT re-write config.yml on every read poll cycle, which would bump st_mtime after dvmhost start.
+        if not DVMConfigManager._active_config_healed:
+            DVMConfigManager._active_config_healed = True
+            try:
+                if self.config_path.exists():
+                    raw = self.config_path.read_text(encoding="utf-8")
+                    data = yaml.safe_load(raw)
+                    if isinstance(data, dict) and self._heal_yaml_dict(data):
+                        content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
+                        if content != raw:
+                            backup_manager.atomic_write(self.config_path, content)
+                            log_audit("SAFETY", "AUTO_HEAL_ACTIVE_CONFIG", "Self-healed active config.yml (WACN/channelNo/protocol safety)")
+            except Exception:
+                logger.exception("Could not self-heal active config.yml")
 
         # One-time per process: Self-heal saved profile config.yml files so switching profiles never introduces a trap
         if not DVMConfigManager._profiles_healed:
@@ -560,6 +565,11 @@ class DVMConfigManager:
         content = yaml.dump(data, Dumper=IndentedSafeDumper, default_flow_style=False, sort_keys=False)
         backup_manager.atomic_write(self.config_path, content)
         # (permissions/ownership are preserved by atomic_write; no recursive chmod per save)
+        try:
+            from dvm_nexus.core.service_controller import service_controller
+            service_controller.mark_config_saved()
+        except Exception:
+            pass
 
     def get_active_protocol(self) -> str:
         """Detect whether DMR or P25 is active."""
@@ -573,6 +583,24 @@ class DVMConfigManager:
         if dmr_on and p25_on:
             return "multimode"
         return "none"
+
+    def set_active_protocol(self, protocol: str) -> bool:
+        """Switch active radio protocol ('dmr' or 'p25') in config.yml while enforcing mutual exclusion."""
+        proto = (protocol or "").strip().lower()
+        if proto not in ("dmr", "p25"):
+            return False
+        try:
+            conf = self.load_config_dict()
+            protocols = conf.setdefault("protocols", {})
+            protocols.setdefault("dmr", {})["enable"] = (proto == "dmr")
+            protocols.setdefault("p25", {})["enable"] = (proto == "p25")
+            if "nxdn" in protocols and isinstance(protocols["nxdn"], dict):
+                protocols["nxdn"]["enable"] = False
+            self.save_config_dict(conf, summary=f"Switch active protocol to {proto.upper()}")
+            return True
+        except Exception:
+            logger.exception("Failed to switch active protocol to %s", proto)
+            return False
 
     def get_tuned_frequencies(self) -> Tuple[float, float]:
         """

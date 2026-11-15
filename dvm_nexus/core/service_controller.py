@@ -31,16 +31,63 @@ class ServiceController:
         self._cached_status: Optional[Dict[str, Any]] = None
         self._status_timestamp: float = 0.0
         self._status_ttl: float = 3.5  # seconds
+        # Track applied config state to avoid false-positive pending-restart banners
+        # caused by Raspberry Pi NTP/RTC clock skew in psutil.Process.create_time()
+        self._last_applied_mtime: float = self._get_config_mtime()
+        self._config_dirty: bool = False
+        self._last_known_pid: Optional[int] = None
 
     @staticmethod
-    def _config_pending_restart(main_pid: Optional[int]) -> bool:
-        """True when config.yml was modified after the running dvmhost process started."""
+    def _priv_cmd(cmd: List[str]) -> List[str]:
+        """Run command directly when already root; prepend sudo -n when non-root on POSIX."""
+        if os.name != "nt" and hasattr(os, "geteuid") and os.geteuid() != 0:
+            return ["sudo", "-n"] + cmd
+        return cmd
+
+    @staticmethod
+    def _get_config_mtime() -> float:
+        """Return current st_mtime of active config.yml, or 0.0 if missing."""
         try:
-            if not main_pid:
-                return False
-            started = psutil.Process(int(main_pid)).create_time()
             cfg = Path(settings.dvm_dir) / "config.yml"
-            return cfg.exists() and cfg.stat().st_mtime > (started + 2.0)
+            return cfg.stat().st_mtime if cfg.exists() else 0.0
+        except Exception:
+            return 0.0
+
+    def mark_config_saved(self) -> None:
+        """Record that config.yml was intentionally saved and awaits a service restart."""
+        self._config_dirty = True
+        self._cached_status = None
+        self._status_timestamp = 0.0
+
+    def mark_config_applied(self) -> None:
+        """Record that dvmhost has started/restarted with the current config.yml."""
+        self._config_dirty = False
+        self._last_applied_mtime = max(time.time(), self._get_config_mtime())
+        self._cached_status = None
+        self._status_timestamp = 0.0
+
+    def _config_pending_restart(self, main_pid: Optional[int]) -> bool:
+        """True when config.yml was modified after the running dvmhost process started/restarted."""
+        try:
+            cfg_mtime = self._get_config_mtime()
+            if cfg_mtime <= 0.0:
+                return False
+
+            if main_pid and main_pid != 9999:
+                if self._last_known_pid is not None and main_pid != self._last_known_pid:
+                    # A new dvmhost PID spawned (e.g. restarted via CLI or systemd)
+                    self._config_dirty = False
+                    self._last_applied_mtime = max(self._last_applied_mtime, cfg_mtime)
+                self._last_known_pid = main_pid
+
+            if self._config_dirty:
+                return True
+
+            if self._last_applied_mtime <= 0.0:
+                self._last_applied_mtime = cfg_mtime
+                return False
+
+            return cfg_mtime > (self._last_applied_mtime + 1.5)
         except Exception:
             return False
 
@@ -115,9 +162,9 @@ class ServiceController:
                     process_alive = False
 
             if not process_alive and not is_active:
-                # Fast pgrep check instead of scanning entire OS process tree
+                # Exact process name match (-x) so we never match 'journalctl -u dvmhost' or shell args
                 try:
-                    pg_res = subprocess.run(["pgrep", "-f", "dvmhost"], capture_output=True, text=True, timeout=0.8)
+                    pg_res = subprocess.run(["pgrep", "-x", "dvmhost"], capture_output=True, text=True, timeout=0.8)
                     if pg_res.returncode == 0 and pg_res.stdout.strip():
                         first_pid = int(pg_res.stdout.splitlines()[0].strip())
                         main_pid = first_pid
@@ -190,8 +237,8 @@ class ServiceController:
                             needs_update = True
 
                     if needs_update:
-                        subprocess.run(["sudo", "cp", str(repo_unit), str(unit_path)], capture_output=True, check=False)
-                        subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True, check=False)
+                        subprocess.run(self._priv_cmd(["cp", str(repo_unit), str(unit_path)]), capture_output=True, check=False)
+                        subprocess.run(self._priv_cmd(["systemctl", "daemon-reload"]), capture_output=True, check=False)
                         log_audit("SERVICE", "SYSTEMD_FIX", "Installed Type=simple dvmhost.service unit to prevent startup timeouts")
         except Exception:
             logger.exception("Preflight: systemd unit self-heal failed")
@@ -214,13 +261,14 @@ class ServiceController:
         if not self.has_systemctl:
             self._dev_simulated_running = True
             self._dev_simulated_start_time = time.time()
+            self.mark_config_applied()
             return {"success": True, "message": "Service started (simulated dev mode)"}
 
         try:
-            # Use --no-block so systemctl returns immediately without hanging on hardware init
-            res = subprocess.run(["sudo", "systemctl", "start", "--no-block", self.service_name], capture_output=True, text=True, timeout=10)
+            res = subprocess.run(self._priv_cmd(["systemctl", "start", self.service_name]), capture_output=True, text=True, timeout=10)
             if res.returncode == 0:
-                time.sleep(0.5)
+                time.sleep(0.4)
+                self.mark_config_applied()
                 return {"success": True, "message": f"{self.service_name} started successfully"}
             else:
                 err = res.stderr.strip() or f"systemctl start exited with code {res.returncode}"
@@ -232,8 +280,8 @@ class ServiceController:
         except Exception as e:
             return {"success": False, "message": str(e), "recent_logs": [str(e)]}
 
-    @staticmethod
-    def _cleanup_zombie_processes() -> int:
+    @classmethod
+    def _cleanup_zombie_processes(cls) -> int:
         """
         Ensure no lingering/zombie dvmhost processes continue holding /dev/ttyAMA0
         after service stop or before service start.
@@ -266,6 +314,9 @@ class ServiceController:
                     p.kill()
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
+
+            if os.name != "nt":
+                subprocess.run(cls._priv_cmd(["pkill", "-9", "-x", "dvmhost"]), capture_output=True, timeout=2)
         except Exception:
             pass
         return killed
@@ -281,7 +332,7 @@ class ServiceController:
             )
             if chk.stdout.strip() == "active":
                 subprocess.run(
-                    ["sudo", "systemctl", "restart", "--no-block", "dvmfne.service"],
+                    self._priv_cmd(["systemctl", "restart", "--no-block", "dvmfne.service"]),
                     capture_output=True, text=True, timeout=5
                 )
                 return True
@@ -300,7 +351,7 @@ class ServiceController:
             return {"success": True, "message": "Service stopped (simulated dev mode)"}
 
         try:
-            res = subprocess.run(["sudo", "systemctl", "stop", self.service_name], capture_output=True, text=True, timeout=15)
+            res = subprocess.run(self._priv_cmd(["systemctl", "stop", self.service_name]), capture_output=True, text=True, timeout=15)
             self._cleanup_zombie_processes()
             if res.returncode == 0:
                 return {"success": True, "message": f"{self.service_name} stopped successfully"}
@@ -323,23 +374,25 @@ class ServiceController:
         if not self.has_systemctl:
             self._dev_simulated_running = True
             self._dev_simulated_start_time = time.time()
+            self.mark_config_applied()
             return {"success": True, "message": "Service restarted (simulated dev mode)"}
 
         try:
             # 1. Stop service cleanly first so serial port lock on /dev/ttyAMA0 is released
-            subprocess.run(["sudo", "systemctl", "stop", self.service_name], capture_output=True, text=True, timeout=10)
+            subprocess.run(self._priv_cmd(["systemctl", "stop", self.service_name]), capture_output=True, text=True, timeout=10)
             # 2. Kill any lingering zombie dvmhost processes holding /dev/ttyAMA0
             stray_killed = self._cleanup_zombie_processes()
             if stray_killed > 0:
                 time.sleep(0.3)
 
-            # 3. Start dvmhost.service (using --no-block so systemctl returns immediately)
-            res = subprocess.run(["sudo", "systemctl", "start", "--no-block", self.service_name], capture_output=True, text=True, timeout=10)
+            # 3. Start dvmhost.service cleanly (Type=simple returns as soon as new PID is spawned)
+            res = subprocess.run(self._priv_cmd(["systemctl", "start", self.service_name]), capture_output=True, text=True, timeout=10)
             # 4. Also restart dvmfne.service if running on the same host
             fne_restarted = self._restart_dvmfne_if_active()
 
             if res.returncode == 0:
-                time.sleep(0.5)
+                time.sleep(0.4)
+                self.mark_config_applied()
                 msg = f"{self.service_name} restarted cleanly"
                 if stray_killed > 0:
                     msg += f" (cleared {stray_killed} zombie process)"

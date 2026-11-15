@@ -357,8 +357,10 @@ async def service_restart_quick(request: Request):
     message = res.get("message") or ("DVMHost restarted" if ok else "Restart failed")
     if not ok and res.get("recent_logs"):
         message += " - " + " | ".join(str(x) for x in res["recent_logs"][-2:])
-    return render_template(
+    toast_resp = render_template(
         request,
         "components/toast.html",
         {"type": "success" if ok else "error", "message": message}
     )
+    body = toast_resp.body.decode("utf-8") + '\n<div id="pending-restart-container" hx-swap-oob="innerHTML"></div>'
+    return HTMLResponse(content=body)

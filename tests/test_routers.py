@@ -665,6 +665,44 @@ def test_connected_radios_roster_and_3_zone_dashboard(client):
     assert not any(r["radio_id"] == 11 for r in telemetry_service.get_connected_radios())
 
 
+def test_pending_restart_banner_clears_after_restart_and_never_triggers_on_read(client):
+    """Verify config_pending_restart never triggers on read polls and clears immediately on restart."""
+    from dvm_nexus.core.service_controller import service_controller
+    from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+
+    # Start service so it is running with current config applied
+    service_controller.start()
+    status = service_controller.get_status(force=True)
+    assert status["is_running"] is True
+    assert status["config_pending_restart"] is False
+
+    # Repeated read polls must not modify config.yml mtime or trigger config_pending_restart
+    mtime_before = dvm_config_manager.config_path.stat().st_mtime
+    for _ in range(5):
+        _ = dvm_config_manager.load_config_dict()
+        _ = dvm_config_manager.get_quick_status()
+    mtime_after = dvm_config_manager.config_path.stat().st_mtime
+    assert mtime_after == mtime_before
+    assert service_controller.get_status(force=True)["config_pending_restart"] is False
+
+    # Saving config without restarting sets config_pending_restart = True
+    conf = dvm_config_manager.load_config_dict()
+    dvm_config_manager.save_config_dict(conf, summary="Test pending restart state")
+    assert service_controller.get_status(force=True)["config_pending_restart"] is True
+    resp_banner = client.get("/components/pending-restart")
+    assert resp_banner.status_code == 200
+    assert "not live yet" in resp_banner.text
+
+    # Clicking 'Restart to apply' (/api/service/restart-quick) clears config_pending_restart immediately
+    resp_restart = client.post("/api/service/restart-quick")
+    assert resp_restart.status_code == 200
+    assert 'id="pending-restart-container" hx-swap-oob="innerHTML"' in resp_restart.text
+    assert service_controller.get_status(force=True)["config_pending_restart"] is False
+    resp_banner_after = client.get("/components/pending-restart")
+    assert "not live yet" not in resp_banner_after.text
+
+
+
 
 
 

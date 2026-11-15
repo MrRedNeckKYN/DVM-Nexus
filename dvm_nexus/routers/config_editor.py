@@ -184,6 +184,7 @@ async def config_raw_save(request: Request, raw_content: str = Form(...)):
 
     backup_manager.create_backup(summary="Manual raw YAML edit", changed_files=["config.yml"])
     backup_manager.atomic_write(dvm_config_manager.config_path, raw_content)
+    service_controller.mark_config_saved()
     log_audit("CONFIG", "RAW_EDIT", "Saved manual raw YAML changes")
 
     return render_template(
