@@ -23,6 +23,63 @@ from dvm_nexus.core.database import log_audit
 router = APIRouter()
 
 
+def build_dmr_programming_summary(conf: Dict[str, Any], rf_verify: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Construct a structured summary of DMR frequencies, Color Code, Timeslot assignments,
+    and Radio CPS codeplug values so operators can program handheld/mobile DMR radios.
+    """
+    sys_conf = conf.get("system", {}).get("config", {}) if isinstance(conf.get("system"), dict) else {}
+    dmr_conf = conf.get("protocols", {}).get("dmr", {}) if isinstance(conf.get("protocols"), dict) else {}
+    net_conf = conf.get("network", {}) if isinstance(conf.get("network"), dict) else {}
+    identity = conf.get("system", {}).get("identity", "NEXUS") if isinstance(conf.get("system"), dict) else "NEXUS"
+    duplex = bool(conf.get("system", {}).get("duplex", False)) if isinstance(conf.get("system"), dict) else False
+
+    color_code = int(sys_conf.get("colorCode", dmr_conf.get("colorCode", 1)))
+    dmr_net_id = int(sys_conf.get("dmrNetId", dmr_conf.get("dmrNetId", 1)))
+    site_id = int(sys_conf.get("siteId", 1))
+
+    tx_freq_mhz = rf_verify.get("tx_freq_mhz", 462.618750)
+    rx_freq_mhz = rf_verify.get("rx_freq_mhz", 462.618750 if not duplex else 467.618750)
+    tx_freq_hz = rf_verify.get("tx_freq_hz", int(round(tx_freq_mhz * 1_000_000)))
+    rx_freq_hz = rf_verify.get("rx_freq_hz", int(round(rx_freq_mhz * 1_000_000)))
+    tx_offset_mhz = rf_verify.get("tx_offset_mhz", 0.0 if not duplex else 5.0)
+
+    beacons = dmr_conf.get("beacons", {}) if isinstance(dmr_conf, dict) else {}
+    control = dmr_conf.get("control", {}) if isinstance(dmr_conf, dict) else {}
+
+    tscc_enable = bool(control.get("enable", False))
+    tscc_slot = int(control.get("slot", 1))
+    tscc_dedicated = bool(control.get("dedicated", False))
+
+    beacon_enable = bool(beacons.get("enable", False))
+    beacon_interval = int(beacons.get("interval", 60))
+
+    slot1_on = bool(net_conf.get("slot1", True))
+    slot2_on = bool(net_conf.get("slot2", True))
+
+    return {
+        "callsign": identity,
+        "color_code": color_code,
+        "dmr_net_id": dmr_net_id,
+        "site_id": site_id,
+        "duplex": duplex,
+        "radio_rx_mhz": tx_freq_mhz,
+        "radio_rx_hz": tx_freq_hz,
+        "radio_tx_mhz": rx_freq_mhz,
+        "radio_tx_hz": rx_freq_hz,
+        "offset_mhz": tx_offset_mhz,
+        "slot1": slot1_on,
+        "slot2": slot2_on,
+        "tscc_enable": tscc_enable,
+        "tscc_slot": tscc_slot,
+        "tscc_dedicated": tscc_dedicated,
+        "beacon_enable": beacon_enable,
+        "beacon_interval": beacon_interval,
+        "net_enable": bool(net_conf.get("enable", False)),
+        "net_id": int(net_conf.get("id", 100000)),
+    }
+
+
 @router.get("/dmr", response_class=HTMLResponse)
 async def dmr_page(request: Request):
     """Render the comprehensive DMR management interface with protocol standby awareness."""
@@ -51,6 +108,7 @@ async def dmr_page(request: Request):
     modem_diag = diagnostics_engine.get_modem_firmware_summary(conf)
     talkgroups = dvm_config_manager.load_talkgroup_rules()
     rids = dvm_config_manager.load_rid_acl()
+    dmr_prog = build_dmr_programming_summary(conf, rf_verify)
 
     return render_template(
         request,
@@ -61,6 +119,7 @@ async def dmr_page(request: Request):
             "active_protocol": active_proto,
             "is_standby": is_standby,
             "dmr": dmr_conf,
+            "dmr_prog": dmr_prog,
             "sys": sys_conf,
             "modem": modem_conf,
             "hotspot": hotspot_conf,
@@ -145,6 +204,7 @@ async def dmr_save(
     ignore_affiliation_check: bool = Form(False),
     legacy_group_reg: bool = Form(False),
     conv_net_grant_demand: bool = Form(False),
+    drop_encrypted: bool = Form(False),
     # Modem & ADF7021 Tuning
     tx_tuning: int = Form(0),
     rx_tuning: int = Form(0),
@@ -291,6 +351,7 @@ async def dmr_save(
         c["protocols"]["dmr"]["disableUnitRegTimeout"] = disable_unit_reg_timeout
         c["protocols"]["dmr"]["disableNetworkGrant"] = disable_network_grant
         c["protocols"]["dmr"]["supervisor"] = supervisor
+        c["protocols"]["dmr"]["dropEncrypted"] = drop_encrypted
 
         c["protocols"]["dmr"].setdefault("beacons", {})
         c["protocols"]["dmr"]["beacons"]["enable"] = beacon_enable
@@ -379,6 +440,9 @@ async def dmr_tg_add(
     tgid: int = Form(...),
     name: str = Form(...),
     slot: int = Form(1),
+    parrot: bool = Form(False),
+    rewrite_tg: Optional[int] = Form(None),
+    always: bool = Form(False),
 ):
     """Add a talkgroup to talkgroup_rules.yml."""
     rules = dvm_config_manager.load_talkgroup_rules()
@@ -390,9 +454,21 @@ async def dmr_tg_add(
                 {"type": "error", "message": f"Talkgroup {tgid} already exists"}
             )
 
-    rules.append({"id": tgid, "name": name, "slot": slot})
+    tg_entry = {
+        "id": tgid,
+        "name": name,
+        "slot": slot,
+        "parrot": parrot,
+        "active": True,
+    }
+    if rewrite_tg is not None and int(rewrite_tg) > 0:
+        tg_entry["rewrite"] = int(rewrite_tg)
+    if always:
+        tg_entry["always"] = True
+
+    rules.append(tg_entry)
     dvm_config_manager.save_talkgroup_rules(rules, summary=f"Add DMR talkgroup {tgid} ({name})")
-    log_audit("DMR", "ADD_TG", f"Added TG {tgid} ({name}) Slot {slot}")
+    log_audit("DMR", "ADD_TG", f"Added TG {tgid} ({name}) Slot {slot} Parrot={parrot}")
 
     return render_template(
         request,

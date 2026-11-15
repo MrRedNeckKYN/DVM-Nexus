@@ -671,6 +671,8 @@ async def p25_tg_add(
     tgid: int = Form(...),
     name: str = Form(...),
     parrot: bool = Form(False),
+    rewrite_tg: Optional[int] = Form(None),
+    always: bool = Form(False),
 ):
     """Add a talkgroup to talkgroup_rules.yml for P25."""
     rules = dvm_config_manager.load_talkgroup_rules()
@@ -682,7 +684,13 @@ async def p25_tg_add(
                 {"type": "error", "message": f"Talkgroup {tgid} already exists"}
             )
 
-    rules.append({"id": tgid, "tgid": tgid, "name": name, "slot": 1, "parrot": parrot, "active": True})
+    tg_entry = {"id": tgid, "tgid": tgid, "name": name, "slot": 1, "parrot": parrot, "active": True}
+    if rewrite_tg is not None and int(rewrite_tg) > 0:
+        tg_entry["rewrite"] = int(rewrite_tg)
+    if always:
+        tg_entry["always"] = True
+
+    rules.append(tg_entry)
     dvm_config_manager.save_talkgroup_rules(rules, summary=f"Add P25 talkgroup {tgid} ({name})")
     log_audit("P25", "ADD_TG", f"Added P25 TG {tgid} ({name}) Parrot={parrot}")
 
@@ -705,6 +713,50 @@ async def p25_tg_delete(request: Request, tgid: int):
         request,
         "components/p25_tg_table.html",
         {"talkgroups": filtered, "toast": {"type": "success", "message": f"Deleted Talkgroup {tgid}"}}
+    )
+
+
+# Radio ID ACL endpoints for P25
+@router.post("/p25/rids/add", response_class=HTMLResponse)
+async def p25_rid_add(
+    request: Request,
+    rid: int = Form(...),
+    alias: str = Form(""),
+    enabled: bool = Form(True),
+):
+    """Add a Radio ID to rid_acl.dat for P25."""
+    rids = dvm_config_manager.load_rid_acl()
+    for item in rids:
+        if item.get("rid") == rid:
+            return render_template(
+                request,
+                "components/toast.html",
+                {"type": "error", "message": f"Radio ID {rid} already exists"}
+            )
+
+    rids.append({"rid": rid, "alias": alias, "enabled": enabled, "ip": ""})
+    dvm_config_manager.save_rid_acl(rids, summary=f"Add P25 Radio ID {rid} ({alias})")
+    log_audit("P25", "ADD_RID", f"Added P25 RID {rid} ({alias})")
+
+    return render_template(
+        request,
+        "components/p25_rid_table.html",
+        {"rids": rids, "toast": {"type": "success", "message": f"Added Radio ID {rid}"}}
+    )
+
+
+@router.post("/p25/rids/delete/{rid}", response_class=HTMLResponse)
+async def p25_rid_delete(request: Request, rid: int):
+    """Delete a Radio ID from rid_acl.dat for P25."""
+    rids = dvm_config_manager.load_rid_acl()
+    filtered = [item for item in rids if item.get("rid") != rid]
+    dvm_config_manager.save_rid_acl(filtered, summary=f"Delete P25 Radio ID {rid}")
+    log_audit("P25", "DEL_RID", f"Deleted P25 RID {rid}")
+
+    return render_template(
+        request,
+        "components/p25_rid_table.html",
+        {"rids": filtered, "toast": {"type": "success", "message": f"Deleted Radio ID {rid}"}}
     )
 
 

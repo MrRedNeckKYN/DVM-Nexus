@@ -68,6 +68,99 @@
   </div>
 </details>
 
+<!-- DMR CPS Codeplug Quick-Reference & Architecture Summary -->
+<details class="engineering-drawer" style="margin-bottom: 1.25rem; border-left: 4px solid var(--accent-cyan);">
+  <summary class="engineering-drawer-summary" style="background: rgba(6, 182, 212, 0.04);">
+    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+      <span style="font-weight:700; color:var(--text-bright);">📋 DMR Radio CPS Codeplug Reference &amp; Frequency Plan</span>
+      <span class="badge badge-cyan">CC {{ dmr_prog.color_code if dmr_prog else (sys.colorCode or 1) }}</span>
+      <span class="badge badge-muted">Net ID: {{ dmr_prog.dmr_net_id if dmr_prog else (sys.dmrNetId or 1) }}</span>
+      <span class="badge badge-success">Radio RX: {{ '%.6f'|format(dmr_prog.radio_rx_mhz) if dmr_prog else '462.618750' }} MHz</span>
+      <span class="badge badge-warning">Radio TX: {{ '%.6f'|format(dmr_prog.radio_tx_mhz) if dmr_prog else '462.618750' }} MHz</span>
+    </div>
+    <span class="badge badge-secondary" style="font-size:0.75rem;">Anytone &bull; Motorola &bull; Hytera &bull; OpenGD77</span>
+  </summary>
+  <div class="engineering-drawer-body">
+    <div style="font-size:0.83rem; color:var(--text-dim); margin-bottom:1rem;">
+      Program your subscriber radio CPS (customer programming software) with the exact channel and identity parameters below. Note: Handheld <strong>RX frequency</strong> matches MMDVM Hat <strong>TX frequency</strong>.
+    </div>
+
+    <div class="table-container" style="margin-bottom:1rem;">
+      <table>
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Codeplug Value</th>
+            <th>CPS Field Name / Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Color Code</strong></td>
+            <td><code class="font-mono" style="color:#38bdf8; font-weight:700;">{{ dmr_prog.color_code if dmr_prog else (sys.colorCode or 1) }}</code></td>
+            <td>Color Code (0–15). Must match exactly for receiver un-muting.</td>
+          </tr>
+          <tr>
+            <td><strong>Radio Receive Freq (RX)</strong></td>
+            <td><strong class="font-mono" style="color:#6ee7b7;">{{ '%.6f'|format(dmr_prog.radio_rx_mhz) if dmr_prog else '462.618750' }} MHz</strong></td>
+            <td>MMDVM Hat Transmitter Output Frequency (Downlink).</td>
+          </tr>
+          <tr>
+            <td><strong>Radio Transmit Freq (TX)</strong></td>
+            <td><strong class="font-mono" style="color:#38bdf8;">{{ '%.6f'|format(dmr_prog.radio_tx_mhz) if dmr_prog else '462.618750' }} MHz</strong></td>
+            <td>MMDVM Hat Receiver Input Frequency (Uplink).</td>
+          </tr>
+          <tr>
+            <td><strong>Operating Duplex Mode</strong></td>
+            <td>
+              {% if dmr_prog and dmr_prog.duplex %}
+                <span class="badge badge-success">Full Duplex Repeater ({% if dmr_prog.offset_mhz >= 0 %}+{% endif %}{{ '%.6f'|format(dmr_prog.offset_mhz) }} MHz Split)</span>
+              {% else %}
+                <span class="badge badge-cyan">Simplex Direct (Same RX/TX Frequency)</span>
+              {% endif %}
+            </td>
+            <td>Channel Mode / Repeater Slot.</td>
+          </tr>
+          <tr>
+            <td><strong>DMR Network ID</strong></td>
+            <td><code class="font-mono">{{ dmr_prog.dmr_net_id if dmr_prog else (sys.dmrNetId or 1) }}</code></td>
+            <td>Network ID (Site ID: {{ dmr_prog.site_id if dmr_prog else (sys.siteId or 1) }}).</td>
+          </tr>
+          <tr>
+            <td><strong>Active Timeslots</strong></td>
+            <td>
+              <span class="badge {% if dmr_prog and dmr_prog.slot1 %}badge-success{% else %}badge-muted{% endif %}">Slot 1: {% if dmr_prog and dmr_prog.slot1 %}Active{% else %}Muted{% endif %}</span>
+              <span class="badge {% if dmr_prog and dmr_prog.slot2 %}badge-success{% else %}badge-muted{% endif %}">Slot 2: {% if dmr_prog and dmr_prog.slot2 %}Active{% else %}Muted{% endif %}</span>
+            </td>
+            <td>TDMA 30ms voice frames passed to local RF and network.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Quick Radio Brand Guidance Cards -->
+    <div class="grid-2" style="gap:0.75rem;">
+      <div style="padding:0.75rem 0.9rem; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.8rem;">
+        <strong style="color:#38bdf8;">📻 Anytone AT-D878UV / AT-D578UV:</strong>
+        <ul style="margin:0.35rem 0 0 1.25rem; padding:0; line-height:1.5;">
+          <li>Channel Type: <code>D-Digital</code> &bull; Color Code: <code>{{ dmr_prog.color_code if dmr_prog else 1 }}</code></li>
+          <li>RX Freq: <code>{{ '%.6f'|format(dmr_prog.radio_rx_mhz) if dmr_prog else '462.618750' }}</code> &bull; TX Freq: <code>{{ '%.6f'|format(dmr_prog.radio_tx_mhz) if dmr_prog else '462.618750' }}</code></li>
+          <li>Time Slot: <code>Slot 1</code> or <code>Slot 2</code> &bull; DMR Mode: <code>Repeater</code> (or Simplex)</li>
+        </ul>
+      </div>
+
+      <div style="padding:0.75rem 0.9rem; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.8rem;">
+        <strong style="color:#a5b4fc;">📡 Motorola MOTOTRBO CPS:</strong>
+        <ul style="margin:0.35rem 0 0 1.25rem; padding:0; line-height:1.5;">
+          <li>Channel: Digital &bull; Color Code: <code>{{ dmr_prog.color_code if dmr_prog else 1 }}</code></li>
+          <li>RX Freq: <code>{{ '%.6f'|format(dmr_prog.radio_rx_mhz) if dmr_prog else '462.618750' }}</code> &bull; TX Freq: <code>{{ '%.6f'|format(dmr_prog.radio_tx_mhz) if dmr_prog else '462.618750' }}</code></li>
+          <li>Repeater / Time Slot: <code>Slot 1 / Slot 2</code> &bull; Admit Criteria: <code>Color Code Free</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</details>
+
 <!-- Main DMR Configuration Form -->
 <form id="dmr-config-form" hx-post="/dmr/save" hx-trigger="submit" hx-target="#toast-container" hx-swap="beforeend" data-dirty-guard>
 
@@ -546,26 +639,35 @@
     </div>
 
     <div id="dmr-net-fields" {% if not net.enable %}style="display:none;"{% endif %}>
+      <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:0.78rem; color:var(--text-dim); font-weight:600;">1-Click Network Presets:</span>
+        <button type="button" class="btn btn-sm btn-outline-cyan" onclick="applyDmrNetPreset('BrandMeister 3102', '3102.tgif.network', 62031)">🌐 BrandMeister 3102</button>
+        <button type="button" class="btn btn-sm btn-outline-cyan" onclick="applyDmrNetPreset('BrandMeister 3103', '3103.tgif.network', 62031)">🌐 BrandMeister 3103</button>
+        <button type="button" class="btn btn-sm btn-outline-cyan" onclick="applyDmrNetPreset('TGIF Network', 'tgif.network', 62031)">🌐 TGIF Network</button>
+        <button type="button" class="btn btn-sm btn-outline-cyan" onclick="applyDmrNetPreset('FreeDMR US', 'freedmr.us', 62031)">🌐 FreeDMR US</button>
+        <button type="button" class="btn btn-sm btn-outline-cyan" onclick="applyDmrNetPreset('Local FNE Core', '127.0.0.1', 62031)">🗼 Local FNE Core</button>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Network Peer ID</label>
-          <input type="number" name="net_id" class="form-control font-mono" value="{{ net.id or 100000 }}">
+          <input type="number" name="net_id" id="dmr-net-id-input" class="form-control font-mono" value="{{ net.id or 100000 }}">
           <small class="form-hint">Assigned repeater ID on master network.</small>
         </div>
 
         <div class="form-group">
           <label class="form-label">Master Server Address / IP</label>
-          <input type="text" name="net_address" class="form-control font-mono" value="{{ net.address or '127.0.0.1' }}">
+          <input type="text" name="net_address" id="dmr-net-addr-input" class="form-control font-mono" value="{{ net.address or '127.0.0.1' }}">
         </div>
 
         <div class="form-group">
           <label class="form-label">Master Server Port</label>
-          <input type="number" name="net_port" class="form-control font-mono" value="{{ net.port or 62031 }}">
+          <input type="number" name="net_port" id="dmr-net-port-input" class="form-control font-mono" value="{{ net.port or 62031 }}">
         </div>
 
         <div class="form-group">
           <label class="form-label">Network Authentication Password</label>
-          <input type="password" name="net_password" class="form-control" value="{{ net.password or 'PASSWORD' }}">
+          <input type="password" name="net_password" id="dmr-net-pass-input" class="form-control" value="{{ net.password or 'PASSWORD' }}">
         </div>
       </div>
 
@@ -740,15 +842,50 @@
       <span style="font-size:0.75rem; color:var(--text-dim);">talkgroup_rules.yml</span>
     </div>
 
-    <form hx-post="/dmr/talkgroups/add" hx-target="#dmr-tg-container" hx-swap="innerHTML" style="margin-bottom:1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-      <input type="number" name="tgid" class="form-control" placeholder="TGID (e.g. 9)" style="flex:1; min-width:80px;" required>
-      <input type="text" name="name" class="form-control" placeholder="Name / Alias" style="flex:2; min-width:120px;" required>
-      <select name="slot" class="form-control" style="width:100px;">
-        <option value="1">Slot 1</option>
-        <option value="2">Slot 2</option>
-      </select>
-      <button type="submit" class="btn btn-primary btn-sm">+ Add</button>
+    <form hx-post="/dmr/talkgroups/add" hx-target="#dmr-tg-container" hx-swap="innerHTML" style="margin-bottom:1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+      <div style="width:110px;">
+        <label class="form-label" style="font-size:0.75rem;">TGID</label>
+        <input type="number" name="tgid" class="form-control font-mono" placeholder="e.g. 9" required>
+      </div>
+      <div style="flex:2; min-width:130px;">
+        <label class="form-label" style="font-size:0.75rem;">Name / Alias</label>
+        <input type="text" name="name" class="form-control" placeholder="Talkgroup Name" required>
+      </div>
+      <div style="width:90px;">
+        <label class="form-label" style="font-size:0.75rem;">Slot</label>
+        <select name="slot" class="form-control">
+          <option value="1">Slot 1</option>
+          <option value="2">Slot 2</option>
+        </select>
+      </div>
+      <div style="width:135px;">
+        <label class="form-label" style="font-size:0.75rem;">Type</label>
+        <select name="parrot" class="form-control">
+          <option value="false">Group Voice</option>
+          <option value="true">🦜 Parrot Echo</option>
+        </select>
+      </div>
+      <div style="width:120px;">
+        <label class="form-label" style="font-size:0.75rem;">Rewrite to TG</label>
+        <input type="number" name="rewrite_tg" class="form-control font-mono" placeholder="Optional">
+      </div>
+      <div style="width:110px;">
+        <label class="form-label" style="font-size:0.75rem;">Hold Policy</label>
+        <select name="always" class="form-control">
+          <option value="false">Dynamic</option>
+          <option value="true">Static Hold</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm" style="height:36px;">+ Add</button>
     </form>
+
+    <div style="display:flex; gap:0.4rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
+      <span style="font-size:0.75rem; color:var(--text-dim);">Quick Presets:</span>
+      <button type="button" class="btn btn-sm btn-outline-cyan" onclick="quickAddDmrTG(9, 'Local TG 9', 1, false)">+ TG 9 (Local TS1)</button>
+      <button type="button" class="btn btn-sm btn-outline-cyan" onclick="quickAddDmrTG(9990, 'Parrot Audio Echo', 2, true)">+ TG 9990 (Parrot Echo TS2)</button>
+      <button type="button" class="btn btn-sm btn-outline-cyan" onclick="quickAddDmrTG(3100, 'USA Nationwide', 1, false)">+ TG 3100 (USA TS1)</button>
+      <button type="button" class="btn btn-sm btn-outline-cyan" onclick="quickAddDmrTG(91, 'Worldwide BrandMeister', 1, false)">+ TG 91 (World TS1)</button>
+    </div>
 
     <div id="dmr-tg-container">
       {% include "components/dmr_tg_table.html" %}
@@ -1168,6 +1305,32 @@ function syncDmrNetMode() {
   if (netSel && netFields) {
     netFields.style.display = (netSel.value === 'true') ? 'block' : 'none';
   }
+}
+
+function applyDmrNetPreset(name, address, port) {
+  const netSel = document.getElementById('dmr-net-enable-select');
+  if (netSel) {
+    netSel.value = 'true';
+    syncDmrNetMode();
+  }
+  const addrEl = document.getElementById('dmr-net-addr-input');
+  if (addrEl) addrEl.value = address;
+  const portEl = document.getElementById('dmr-net-port-input');
+  if (portEl) portEl.value = port;
+  if (typeof htmx !== 'undefined') {
+    htmx.find('#toast-container')?.insertAdjacentHTML('beforeend',
+      `<div class="toast toast-info"><span>Applied ${name} (${address}:${port})</span></div>`);
+  }
+}
+
+function quickAddDmrTG(tgid, name, slot, parrot) {
+  const form = document.querySelector('form[hx-post="/dmr/talkgroups/add"]');
+  if (!form) return;
+  form.querySelector('input[name="tgid"]').value = tgid;
+  form.querySelector('input[name="name"]').value = name;
+  form.querySelector('select[name="slot"]').value = slot;
+  form.querySelector('select[name="parrot"]').value = parrot ? 'true' : 'false';
+  htmx.trigger(form, 'submit');
 }
 
 document.addEventListener('DOMContentLoaded', function() {

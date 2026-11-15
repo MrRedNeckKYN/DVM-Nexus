@@ -1,0 +1,51 @@
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Radio ID (RID)</th>
+        <th>Subscriber Alias</th>
+        <th>ACL Access Policy</th>
+        <th style="width: 80px; text-align: center;">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in rids %}
+      <tr>
+        <td><strong class="font-mono">{{ item.rid }}</strong></td>
+        <td>{{ item.alias or 'P25 Subscriber' }}</td>
+        <td>
+          {% if item.enabled %}
+            <span class="badge badge-success">✓ Authorized / Allowed</span>
+          {% else %}
+            <span class="badge badge-danger">✕ Denied / Blocked</span>
+          {% endif %}
+        </td>
+        <td style="text-align: center;">
+          <button 
+            hx-post="/p25/rids/delete/{{ item.rid }}" 
+            hx-target="#p25-rid-container" 
+            hx-swap="innerHTML"
+            class="btn btn-danger btn-sm"
+            onclick="return confirm('Delete Radio ID {{ item.rid }}?')">
+            Delete
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" style="text-align:center; color:var(--text-dim); padding:1.25rem;">
+          No explicit Radio IDs in <code>rid_acl.dat</code>. Unlisted subscribers are permitted while <em>Allow Unknown Subscriber RIDs</em> is enabled above.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if toast %}
+  <div id="toast-message" hx-swap-oob="beforeend:#toast-container">
+    <div class="toast toast-{{ toast.type }}">
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
+{% endif %}

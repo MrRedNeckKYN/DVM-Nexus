@@ -1028,26 +1028,33 @@
     </div>
 
     <div id="p25-net-fields" {% if not net.enable %}style="display:none;"{% endif %}>
+      <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:0.78rem; color:var(--text-dim); font-weight:600;">1-Click Network Presets:</span>
+        <button type="button" class="btn btn-sm btn-outline-indigo" onclick="applyP25NetPreset('P25Reflector US East', 'p25-us-east.reflector.network', 41000)">🌐 P25Reflector US East</button>
+        <button type="button" class="btn btn-sm btn-outline-indigo" onclick="applyP25NetPreset('P25Reflector US West', 'p25-us-west.reflector.network', 41000)">🌐 P25Reflector US West</button>
+        <button type="button" class="btn btn-sm btn-outline-indigo" onclick="applyP25NetPreset('Private FNE / Quantar', '127.0.0.1', 62031)">🗼 Local FNE Core</button>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Network Peer ID</label>
-          <input type="number" name="net_id" class="form-control font-mono" value="{{ net.id or 100000 }}">
+          <input type="number" name="net_id" id="p25-net-id-input" class="form-control font-mono" value="{{ net.id or 100000 }}">
           <small class="form-hint">Assigned repeater ID on master network.</small>
         </div>
 
         <div class="form-group">
           <label class="form-label">Master Server Address / IP</label>
-          <input type="text" name="net_address" class="form-control font-mono" value="{{ net.address or '127.0.0.1' }}">
+          <input type="text" name="net_address" id="p25-net-addr-input" class="form-control font-mono" value="{{ net.address or '127.0.0.1' }}">
         </div>
 
         <div class="form-group">
           <label class="form-label">Master Server Port</label>
-          <input type="number" name="net_port" class="form-control font-mono" value="{{ net.port or 62031 }}">
+          <input type="number" name="net_port" id="p25-net-port-input" class="form-control font-mono" value="{{ net.port or 62031 }}">
         </div>
 
         <div class="form-group">
           <label class="form-label">Network Authentication Password</label>
-          <input type="password" name="net_password" class="form-control" value="{{ net.password or 'PASSWORD' }}">
+          <input type="password" name="net_password" id="p25-net-pass-input" class="form-control" value="{{ net.password or 'PASSWORD' }}">
         </div>
       </div>
     </div>
@@ -1222,6 +1229,17 @@
         <option value="true">🦜 Parrot (Audio Echo Test)</option>
       </select>
     </div>
+    <div style="width:140px;">
+      <label class="form-label">Rewrite to TG</label>
+      <input type="number" name="rewrite_tg" class="form-control font-mono" placeholder="Optional TGID">
+    </div>
+    <div style="width:130px;">
+      <label class="form-label">Static Hold</label>
+      <select name="always" class="form-control">
+        <option value="false">Dynamic</option>
+        <option value="true">Always Active</option>
+      </select>
+    </div>
     <button type="submit" class="btn btn-primary btn-sm" style="height:38px;">+ Add Talkgroup</button>
   </form>
 
@@ -1235,6 +1253,42 @@
 
   <div id="p25-tg-container">
     {% include "components/p25_tg_table.html" %}
+  </div>
+</div>
+
+<!-- P25 Radio ID Access Control -->
+<div class="card" style="margin-top: 1.5rem;">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <div class="card-title">📻 P25 Radio ID Access Control</div>
+      <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">
+        Authorize or block specific subscriber units in <code>rid_acl.dat</code>.
+      </div>
+    </div>
+    <span class="badge badge-indigo">rid_acl.dat</span>
+  </div>
+
+  <form hx-post="/p25/rids/add" hx-target="#p25-rid-container" hx-swap="innerHTML" style="margin-bottom:1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+    <div style="width:160px;">
+      <label class="form-label">Radio ID (RID)</label>
+      <input type="number" name="rid" class="form-control font-mono" placeholder="e.g. 1234567" required>
+    </div>
+    <div style="flex:2; min-width:180px;">
+      <label class="form-label">Subscriber Alias / Callsign</label>
+      <input type="text" name="alias" class="form-control" placeholder="e.g. Unit 401 / Portable">
+    </div>
+    <div style="width:140px;">
+      <label class="form-label">Access Policy</label>
+      <select name="enabled" class="form-control">
+        <option value="true">Allowed (Permit)</option>
+        <option value="false">Blocked (Deny)</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm" style="height:38px;">+ Add Permitted RID</button>
+  </form>
+
+  <div id="p25-rid-container">
+    {% include "components/p25_rid_table.html" %}
   </div>
 </div>
 
@@ -1810,6 +1864,22 @@ function syncP25NetMode() {
   const netFields = document.getElementById('p25-net-fields');
   if (netSel && netFields) {
     netFields.style.display = (netSel.value === 'true') ? 'block' : 'none';
+  }
+}
+
+function applyP25NetPreset(name, address, port) {
+  const netSel = document.getElementById('p25-net-enable-select');
+  if (netSel) {
+    netSel.value = 'true';
+    syncP25NetMode();
+  }
+  const addrEl = document.getElementById('p25-net-addr-input');
+  if (addrEl) addrEl.value = address;
+  const portEl = document.getElementById('p25-net-port-input');
+  if (portEl) portEl.value = port;
+  if (typeof htmx !== 'undefined') {
+    htmx.find('#toast-container')?.insertAdjacentHTML('beforeend',
+      `<div class="toast toast-info"><span>Applied ${name} (${address}:${port})</span></div>`);
   }
 }
 

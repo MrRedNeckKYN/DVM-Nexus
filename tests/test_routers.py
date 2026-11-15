@@ -213,13 +213,50 @@ def test_p25_talkgroups_add_and_delete(client):
         "tgid": 9991,
         "name": "Test P25 TG",
         "parrot": "false",
+        "rewrite_tg": 10200,
+        "always": "true",
     })
     assert add_resp.status_code == 200
     assert "9991" in add_resp.text
+    assert "Rewrite" in add_resp.text or "10200" in add_resp.text
 
     del_resp = client.post("/p25/talkgroups/delete/9991")
     assert del_resp.status_code == 200
     assert "Deleted Talkgroup 9991" in del_resp.text
+
+
+def test_p25_rid_acl_add_and_delete(client):
+    """Test adding and deleting P25 subscriber RIDs in rid_acl.dat."""
+    add_resp = client.post("/p25/rids/add", data={
+        "rid": 3129999,
+        "alias": "Test Unit P25",
+        "enabled": "true",
+    })
+    assert add_resp.status_code == 200
+    assert "3129999" in add_resp.text
+
+    del_resp = client.post("/p25/rids/delete/3129999")
+    assert del_resp.status_code == 200
+    assert "Deleted Radio ID 3129999" in del_resp.text
+
+
+def test_dmr_talkgroups_add_parrot_and_rewrite(client):
+    """Test adding DMR talkgroup with parrot echo and rewrite rules."""
+    add_resp = client.post("/dmr/talkgroups/add", data={
+        "tgid": 9992,
+        "name": "DMR Parrot TG",
+        "slot": 2,
+        "parrot": "true",
+        "rewrite_tg": 3100,
+        "always": "true",
+    })
+    assert add_resp.status_code == 200
+    assert "9992" in add_resp.text
+    assert "Parrot" in add_resp.text
+
+    del_resp = client.post("/dmr/talkgroups/delete/9992")
+    assert del_resp.status_code == 200
+    assert "Deleted Talkgroup 9992" in del_resp.text
 
 
 def test_api_settings_save(client):

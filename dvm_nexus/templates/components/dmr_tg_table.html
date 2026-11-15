@@ -3,22 +3,37 @@
     <thead>
       <tr>
         <th>TGID</th>
-        <th>Name</th>
-        <th>Slot</th>
-        <th>Action</th>
+        <th>Talkgroup Name / Alias</th>
+        <th>Timeslot</th>
+        <th>Routing &amp; Type</th>
+        <th style="width: 80px; text-align: center;">Action</th>
       </tr>
     </thead>
     <tbody>
       {% for tg in talkgroups %}
       <tr>
-        <td><strong>{{ tg.id or tg.tgid }}</strong></td>
+        <td><strong class="font-mono">{{ tg.id or tg.tgid }}</strong></td>
         <td>{{ tg.name or 'Talkgroup' }}</td>
         <td>
           <span class="badge {% if tg.slot == 2 %}badge-indigo{% else %}badge-cyan{% endif %}">
-            Slot {{ tg.slot or 1 }}
+            TS {{ tg.slot or 1 }}
           </span>
         </td>
         <td>
+          {% if tg.parrot %}
+            <span class="badge badge-warning" style="margin-right: 4px;">🦜 Parrot Echo</span>
+          {% endif %}
+          {% if tg.rewrite %}
+            <span class="badge badge-purple" style="margin-right: 4px;">⇄ Rewrite &rarr; TG {{ tg.rewrite }}</span>
+          {% endif %}
+          {% if tg.always %}
+            <span class="badge badge-success" style="margin-right: 4px;">📌 Static Hold</span>
+          {% endif %}
+          {% if not tg.parrot and not tg.rewrite and not tg.always %}
+            <span class="badge badge-muted">Standard DMR Group</span>
+          {% endif %}
+        </td>
+        <td style="text-align: center;">
           <button 
             hx-post="/dmr/talkgroups/delete/{{ tg.id or tg.tgid }}" 
             hx-target="#dmr-tg-container" 
@@ -31,7 +46,9 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="4" style="text-align:center; color:var(--text-dim);">No talkgroups defined.</td>
+        <td colspan="5" style="text-align:center; color:var(--text-dim); padding: 1.25rem;">
+          No DMR talkgroups defined in <code>talkgroup_rules.yml</code>.
+        </td>
       </tr>
       {% endfor %}
     </tbody>

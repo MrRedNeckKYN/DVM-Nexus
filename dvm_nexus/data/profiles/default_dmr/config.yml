@@ -72,6 +72,7 @@ protocols:
     debug: false
     supervisor: false
     colorCode: 3
+    dropEncrypted: false
   p25:
     enable: false
     tduPreambleCount: 1
