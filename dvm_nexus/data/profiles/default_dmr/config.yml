@@ -74,7 +74,7 @@ protocols:
     colorCode: 3
   p25:
     enable: false
-    tduPreambleCount: 6
+    tduPreambleCount: 1
     control:
       enable: false
       ackRequests: true
@@ -214,7 +214,7 @@ system:
     dmrRxDelay: 7
     p25CorrCount: 2
     dmrFifoLength: 560
-    p25FifoLength: 522
+    p25FifoLength: 442
     nxdnFifoLength: 538
     hotspot:
       dmrDiscBWAdj: 0

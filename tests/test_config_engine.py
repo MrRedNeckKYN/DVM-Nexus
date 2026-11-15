@@ -191,3 +191,38 @@ def test_heal_narrow_duplex_split_rf_power_and_gain(tmp_path):
     assert hs["rfPower"] == 2
 
 
+def test_heal_p25_dedicated_control_channel_low_latency(tmp_path):
+    """Verify single-carrier dedicated P25 CC auto-heals voiceOnControl, disableTSDUMBF, tduPreambleCount, and p25FifoLength."""
+    from dvm_nexus.config_engine.dvm_yaml import DVMConfigManager
+    mgr = DVMConfigManager(dvm_dir=tmp_path)
+    cfg = {
+        "system": {
+            "duplex": True,
+            "config": {"channelId": 1, "channelNo": "1", "voiceChNo": []},
+            "modem": {
+                "p25FifoLength": 522,
+            },
+        },
+        "protocols": {
+            "p25": {
+                "enable": True,
+                "tduPreambleCount": 6,
+                "control": {
+                    "enable": True,
+                    "dedicated": True,
+                    "disableTSDUMBF": False,
+                    "redundantGrantTransmit": False,
+                },
+            },
+        },
+    }
+    assert mgr._heal_yaml_dict(cfg) is True
+    p25_ctrl = cfg["protocols"]["p25"]["control"]
+    assert p25_ctrl["voiceOnControl"] is True
+    assert p25_ctrl["disableTSDUMBF"] is True
+    assert p25_ctrl["redundantGrantTransmit"] is True
+    assert cfg["protocols"]["p25"]["tduPreambleCount"] == 1
+    assert cfg["system"]["modem"]["p25FifoLength"] == 442
+
+
+

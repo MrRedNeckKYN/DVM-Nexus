@@ -111,9 +111,15 @@ def build_p25_programming_summary(
         primary_name = "Ch 1 (Simplex Voice)"
         primary_status = "Direct Simplex Voice"
     elif cc_dedicated:
-        primary_role = "Dedicated Control Channel (Data Only)"
-        primary_name = "Ch 1 (Dedicated 24/7 CC)"
-        primary_status = "Continuous 24/7 TSBK Data (No voice on CC carrier)"
+        voice_on_cc = bool(cc_conf.get("voiceOnControl", False))
+        if voice_on_cc:
+            primary_role = "Dedicated CC + Voice On Control (Single Duplex Hat)"
+            primary_name = "Ch 1 (Dedicated CC & Voice)"
+            primary_status = "Continuous 24/7 TSBK Data + On-Channel Voice Grants"
+        else:
+            primary_role = "Dedicated Control Channel (Data Only)"
+            primary_name = "Ch 1 (Dedicated 24/7 CC)"
+            primary_status = "Continuous 24/7 TSBK Data (Separate VC Required)"
     elif cc_enabled:
         primary_role = "Combined CC + Voice Channel"
         primary_name = "Ch 1 (Combined CC & Voice)"
@@ -247,6 +253,8 @@ def build_p25_programming_summary(
         "cc_mode_label": cc_mode_label,
         "cc_enabled": cc_enabled,
         "cc_dedicated": cc_dedicated,
+        "voice_on_control": bool(cc_conf.get("voiceOnControl", False)),
+        "disable_tsdu_mbf": bool(cc_conf.get("disableTSDUMBF", False)),
         "cc_interval": int(cc_conf.get("interval", 300)),
         "cc_duration": int(cc_conf.get("duration", 1)),
         "radio_rx_mhz": tx_freq_mhz,
@@ -356,7 +364,7 @@ async def p25_save(
     rfss_id: int = Form(1),
     site_id: int = Form(1),
     call_hang: int = Form(5),
-    tdu_preambles: int = Form(6),
+    tdu_preambles: int = Form(1),
     immediate_call_term: bool = Form(True),
     authoritative: bool = Form(True),
     default_net_idle_tg: int = Form(0),
@@ -380,6 +388,9 @@ async def p25_save(
     cc_ack_requests: bool = Form(True),
     cc_notify_active_tg: bool = Form(False),
     cc_dedicated: bool = Form(False),
+    voice_on_control: bool = Form(True),
+    disable_tsdu_mbf: bool = Form(True),
+    redundant_grant_tx: bool = Form(True),
     control_only: bool = Form(False),
     disable_grant_src_check: bool = Form(False),
     inhibit_unauthorized: bool = Form(False),
@@ -436,9 +447,16 @@ async def p25_save(
             cc_dedicated = True
             cc_broadcast = True
             control_only = False
+            voice_on_control = True
+            disable_tsdu_mbf = True
+            redundant_grant_tx = True
+            if tdu_preambles > 1:
+                tdu_preambles = 1
         elif mode_val == "non_dedicated":
             cc_enable = True
             cc_dedicated = False
+            if tdu_preambles > 1:
+                tdu_preambles = 1
         else:
             cc_enable = False
             cc_dedicated = False
@@ -557,6 +575,9 @@ async def p25_save(
         c["protocols"]["p25"]["control"]["ackRequests"] = cc_ack_requests
         c["protocols"]["p25"]["control"]["notifyActiveTG"] = cc_notify_active_tg
         c["protocols"]["p25"]["control"]["dedicated"] = cc_dedicated
+        c["protocols"]["p25"]["control"]["voiceOnControl"] = voice_on_control
+        c["protocols"]["p25"]["control"]["disableTSDUMBF"] = disable_tsdu_mbf
+        c["protocols"]["p25"]["control"]["redundantGrantTransmit"] = redundant_grant_tx
         c["protocols"]["p25"]["control"]["disableGrantSourceIdCheck"] = disable_grant_src_check
 
         c.setdefault("system", {}).setdefault("config", {})
@@ -599,6 +620,8 @@ async def p25_save(
         effective_afc = False if duplex else afc_enable
         c["system"]["modem"]["hotspot"]["adfGainMode"] = effective_gain_mode
         c["system"]["modem"]["hotspot"]["afcEnable"] = effective_afc
+        if cc_dedicated or cc_enable or duplex:
+            c["system"]["modem"]["p25FifoLength"] = 442
 
         # Auto-calculate iden_table.dat (Channel ID 1, Channel No 1)
         dvm_config_manager.set_tuned_frequencies(tx_freq_mhz, rx_freq_mhz, c, spacing_khz=eff_spacing_khz)

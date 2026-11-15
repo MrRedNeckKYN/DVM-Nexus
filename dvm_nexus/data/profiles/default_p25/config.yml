@@ -71,10 +71,10 @@ protocols:
     verbose: true
     debug: false
     supervisor: false
-    colorCode: 1
+    colorCode: 3
   p25:
     enable: true
-    tduPreambleCount: 6
+    tduPreambleCount: 1
     control:
       enable: false
       ackRequests: true
@@ -83,13 +83,14 @@ protocols:
       interval: 300
       duration: 1
       notifyActiveTG: false
-      disableTSDUMBF: false
+      disableTSDUMBF: true
       enableTimeDateAnn: false
       disableGrantSourceIdCheck: false
       disableAdjSiteBroadcast: false
       explicitTDUGrantRelease: true
       redundantImmediate: true
-      redundantGrantTransmit: false
+      redundantGrantTransmit: true
+      voiceOnControl: true
     controlOnly: false
     disableNetworkHDU: false
     disableNetworkGrant: false
@@ -183,7 +184,7 @@ system:
         rpcPassword: ULTRA-VERY-SECURE-DEFAULT
     secure:
       key: 000102030405060708090A0B0C0D0E0F
-    colorCode: 1
+    colorCode: 3
     nac: '293'
     ran: 1
     pSuperGroup: FFFE
@@ -214,7 +215,7 @@ system:
     dmrRxDelay: 7
     p25CorrCount: 2
     dmrFifoLength: 560
-    p25FifoLength: 522
+    p25FifoLength: 442
     nxdnFifoLength: 538
     hotspot:
       dmrDiscBWAdj: 0
@@ -224,13 +225,13 @@ system:
       nxdnDiscBWAdj: 0
       nxdnPostBWAdj: 0
       adfGainMode: 2
+      rfPower: 100
       afcEnable: false
       afcKI: 13
       afcKP: 5
       afcRange: 1
       txTuning: 100
       rxTuning: -150
-      rfPower: 100
     repeater:
       dmrSymLvl3Adj: 0
       dmrSymLvl1Adj: 0

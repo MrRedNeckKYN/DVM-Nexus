@@ -810,17 +810,35 @@
     <!-- Dedicated CC Specific Options & Architecture Warning (Visible ONLY when Dedicated is selected) -->
     <div id="p25-cc-dedicated-box" {% if p25_cc_mode != 'dedicated' %}style="display:none;"{% endif %}>
       <div class="form-row">
-        <div class="form-group" style="max-width:360px;">
-          <label class="form-label">Notify Voice Channels of Active TGIDs (<code>notifyActiveTG</code>)</label>
-          <select name="cc_notify_active_tg" class="form-control">
-            <option value="false" {% if not p25.control or not p25.control.notifyActiveTG %}selected{% endif %}>Disabled (Default)</option>
-            <option value="true" {% if p25.control and p25.control.notifyActiveTG %}selected{% endif %}>Enabled (Notify Subordinate VCs via RPC)</option>
+        <div class="form-group" style="max-width:320px;">
+          <label class="form-label">Voice On Control Carrier (<code>voiceOnControl</code>)</label>
+          <select name="voice_on_control" class="form-control">
+            <option value="true" {% if not p25.control or p25.control.voiceOnControl is not defined or p25.control.voiceOnControl %}selected{% endif %}>Enabled (Single Duplex Hat — Calls On Same Carrier)</option>
+            <option value="false" {% if p25.control and p25.control.voiceOnControl is defined and not p25.control.voiceOnControl %}selected{% endif %}>Disabled (Dedicated Multi-Node Trunking with External VCs)</option>
           </select>
-          <small class="form-hint">Used when this Dedicated CC coordinates separate Voice Channel nodes.</small>
+          <small class="form-hint">Allows DVMHost to grant &amp; repeat voice on Channel 1 without external voice channels.</small>
+        </div>
+
+        <div class="form-group" style="max-width:320px;">
+          <label class="form-label">Fast Grant / Single-Block Frame (<code>disableTSDUMBF</code>)</label>
+          <select name="disable_tsdu_mbf" class="form-control">
+            <option value="true" {% if not p25.control or p25.control.disableTSDUMBF is not defined or p25.control.disableTSDUMBF %}selected{% endif %}>Enabled (SBF — Instant PTT Grant &amp; Fast TX)</option>
+            <option value="false" {% if p25.control and p25.control.disableTSDUMBF is defined and not p25.control.disableTSDUMBF %}selected{% endif %}>Disabled (MBF Multi-Block — Standard Interleaving)</option>
+          </select>
+          <small class="form-hint">Eliminates multi-block interleaving lag so radios decode grants on the next frame boundary.</small>
+        </div>
+
+        <div class="form-group" style="max-width:280px;">
+          <label class="form-label">Notify External Voice Channels (<code>notifyActiveTG</code>)</label>
+          <select name="cc_notify_active_tg" class="form-control">
+            <option value="false" {% if not p25.control or not p25.control.notifyActiveTG %}selected{% endif %}>Disabled (Single Hat Mode)</option>
+            <option value="true" {% if p25.control and p25.control.notifyActiveTG %}selected{% endif %}>Enabled (Multi-Node RPC Network)</option>
+          </select>
+          <small class="form-hint">Used only when this CC coordinates separate Voice Channel nodes.</small>
         </div>
       </div>
-      <div style="padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.4); border-radius:var(--radius-sm); font-size:0.82rem; color:#fde68a;">
-        ⚠️ <strong>DVMHost Dedicated P25 Control Channel Note:</strong> Because P25 Phase 1 is FDMA (single channel per carrier), enabling <strong>Dedicated CC (`control.dedicated: true`)</strong> keys your transmitter <strong>100% continuously</strong> broadcasting TSBK trunking data. A dedicated P25 CC requires a second DVMHost Voice Channel (`voiceChNo`) radio to carry voice calls. If you are using a <strong>single Raspberry Pi + MMDVM Duplex Hat</strong> and want both TSBK Control Channel features AND voice calls, select <strong>2. Non-Dedicated Control Channel (Combined CC + Voice)</strong> above.
+      <div style="padding:0.75rem 1rem; margin-bottom:1rem; background:rgba(16, 185, 129, 0.12); border:1px solid rgba(16, 185, 129, 0.4); border-radius:var(--radius-sm); font-size:0.82rem; color:#a7f3d0;">
+        ⚡ <strong>Single-Hat Dedicated Trunking Mode Active:</strong> With <strong>Voice On Control (<code>voiceOnControl: true</code>)</strong> and <strong>Single-Block Fast Grants (<code>disableTSDUMBF: true</code>)</strong> enabled, your Tait/Motorola subscribers receive continuous 24/7 TSBK control channel data (no hunting or out-of-range beeps), and grant group voice calls directly on the primary carrier with minimum PTT turnaround delay.
       </div>
     </div>
 
@@ -977,8 +995,8 @@
 
       <div class="form-group">
         <label class="form-label">TDU Preamble Count</label>
-        <input type="number" name="tdu_preambles" class="form-control" value="{{ p25.tduPreambleCount or 6 }}">
-        <small class="form-hint">Terminator Data Unit preambles (default 6).</small>
+        <input type="number" name="tdu_preambles" class="form-control" value="{{ p25.tduPreambleCount if p25.tduPreambleCount is defined else 1 }}">
+        <small class="form-hint">Terminator Data Unit preambles (default 1 for near-instant PTT keying; 6+ introduces 1s delay).</small>
       </div>
 
       <div class="form-group">

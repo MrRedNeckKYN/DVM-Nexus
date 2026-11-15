@@ -360,15 +360,51 @@ class DVMConfigManager:
                     dmr_blk["colorCode"] = cc_val
                     modified = True
             p25_blk = protocols.get("p25")
-            if isinstance(p25_blk, dict) and isinstance(sys_config, dict):
-                for k, v in (
-                    ("nac", sys_config.get("nac", "293")),
-                    ("sysId", sys_config.get("sysId", "001")),
-                    ("wacn", sys_config.get("netId", "BB800")),
-                    ("netId", sys_config.get("netId", "BB800")),
-                ):
-                    if p25_blk.get(k) != v:
-                        p25_blk[k] = v
+            if isinstance(p25_blk, dict):
+                if isinstance(sys_config, dict):
+                    for k, v in (
+                        ("nac", sys_config.get("nac", "293")),
+                        ("sysId", sys_config.get("sysId", "001")),
+                        ("wacn", sys_config.get("netId", "BB800")),
+                        ("netId", sys_config.get("netId", "BB800")),
+                    ):
+                        if p25_blk.get(k) != v:
+                            p25_blk[k] = v
+                            modified = True
+
+                ctrl_blk = p25_blk.get("control")
+                if isinstance(ctrl_blk, dict):
+                    is_cc_enabled = bool(ctrl_blk.get("enable", False))
+                    is_dedicated = bool(ctrl_blk.get("dedicated", False))
+                    voice_chs = sys_config.get("voiceChNo") if isinstance(sys_config, dict) else None
+                    is_single_carrier = not voice_chs or len(voice_chs) <= 1
+
+                    if is_dedicated and is_single_carrier:
+                        # Single-hat dedicated control channel requires voiceOnControl so DVMHost accepts voice frames on Ch 1
+                        if ctrl_blk.get("voiceOnControl") is not True:
+                            ctrl_blk["voiceOnControl"] = True
+                            modified = True
+                        # Enable redundant grant transmit for reliable subscriber grant reception
+                        if ctrl_blk.get("redundantGrantTransmit") is not True:
+                            ctrl_blk["redundantGrantTransmit"] = True
+                            modified = True
+
+                    if (is_dedicated or is_cc_enabled) and ctrl_blk.get("disableTSDUMBF") is not True:
+                        # Disable Multi-Block Frames (TSDU MBF) to send Single Block Frames immediately (low TX grant latency)
+                        ctrl_blk["disableTSDUMBF"] = True
+                        modified = True
+
+                # Optimize TDU preamble count to prevent 1+ second dead carrier keying delay (hotspot/duplex hat needs 1, not 6 or 8)
+                curr_tdu = p25_blk.get("tduPreambleCount")
+                if curr_tdu is None or curr_tdu > 1:
+                    p25_blk["tduPreambleCount"] = 1
+                    modified = True
+
+                # Optimize modem P25 FIFO length to eliminate serial buffer lag (DVMHost min is 442)
+                if isinstance(modem_blk, dict):
+                    curr_fifo = modem_blk.get("p25FifoLength")
+                    if curr_fifo is None or curr_fifo > 442:
+                        modem_blk["p25FifoLength"] = 442
                         modified = True
             dmr_on = bool(protocols.get("dmr", {}).get("enable", False)) if isinstance(protocols.get("dmr"), dict) else False
             p25_on = bool(protocols.get("p25", {}).get("enable", False)) if isinstance(protocols.get("p25"), dict) else False
