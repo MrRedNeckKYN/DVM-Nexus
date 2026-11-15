@@ -75,6 +75,7 @@ class DiagnosticsEngine:
         is_single_hat_firmware = False
         is_dual_hat_firmware = False
         uart_timeout_in_logs = False
+        duplex_nak_in_logs = False
 
         for line in raw_lines:
             if "(MODEM)" in line or "MMDVM" in line:
@@ -82,21 +83,39 @@ class DiagnosticsEngine:
                     is_dvm_firmware = True
                     parts = line.split("(MODEM)", 1)
                     firmware_string = parts[1].strip() if len(parts) > 1 else line.strip()
-                    if "[MMDVM_HS_Hat]" in firmware_string and "Dual" not in firmware_string:
-                        is_single_hat_firmware = True
-                    elif "Dual" in firmware_string:
+                    if "Dual" in firmware_string:
                         is_dual_hat_firmware = True
                 elif ("MMDVM_HS" in line or "ZUMspot" in line) and "Digital Voice Modem" not in line:
                     if is_dvm_firmware is None:
                         is_dvm_firmware = False
                         parts = line.split("(MODEM)", 1)
                         firmware_string = parts[1].strip() if len(parts) > 1 else line.strip()
+                if (
+                    "NAK, CMD_SET_CONFIG" in line
+                    or "Full duplex not supported with this firmware" in line
+                    or "Full duplex is not supported on this board" in line
+                    or "Modem unresponsive to configuration set" in line
+                ):
+                    duplex_nak_in_logs = True
                 if "Modem Ready" in line:
                     m = re.search(r"Modem Ready \[([^\]]+)\]", line)
                     if m:
                         modem_ready_mode = m.group(1)
+                    # A successful Modem Ready after startup clears older transient errors
+                    uart_timeout_in_logs = False
+                    duplex_nak_in_logs = False
                 if "Unable to read the firmware version" in line or "Cannot open device" in line or "Unable to open the modem" in line:
                     uart_timeout_in_logs = True
+
+        # Note: Upstream DVMProject/dvmfirmware-hs Makefile.STM32FX defines target 'mmdvm-hs-hat-dual'
+        # as '-DDUPLEX -DMMDVM_HS_HAT_REV12', which compiles BOARD_INFO as '[MMDVM_HS_Hat]' even on
+        # 2-antenna Duplex Hats. A real 1-antenna simplex build only rejects duplex mode in
+        # SerialPort::setConfig() by returning NAK to CMD_SET_CONFIG.
+        if config_duplex and duplex_nak_in_logs:
+            is_single_hat_firmware = True
+            is_dual_hat_firmware = False
+        elif is_dvm_firmware and config_duplex and not duplex_nak_in_logs:
+            is_dual_hat_firmware = True
 
         serial_getty_active = False
         bt_uart_active = False
@@ -127,7 +146,7 @@ class DiagnosticsEngine:
             )
         if is_single_hat_firmware and config_duplex:
             warnings.append(
-                "Hardware Duplex Mismatch: Your MMDVM hat reports 1-antenna [MMDVM_HS_Hat] firmware, which cannot transmit and receive simultaneously. Switch to Simplex (duplex: false, RX = TX) or use a 2-antenna [MMDVM_HS_Dual_Hat] board."
+                "Hardware Duplex Mismatch: Modem rejected full-duplex configuration (CMD_SET_CONFIG NAK). Flash the Duplex Hat target (mmdvm-hs-hat-dual) or switch to Simplex (duplex: false, RX = TX)."
             )
         if serial_getty_active:
             warnings.append(
@@ -540,9 +559,9 @@ class DiagnosticsEngine:
                 "id": "modem_firmware_check",
                 "name": "Modem Hardware Duplex Capability",
                 "status": "warn",
-                "badge": "1-ANTENNA HAT IN DUPLEX",
-                "summary": f"Modem reports 1-antenna [MMDVM_HS_Hat] firmware ({modem_summary.get('firmware_string')}), which only supports Simplex, while config.yml has duplex: true.",
-                "remedy": "Switch to Simplex (Direct / Hotspot) mode on the DMR or P25 page so duplex: false and RX = TX.",
+                "badge": "SIMPLEX FW NAK",
+                "summary": f"Modem rejected full-duplex CMD_SET_CONFIG ({modem_summary.get('firmware_string')}) while config.yml has duplex: true.",
+                "remedy": "Flash the Duplex Hat firmware target (mmdvm-hs-hat-dual) or switch to Simplex mode (duplex: false).",
                 "auto_fixable": False,
             })
         elif modem_summary.get("is_dvm_firmware") is True:

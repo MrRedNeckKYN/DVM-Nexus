@@ -770,3 +770,48 @@ def test_dvmhost_segfault_guard_and_config_healer(monkeypatch):
     assert raw_cfg["system"]["config"]["controlCh"]["notifyEnable"] is False
     assert raw_cfg["system"]["modem"]["ignoreModemConfigArea"] is True
 
+
+def test_duplex_hat_mmdvm_hs_hat_firmware_banner_not_flagged_as_simplex(monkeypatch):
+    """
+    Upstream DVMProject/dvmfirmware-hs Makefile.STM32FX target 'mmdvm-hs-hat-dual' passes
+    '-DDUPLEX -DMMDVM_HS_HAT_REV12', which compiles BOARD_INFO as '[MMDVM_HS_Hat]'.
+    Verify DiagnosticsEngine treats '[MMDVM_HS_Hat]' in duplex mode as healthy (is_dual_hat_firmware=True,
+    is_single_hat_firmware=False) unless CMD_SET_CONFIG returns NAK.
+    """
+    from dvm_nexus.core.diagnostics import diagnostics_engine
+
+    monkeypatch.setattr(
+        diagnostics_engine,
+        "get_service_logs",
+        lambda service, lines=120, filter_level="all": {
+            "entries": [
+                {
+                    "raw": "I: (MODEM) Digital Voice Modem DSP Hotspot [MMDVM_HS_Hat] (ADF7021, DMR, P25, NXDN, TCXO 14.7456, CW Id) (build 20:41:06 Nov 10 2026), Modem protocol: 4"
+                },
+                {
+                    "raw": "I: (MODEM) Modem Ready [Direct Mode]"
+                },
+            ]
+        },
+    )
+
+    cfg = {
+        "system": {
+            "duplex": True,
+            "modem": {
+                "protocol": {
+                    "type": "uart",
+                    "mode": "air",
+                    "uart": {"port": "/dev/ttyAMA0", "speed": 115200},
+                }
+            },
+        }
+    }
+    summary = diagnostics_engine.get_modem_firmware_summary(cfg_dict=cfg, force=True)
+    assert summary["is_dvm_firmware"] is True
+    assert summary["is_dual_hat_firmware"] is True
+    assert summary["is_single_hat_firmware"] is False
+    assert summary["warnings"] == []
+    assert summary["healthy"] is True
+
+

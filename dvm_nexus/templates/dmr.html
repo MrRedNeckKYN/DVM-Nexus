@@ -100,9 +100,11 @@
           <span style="color:var(--text-bright);">{{ modem_diag.firmware_string }}</span>
         </div>
         {% if modem_diag.is_single_hat_firmware %}
-          <span class="badge badge-warning">1-Antenna Simplex Hat ([MMDVM_HS_Hat])</span>
+          <span class="badge badge-warning">Simplex-Only Firmware (CMD_SET_CONFIG NAK)</span>
         {% elif modem_diag.is_dual_hat_firmware %}
-          <span class="badge badge-success">2-Antenna Duplex Hat ([Dual_Hat])</span>
+          <span class="badge badge-success">2-Antenna Duplex Hat Verified</span>
+        {% elif modem_diag.is_dvm_firmware %}
+          <span class="badge badge-success">DVMFirmware-HS Ready</span>
         {% endif %}
       </div>
       {% if modem_diag.warnings %}

@@ -169,8 +169,14 @@ class FirmwareFlasher:
                         d_txt = d_txt.replace("// #define DUPLEX", "#define DUPLEX").replace("//#define DUPLEX", "#define DUPLEX")
                         if "#define DUPLEX" not in d_txt:
                             d_txt = "#define DUPLEX\n" + d_txt
+                        # Upstream dvmfirmware-hs Makefile.STM32FX passes -DMMDVM_HS_HAT_REV12 for mmdvm-hs-hat-dual;
+                        # ensure BOARD_INFO reports MMDVM_HS_Dual_Hat when DUPLEX is enabled.
+                        d_txt = d_txt.replace(
+                            '#elif defined(MMDVM_HS_HAT_REV12)\n#define BOARD_INFO      "MMDVM_HS_Hat"',
+                            '#elif defined(MMDVM_HS_HAT_REV12)\n#define BOARD_INFO      "MMDVM_HS_Dual_Hat"',
+                        )
                         defines_h.write_text(d_txt, encoding="utf-8")
-                        self._append_log("Enforced #define DUPLEX in Defines.h for dual ADF7021 hardware.")
+                        self._append_log("Enforced #define DUPLEX and BOARD_INFO='MMDVM_HS_Dual_Hat' in Defines.h for dual ADF7021 hardware.")
 
                     cfg_src = build_dir / "configs" / "MMDVM_HS_Dual_Hat.h"
                     if not cfg_src.exists() and (build_dir / "configs").exists():
