@@ -1,14 +1,12 @@
 <div class="telemetry-grid">
   <!-- SoC Temperature Tile (°F) -->
   <div class="telemetry-card">
-    <div class="telemetry-header">
+    <div class="telemetry-card-top">
       <span class="telemetry-label">SoC Temp</span>
-      <span class="telemetry-value {% if sys.cpu_temp_f and sys.cpu_temp_f > 158 %}temp-hot{% elif sys.cpu_temp_f and sys.cpu_temp_f >= 122 %}temp-warm{% else %}temp-cool{% endif %} font-mono">
-        {% if sys.cpu_temp_f %}
-          <span class="temp-indicator-dot {% if sys.cpu_temp_f > 158 %}dot-danger{% elif sys.cpu_temp_f and sys.cpu_temp_f >= 122 %}dot-warning{% else %}dot-success{% endif %}"></span>
-        {% endif %}
-        {{ sys.cpu_temp_display }}
-      </span>
+      <span class="temp-indicator-dot {% if sys.cpu_temp_f and sys.cpu_temp_f > 158 %}dot-danger{% elif sys.cpu_temp_f and sys.cpu_temp_f >= 122 %}dot-warning{% else %}dot-success{% endif %}"></span>
+    </div>
+    <div class="telemetry-main-value {% if sys.cpu_temp_f and sys.cpu_temp_f > 158 %}temp-hot{% elif sys.cpu_temp_f and sys.cpu_temp_f >= 122 %}temp-warm{% else %}temp-cool{% endif %} font-mono">
+      {{ sys.cpu_temp_display|replace(' ', '&nbsp;')|safe if sys.cpu_temp_display else '--' }}
     </div>
     <div class="telemetry-bar-bg">
       <div class="telemetry-bar-fill {% if sys.cpu_temp_f and sys.cpu_temp_f > 158 %}bar-danger{% elif sys.cpu_temp_f and sys.cpu_temp_f >= 122 %}bar-warning{% else %}bar-success{% endif %}"
@@ -21,45 +19,54 @@
 
   <!-- CPU Utilization Tile -->
   <div class="telemetry-card">
-    <div class="telemetry-header">
-      <span class="telemetry-label">CPU Utilization</span>
-      <span class="telemetry-value font-mono">{{ sys.cpu_percent }}%</span>
+    <div class="telemetry-card-top">
+      <span class="telemetry-label">CPU Load</span>
+      <span class="telemetry-sub-badge font-mono">{% if sys.load_avg %}{{ sys.load_avg[0] }}{% else %}4-Core{% endif %}</span>
+    </div>
+    <div class="telemetry-main-value font-mono {% if sys.cpu_percent > 85 %}text-danger{% elif sys.cpu_percent > 60 %}text-warning{% else %}text-cyan{% endif %}">
+      {{ sys.cpu_percent }}%
     </div>
     <div class="telemetry-bar-bg">
       <div class="telemetry-bar-fill {% if sys.cpu_percent > 85 %}bar-danger{% elif sys.cpu_percent > 60 %}bar-warning{% else %}bar-cyan{% endif %}"
            style="width: {{ sys.cpu_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span class="truncate">{{ sys.cpu_model|default('BCM2712 Cortex-A76 4-Core') }}</span>
+      <span class="truncate">{{ sys.cpu_model|default('BCM2712 Cortex-A76') }}</span>
     </div>
   </div>
 
   <!-- Memory Usage Tile -->
   <div class="telemetry-card">
-    <div class="telemetry-header">
+    <div class="telemetry-card-top">
       <span class="telemetry-label">Memory (RAM)</span>
-      <span class="telemetry-value font-mono">{{ sys.memory_percent }}%</span>
+      <span class="telemetry-sub-badge font-mono">{{ sys.memory_used_str|default('0.3 GB') }}</span>
+    </div>
+    <div class="telemetry-main-value font-mono {% if sys.memory_percent > 85 %}text-danger{% elif sys.memory_percent > 70 %}text-warning{% else %}text-blue{% endif %}">
+      {{ sys.memory_percent }}%
     </div>
     <div class="telemetry-bar-bg">
       <div class="telemetry-bar-fill {% if sys.memory_percent > 85 %}bar-danger{% elif sys.memory_percent > 70 %}bar-warning{% else %}bar-blue{% endif %}"
            style="width: {{ sys.memory_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span class="truncate font-mono">{{ sys.memory_display }}</span>
+      <span class="truncate font-mono">{{ sys.memory_used_str|default('0.3 GB') }} / {{ sys.memory_total_str|default('2.0 GB') }}</span>
     </div>
   </div>
 
   <!-- Storage Tile -->
   <div class="telemetry-card">
-    <div class="telemetry-header">
-      <span class="telemetry-label">Storage</span>
-      <span class="telemetry-value font-mono">{{ sys.disk_percent }}%</span>
+    <div class="telemetry-card-top">
+      <span class="telemetry-label">Disk Storage</span>
+      <span class="telemetry-sub-badge font-mono">{{ sys.disk_used_gb|default(8.4) }}G</span>
+    </div>
+    <div class="telemetry-main-value font-mono text-purple">
+      {{ sys.disk_percent }}%
     </div>
     <div class="telemetry-bar-bg">
       <div class="telemetry-bar-fill bar-purple" style="width: {{ sys.disk_percent }}%;"></div>
     </div>
     <div class="telemetry-footer">
-      <span class="truncate font-mono">Disk: {{ sys.disk_display|default(sys.disk_used_gb ~ ' / ' ~ sys.disk_total_gb ~ ' GB (' ~ sys.disk_percent ~ '%)') }}</span>
+      <span class="truncate font-mono">Disk: {{ sys.disk_used_gb|default(8.4) }} / {{ sys.disk_total_gb|default(57.4) }} GB</span>
     </div>
   </div>
 </div>
@@ -73,7 +80,7 @@
   </div>
   <div class="uptime-badge-item">
     <span class="pulse-dot-small"></span>
-    <span class="uptime-label">Hardware:</span>
-    <strong class="uptime-val">{{ sys.hardware_label|default('Raspberry Pi 5') }}</strong>
+    <span class="uptime-label">Host:</span>
+    <strong class="uptime-val font-mono" title="{{ sys.hardware_label }}">{{ sys.hardware_label|default('Raspberry Pi 5') }}</strong>
   </div>
 </div>
