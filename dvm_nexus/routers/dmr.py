@@ -151,9 +151,10 @@ async def dmr_save(
     dmr_disc_bw: int = Form(0),
     dmr_post_bw: int = Form(0),
     adf_gain_mode: int = Form(2),
-    afc_enable: bool = Form(True),
+    afc_enable: bool = Form(False),
     dmr_rx_delay: int = Form(7),
     tx_level: int = Form(50),
+    rf_power: Optional[int] = Form(None),
     config_rev: str = Form(""),
 ):
     """Save comprehensive DMR parameters safely, auto-calculating iden_table.dat and restarting dvmhost."""
@@ -310,6 +311,14 @@ async def dmr_save(
         c["system"]["config"]["supervisor"] = supervisor
         c["system"]["config"]["defaultNetIdleTalkgroup"] = default_net_idle_tg
 
+        is_narrow_split = bool(duplex and 0.0 < abs(tx_freq_mhz - rx_freq_mhz) < 1.0)
+        if rf_power is None:
+            resolved_rf_power = 2 if is_narrow_split else int(c.get("system", {}).get("modem", {}).get("hotspot", {}).get("rfPower", 100) or 100)
+        else:
+            resolved_rf_power = max(2, min(100, int(rf_power)))
+            if is_narrow_split and resolved_rf_power >= 90:
+                resolved_rf_power = 2
+
         c.setdefault("system", {}).setdefault("modem", {})
         c["system"]["modem"]["dmrRxDelay"] = dmr_rx_delay
         c["system"]["modem"]["txLevel"] = tx_level
@@ -318,8 +327,9 @@ async def dmr_save(
         c["system"]["modem"]["hotspot"]["rxTuning"] = rx_tuning
         c["system"]["modem"]["hotspot"]["dmrDiscBWAdj"] = dmr_disc_bw
         c["system"]["modem"]["hotspot"]["dmrPostBWAdj"] = dmr_post_bw
-        c["system"]["modem"]["hotspot"]["adfGainMode"] = adf_gain_mode
-        c["system"]["modem"]["hotspot"]["afcEnable"] = afc_enable
+        c["system"]["modem"]["hotspot"]["rfPower"] = resolved_rf_power
+        c["system"]["modem"]["hotspot"]["adfGainMode"] = 2 if (duplex and adf_gain_mode in (0, 1)) else adf_gain_mode
+        c["system"]["modem"]["hotspot"]["afcEnable"] = False if duplex else afc_enable
 
         # Auto-calculate iden_table.dat (Channel ID 1, Channel No 1)
         dvm_config_manager.set_tuned_frequencies(tx_freq_mhz, rx_freq_mhz, c, spacing_khz=eff_spacing_khz)

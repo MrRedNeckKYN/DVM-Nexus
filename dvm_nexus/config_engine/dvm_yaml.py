@@ -219,17 +219,63 @@ class DVMConfigManager:
             if modem_blk.get("ignoreModemConfigArea") is not True:
                 modem_blk["ignoreModemConfigArea"] = True
                 modified = True
-            # On Duplex Hats running a P25/DMR Control Channel, ADF7021 hardware AFC (afcEnable: true)
-            # pulls the RX discriminator toward the adjacent 24/7 TX carrier on narrow splits (e.g. 25 kHz),
-            # causing self-hearing (TSBK CRC errors & unhandled OSP LCOs $16/$3A/$3B/$3D).
-            if bool(sys_root.get("duplex", False)):
-                hs_blk = modem_blk.get("hotspot")
-                if isinstance(hs_blk, dict):
-                    if hs_blk.get("afcEnable") is True:
-                        hs_blk["afcEnable"] = False
-                        modified = True
-                    if hs_blk.get("adfGainMode") not in (1, 2):
+            # On Duplex Hats running a P25/DMR Control Channel:
+            # 1. ADF7021 hardware AFC (afcEnable: true) pulls the RX discriminator toward the adjacent
+            #    24/7 TX carrier on narrow splits (e.g. 25 kHz).
+            # 2. adfGainMode 0/1 leaves hardware AGC enabled (up to ~80 dB gain during idle), amplifying
+            #    adjacent-channel TX leakage into the hard IF limiter; adfGainMode: 2 (ADF_GAIN_LOW)
+            #    disables AGC and sets fixed minimum LNA/filter gain.
+            # 3. DVMHost reads TX PA power from system.modem.hotspot.rfPower (default 95% = +12.5 dBm),
+            #    NOT system.info.power! Moreover, rfPower: 1 maps to (1*2.55)>>2 = 0 (PA Off), whereas
+            #    rfPower: 2 maps to (2*2.55)>>2 = 1 (-16 dBm, minimum active PA level, 28.5 dB lower).
+            hs_blk = modem_blk.setdefault("hotspot", {}) if isinstance(modem_blk.get("hotspot"), (dict, type(None))) else None
+            if bool(sys_root.get("duplex", False)) and isinstance(hs_blk, dict):
+                if hs_blk.get("afcEnable") is not False:
+                    hs_blk["afcEnable"] = False
+                    modified = True
+                if hs_blk.get("adfGainMode") in (0, 1, None):
+                    hs_blk["adfGainMode"] = 2
+                    modified = True
+
+                is_narrow_duplex = False
+                try:
+                    if self.iden_path.exists():
+                        from dvm_nexus.config_engine.iden_calculator import read_iden_table_file
+                        ch_id = int(sys_root.get("config", {}).get("channelId", 1) or 1)
+                        for entry in read_iden_table_file(self.iden_path):
+                            if entry.channel_id == ch_id:
+                                if 0.0 < abs(entry.offset_mhz) < 1.0:
+                                    is_narrow_duplex = True
+                                break
+                except Exception:
+                    pass
+
+                curr_rf_pwr = hs_blk.get("rfPower")
+                if is_narrow_duplex:
+                    if hs_blk.get("adfGainMode") != 2:
                         hs_blk["adfGainMode"] = 2
+                        modified = True
+                    if curr_rf_pwr is None or int(curr_rf_pwr or 0) >= 90 or int(curr_rf_pwr or 0) < 2:
+                        info_pwr = sys_root.get("info", {}).get("power") if isinstance(sys_root.get("info"), dict) else None
+                        if isinstance(info_pwr, (int, float)) and 1 <= int(info_pwr) <= 25 and int(info_pwr) != 10:
+                            target_pwr = max(2, int(info_pwr))
+                        else:
+                            target_pwr = 2
+                        if curr_rf_pwr != target_pwr:
+                            hs_blk["rfPower"] = target_pwr
+                            modified = True
+                else:
+                    if curr_rf_pwr is None or int(curr_rf_pwr or 0) < 2:
+                        target_pwr = max(2, int(curr_rf_pwr or 100))
+                        if curr_rf_pwr != target_pwr:
+                            hs_blk["rfPower"] = target_pwr
+                            modified = True
+            elif isinstance(hs_blk, dict):
+                curr_rf_pwr = hs_blk.get("rfPower")
+                if curr_rf_pwr is None or int(curr_rf_pwr or 0) < 2:
+                    target_pwr = max(2, int(curr_rf_pwr or 100))
+                    if curr_rf_pwr != target_pwr:
+                        hs_blk["rfPower"] = target_pwr
                         modified = True
             if include_policy:
                 proto_blk = modem_blk.get("protocol", {})
@@ -504,6 +550,7 @@ class DVMConfigManager:
 
         # Suppress false-positive MMDVM_HS EEPROM warning ("Modem configuration area does not contain a valid configuration!")
         modem_blk["ignoreModemConfigArea"] = True
+        self._heal_yaml_dict(data)
 
         # Safety Net: Authoritative Standalone Mode and Voice Channel RPC conflict prevention
         # Prevents: "W: (HOST) Detected possible misconfiguration! Voice Channel RPC Address/Port and the configured RPC Address/Port are the same!"

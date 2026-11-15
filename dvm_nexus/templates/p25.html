@@ -264,9 +264,9 @@
         </div>
 
         <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">RF Transmit Power (%) (<code>system.info.power</code>)</label>
-          <input type="number" name="rf_power" class="form-control font-mono" min="1" max="100" value="{{ info.power if info is defined and info.power is defined else 10 }}">
-          <small class="form-hint">ADF7021 PA level (1&ndash;100%). Set to <code>1&ndash;3%</code> on tight 25 kHz splits to stop TX&rarr;RX self-hearing.</small>
+          <label class="form-label">RF Transmit Power (%) (<code>system.modem.hotspot.rfPower</code>)</label>
+          <input type="number" name="rf_power" class="form-control font-mono" min="2" max="100" value="{{ hotspot.rfPower if hotspot is defined and hotspot.rfPower is defined else (2 if duplex and (active_rx_mhz - active_tx_mhz)|abs < 1.0 else 100) }}">
+          <small class="form-hint">ADF7021 PA level (2&ndash;100%; <code>2%</code> = &minus;16 dBm min active PA). Set to <code>2&ndash;5%</code> on tight 25 kHz splits to stop TX&rarr;RX self-hearing.</small>
         </div>
       </div>
     </div>

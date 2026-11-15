@@ -9,6 +9,7 @@ import asyncio
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 from pathlib import Path
+from typing import Optional
 
 from dvm_nexus.core.templates import render_template
 from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
@@ -76,8 +77,9 @@ async def modem_save(
     ptt_invert: bool = Form(False),
     rx_level: int = Form(50),
     tx_level: int = Form(50),
+    rf_power: Optional[int] = Form(None),
     adf_gain_mode: int = Form(2),
-    afc_enable: bool = Form(True),
+    afc_enable: bool = Form(False),
     tx_tuning: int = Form(0),
     rx_tuning: int = Form(0),
     dmr_disc_bw: int = Form(0),
@@ -136,8 +138,10 @@ async def modem_save(
     conf["system"]["modem"]["txLevel"] = tx_level
 
     conf["system"]["modem"].setdefault("hotspot", {})
-    conf["system"]["modem"]["hotspot"]["adfGainMode"] = adf_gain_mode
-    conf["system"]["modem"]["hotspot"]["afcEnable"] = afc_enable
+    if rf_power is not None:
+        conf["system"]["modem"]["hotspot"]["rfPower"] = max(2, min(100, int(rf_power)))
+    conf["system"]["modem"]["hotspot"]["adfGainMode"] = 2 if (duplex and adf_gain_mode in (0, 1)) else adf_gain_mode
+    conf["system"]["modem"]["hotspot"]["afcEnable"] = False if duplex else afc_enable
     conf["system"]["modem"]["hotspot"]["txTuning"] = tx_tuning
     conf["system"]["modem"]["hotspot"]["rxTuning"] = rx_tuning
     conf["system"]["modem"]["hotspot"]["dmrDiscBWAdj"] = dmr_disc_bw

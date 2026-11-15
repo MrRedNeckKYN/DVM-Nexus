@@ -102,6 +102,11 @@
           <label class="form-label">Modulation Level (TX Level %)</label>
           <input type="number" name="tx_level" class="form-control" min="0" max="100" value="{{ tx_level }}">
         </div>
+
+        <div class="form-group">
+          <label class="form-label">RF Transmit Power (%) (<code>hotspot.rfPower</code>)</label>
+          <input type="number" name="rf_power" class="form-control" min="2" max="100" value="{{ hotspot.rfPower if hotspot is defined and hotspot.rfPower is defined else 100 }}">
+        </div>
       </div>
     </div>
 

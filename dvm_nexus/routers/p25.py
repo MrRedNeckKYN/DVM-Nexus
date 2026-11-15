@@ -402,7 +402,7 @@ async def p25_save(
     adf_gain_mode: int = Form(2),
     afc_enable: bool = Form(False),
     tx_level: int = Form(50),
-    rf_power: int = Form(10),
+    rf_power: Optional[int] = Form(None),
     config_rev: str = Form(""),
 ):
     """Save comprehensive P25 parameters safely, auto-calculating iden_table.dat and restarting dvmhost."""
@@ -573,8 +573,16 @@ async def p25_save(
         c["system"]["config"]["authoritative"] = authoritative
         c["system"]["config"]["defaultNetIdleTalkgroup"] = default_net_idle_tg
 
+        is_narrow_split = bool(duplex and 0.0 < abs(tx_freq_mhz - rx_freq_mhz) < 1.0)
+        if rf_power is None:
+            resolved_rf_power = 2 if is_narrow_split else int(c.get("system", {}).get("modem", {}).get("hotspot", {}).get("rfPower", 100) or 100)
+        else:
+            resolved_rf_power = max(2, min(100, int(rf_power)))
+            if is_narrow_split and resolved_rf_power >= 90:
+                resolved_rf_power = 2
+
         c.setdefault("system", {}).setdefault("info", {})
-        c["system"]["info"]["power"] = max(1, min(100, int(rf_power)))
+        c["system"]["info"]["power"] = resolved_rf_power
 
         c.setdefault("system", {}).setdefault("modem", {})
         c["system"]["modem"]["p25CorrCount"] = p25_corr_count
@@ -584,9 +592,12 @@ async def p25_save(
         c["system"]["modem"]["hotspot"]["rxTuning"] = rx_tuning
         c["system"]["modem"]["hotspot"]["p25DiscBWAdj"] = p25_disc_bw
         c["system"]["modem"]["hotspot"]["p25PostBWAdj"] = p25_post_bw
-        c["system"]["modem"]["hotspot"]["adfGainMode"] = adf_gain_mode
-        # Force AFC off on tight duplex splits (< 0.5 MHz) so RX ADF7021 does not lock onto TX CC carrier
-        effective_afc = False if (duplex and abs(tx_freq_mhz - rx_freq_mhz) < 0.5) else afc_enable
+        c["system"]["modem"]["hotspot"]["rfPower"] = resolved_rf_power
+        # On Duplex Hats (especially narrow < 1.0 MHz splits), force AGC Off / Low Gain (adfGainMode: 2)
+        # and AFC Off (afcEnable: false) so RX ADF7021 does not lock onto the adjacent TX carrier.
+        effective_gain_mode = 2 if (duplex and adf_gain_mode in (0, 1)) else adf_gain_mode
+        effective_afc = False if duplex else afc_enable
+        c["system"]["modem"]["hotspot"]["adfGainMode"] = effective_gain_mode
         c["system"]["modem"]["hotspot"]["afcEnable"] = effective_afc
 
         # Auto-calculate iden_table.dat (Channel ID 1, Channel No 1)

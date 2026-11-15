@@ -164,3 +164,30 @@ def test_frequency_port_serial_and_raw_config_validators():
     assert any("daemon" in e for e in raw_errs)
     assert any("HS_NO_DUAL_MODE" in e for e in raw_errs)
 
+
+def test_heal_narrow_duplex_split_rf_power_and_gain(tmp_path):
+    """Verify narrow duplex splits (e.g. 25 kHz) auto-heal hotspot.rfPower=2, adfGainMode=2, and afcEnable=False."""
+    from dvm_nexus.config_engine.dvm_yaml import DVMConfigManager
+    mgr = DVMConfigManager(dvm_dir=tmp_path)
+    cfg = {
+        "system": {
+            "duplex": True,
+            "info": {"power": 1},
+            "config": {"channelId": 1, "channelNo": "1"},
+            "modem": {
+                "hotspot": {
+                    "adfGainMode": 1,
+                    "afcEnable": True,
+                }
+            },
+        },
+        "protocols": {"p25": {"enable": True}},
+    }
+    mgr.set_tuned_frequencies(467.550, 467.575, cfg, spacing_khz=12.5)
+    assert mgr._heal_yaml_dict(cfg) is True
+    hs = cfg["system"]["modem"]["hotspot"]
+    assert hs["afcEnable"] is False
+    assert hs["adfGainMode"] == 2
+    assert hs["rfPower"] == 2
+
+

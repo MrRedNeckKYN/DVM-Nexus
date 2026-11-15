@@ -196,6 +196,17 @@ class FirmwareFlasher:
                         config_h.write_text(c_txt, encoding="utf-8")
                         self._append_log("Enforced #define DUPLEX in Config.h for dual ADF7021 hardware.")
 
+                    # Narrow the P25/DMR hardware IF filter on Dual ADF7021 Hats from 25 kHz to 12.5 kHz
+                    # (ADF7021_REG4_IF_125K) so adjacent-channel TX carriers on tight splits (e.g. 25 kHz)
+                    # receive >25 dB of additional IF filter rejection before the hard limiter.
+                    adf_cpp = build_dir / "ADF7021.cpp"
+                    if adf_cpp.exists():
+                        a_txt = adf_cpp.read_text(encoding="utf-8", errors="ignore")
+                        if "ADF7021_REG4_IF_25K" in a_txt:
+                            a_txt = a_txt.replace("ADF7021_REG4_IF_25K", "ADF7021_REG4_IF_125K")
+                            adf_cpp.write_text(a_txt, encoding="utf-8")
+                            self._append_log("Configured 12.5 kHz IF filter (ADF7021_REG4_IF_125K) in ADF7021.cpp for Dual Hat adjacent-channel isolation.")
+
                 # Clean prior build artifacts
                 cmd_clean = ["make", "-f", "Makefile.STM32FX", "clean"]
                 p_clean = await asyncio.create_subprocess_exec(
