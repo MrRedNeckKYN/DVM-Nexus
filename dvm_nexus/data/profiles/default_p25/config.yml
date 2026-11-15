@@ -224,12 +224,12 @@ system:
       nxdnDiscBWAdj: 0
       nxdnPostBWAdj: 0
       adfGainMode: 2
-      afcEnable: true
+      afcEnable: false
       afcKI: 13
       afcKP: 5
       afcRange: 1
-      txTuning: 100
-      rxTuning: -150
+      txTuning: 0
+      rxTuning: 0
     repeater:
       dmrSymLvl3Adj: 0
       dmrSymLvl1Adj: 0

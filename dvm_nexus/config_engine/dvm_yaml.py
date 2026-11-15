@@ -212,12 +212,25 @@ class DVMConfigManager:
                     log_blk[k] = "/opt/dvm"
                     modified = True
 
-        # Heal modem config area warning & 'null' trap
-        modem_blk = data.get("system", {}).get("modem", {}) if isinstance(data.get("system"), dict) else {}
+        # Heal modem config area warning, duplex AFC bleedover, & 'null' trap
+        sys_root = data.get("system", {}) if isinstance(data.get("system"), dict) else {}
+        modem_blk = sys_root.get("modem", {}) if isinstance(sys_root, dict) else {}
         if isinstance(modem_blk, dict):
             if modem_blk.get("ignoreModemConfigArea") is not True:
                 modem_blk["ignoreModemConfigArea"] = True
                 modified = True
+            # On Duplex Hats running a P25/DMR Control Channel, ADF7021 hardware AFC (afcEnable: true)
+            # pulls the RX discriminator toward the adjacent 24/7 TX carrier on narrow splits (e.g. 25 kHz),
+            # causing self-hearing (TSBK CRC errors & unhandled OSP LCOs $16/$3A/$3B/$3D).
+            if bool(sys_root.get("duplex", False)):
+                hs_blk = modem_blk.get("hotspot")
+                if isinstance(hs_blk, dict):
+                    if hs_blk.get("afcEnable") is True:
+                        hs_blk["afcEnable"] = False
+                        modified = True
+                    if hs_blk.get("adfGainMode") not in (1, 2):
+                        hs_blk["adfGainMode"] = 2
+                        modified = True
             if include_policy:
                 proto_blk = modem_blk.get("protocol", {})
                 if isinstance(proto_blk, dict):

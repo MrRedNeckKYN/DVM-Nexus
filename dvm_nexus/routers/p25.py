@@ -272,6 +272,7 @@ async def p25_page(request: Request):
     conf = dvm_config_manager.load_config_dict()
     p25_conf = conf.get("protocols", {}).get("p25", {})
     sys_conf = conf.get("system", {}).get("config", {})
+    sys_info = conf.get("system", {}).get("info", {})
     modem_conf = conf.get("system", {}).get("modem", {})
     hotspot_conf = modem_conf.get("hotspot", {})
     net_conf = conf.get("network", {})
@@ -306,6 +307,7 @@ async def p25_page(request: Request):
             "is_standby": is_standby,
             "p25": p25_conf,
             "sys": sys_conf,
+            "info": sys_info,
             "modem": modem_conf,
             "hotspot": hotspot_conf,
             "net": net_conf,
@@ -398,8 +400,9 @@ async def p25_save(
     p25_disc_bw: int = Form(0),
     p25_post_bw: int = Form(0),
     adf_gain_mode: int = Form(2),
-    afc_enable: bool = Form(True),
+    afc_enable: bool = Form(False),
     tx_level: int = Form(50),
+    rf_power: int = Form(10),
     config_rev: str = Form(""),
 ):
     """Save comprehensive P25 parameters safely, auto-calculating iden_table.dat and restarting dvmhost."""
@@ -570,6 +573,9 @@ async def p25_save(
         c["system"]["config"]["authoritative"] = authoritative
         c["system"]["config"]["defaultNetIdleTalkgroup"] = default_net_idle_tg
 
+        c.setdefault("system", {}).setdefault("info", {})
+        c["system"]["info"]["power"] = max(1, min(100, int(rf_power)))
+
         c.setdefault("system", {}).setdefault("modem", {})
         c["system"]["modem"]["p25CorrCount"] = p25_corr_count
         c["system"]["modem"]["txLevel"] = tx_level
@@ -579,7 +585,9 @@ async def p25_save(
         c["system"]["modem"]["hotspot"]["p25DiscBWAdj"] = p25_disc_bw
         c["system"]["modem"]["hotspot"]["p25PostBWAdj"] = p25_post_bw
         c["system"]["modem"]["hotspot"]["adfGainMode"] = adf_gain_mode
-        c["system"]["modem"]["hotspot"]["afcEnable"] = afc_enable
+        # Force AFC off on tight duplex splits (< 0.5 MHz) so RX ADF7021 does not lock onto TX CC carrier
+        effective_afc = False if (duplex and abs(tx_freq_mhz - rx_freq_mhz) < 0.5) else afc_enable
+        c["system"]["modem"]["hotspot"]["afcEnable"] = effective_afc
 
         # Auto-calculate iden_table.dat (Channel ID 1, Channel No 1)
         dvm_config_manager.set_tuned_frequencies(tx_freq_mhz, rx_freq_mhz, c, spacing_khz=eff_spacing_khz)

@@ -260,7 +260,13 @@
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Modulation Output Level (%)</label>
           <input type="number" name="tx_level" class="form-control font-mono" min="0" max="100" value="{{ modem.txLevel or 50 }}">
-          <small class="form-hint">ADF7021 TX modulation level (default 50%).</small>
+          <small class="form-hint">ADF7021 TX modulation deviation (default 50%).</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">RF Transmit Power (%) (<code>system.info.power</code>)</label>
+          <input type="number" name="rf_power" class="form-control font-mono" min="1" max="100" value="{{ info.power if info is defined and info.power is defined else 10 }}">
+          <small class="form-hint">ADF7021 PA level (1&ndash;100%). Set to <code>1&ndash;3%</code> on tight 25 kHz splits to stop TX&rarr;RX self-hearing.</small>
         </div>
       </div>
     </div>
@@ -1061,9 +1067,10 @@
           <div class="form-group">
             <label class="form-label">Automatic Frequency Correction (AFC)</label>
             <select name="afc_enable" class="form-control">
-              <option value="true" {% if hotspot.afcEnable is not defined or hotspot.afcEnable %}selected{% endif %}>Enabled</option>
-              <option value="false" {% if hotspot.afcEnable is defined and not hotspot.afcEnable %}selected{% endif %}>Disabled</option>
+              <option value="false" {% if hotspot.afcEnable is not defined or not hotspot.afcEnable %}selected{% endif %}>Disabled (Recommended for Duplex CC / Tight Splits)</option>
+              <option value="true" {% if hotspot.afcEnable is defined and hotspot.afcEnable %}selected{% endif %}>Enabled</option>
             </select>
+            <small class="form-hint">Keep Disabled in Duplex mode so RX does not pull toward your 24/7 TX Control Channel.</small>
           </div>
         </div>
 
