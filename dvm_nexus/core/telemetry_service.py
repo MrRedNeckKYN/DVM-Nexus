@@ -80,30 +80,38 @@ _P25_END = [
     re.compile(r"P25.*call end.*duration\s*=\s*(?P<dur>[\d.]+)s", re.I),
 ]
 
-# Subscriber Affiliation, Registration, Deregistration & Channel Grant patterns
+# Subscriber Affiliation, Registration, Deregistration & Channel Grant patterns (P25 TSBK & DMR CSBK)
 _AFFIL_GRANT = [
     re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+granting\s+channel,\s*chNo\s*=\s*\d+(?:,\s*slot\s*=\s*(?P<slot>[12]))?,\s*dstId\s*=\s*(?P<dst>\d+),\s*srcId\s*=\s*(?P<src>\d+)", re.I),
     re.compile(r"(?P<proto>P25|DMR)\s+RF\s+(?:group|individual)\s+grant\s+request\s+from\s+(?P<src>\d+)\s+to\s+(?:TG\s*)?(?P<dst>\d+)", re.I),
     re.compile(r"P25,\s+TSDU.*?(?:I?OSP|ISP)_GRP_VCH.*?srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+    re.compile(r"DMR.*?(?:CSBK\s+(?:Channel\s+Grant|GRP_VCH)|granting\s+channel).*?srcId\s*=\s*(?P<src>\d+).*?dstId\s*=\s*(?P<dst>\d+)(?:.*?slot\s*=\s*(?P<slot>[12]))?", re.I),
 ]
 _AFFIL_GROUP = [
-    re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+group\s+affiliation,\s*srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+    re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+group\s+affiliation,\s*srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)(?:,\s*slot\s*=\s*(?P<slot>[12]))?", re.I),
     re.compile(r"(?P<proto>P25|DMR)\s+RF\s+group\s+affiliation\s+request\s+from\s+(?P<src>\d+)\s+to\s+(?:TG\s*)?(?P<dst>\d+)", re.I),
     re.compile(r"P25,\s+TSDU.*?(?:I?OSP|ISP)_GRP_AFF.*?srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+    re.compile(r"DMR.*?(?:CSBK\s+Group\s+Affiliation|CSBK_GRP_AFF).*?srcId\s*=\s*(?P<src>\d+).*?(?:dstId|grpId|tgid)\s*=\s*(?P<dst>\d+)(?:.*?slot\s*=\s*(?P<slot>[12]))?", re.I),
+    re.compile(r"DMR.*?group\s+affiliation.*?srcId\s*=\s*(?P<src>\d+).*?(?:dstId|grpId|tgid)\s*=\s*(?P<dst>\d+)(?:.*?slot\s*=\s*(?P<slot>[12]))?", re.I),
 ]
 _AFFIL_REG = [
     re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+unit\s+registration,\s*srcId\s*=\s*(?P<src>\d+)", re.I),
     re.compile(r"(?P<proto>P25|DMR).*?unit\s+registration\s+request\s+from\s+(?P<src>\d+)(?!\s+denied)", re.I),
     re.compile(r"P25,\s+TSDU.*?(?:I?OSP|ISP)_U_REG.*?srcId\s*=\s*(?P<src>\d+)", re.I),
+    re.compile(r"DMR.*?(?:CSBK\s+Unit\s+Registration|CSBK_U_REG).*?srcId\s*=\s*(?P<src>\d+)", re.I),
+    re.compile(r"DMR.*?unit\s+registration.*?srcId\s*=\s*(?P<src>\d+)", re.I),
 ]
 _AFFIL_DEREG = [
     re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+unit\s+deregistration,\s*srcId\s*=\s*(?P<src>\d+)", re.I),
     re.compile(r"(?P<proto>P25|DMR).*?unit\s+deregistration\s+request\s+from\s+(?P<src>\d+)", re.I),
     re.compile(r"P25,\s+TSDU.*?ISP_U_DEREG_REQ.*?srcId\s*=\s*(?P<src>\d+)", re.I),
+    re.compile(r"DMR.*?(?:CSBK\s+Unit\s+Deregistration|CSBK_U_DEREG).*?srcId\s*=\s*(?P<src>\d+)", re.I),
+    re.compile(r"DMR.*?unit\s+deregistration.*?srcId\s*=\s*(?P<src>\d+)", re.I),
 ]
 _AFFIL_RELEASE = [
     re.compile(r"P25,\s+TDULC.*?CALL_TERM.*?srcId\s*=\s*(?P<src>\d+),\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
     re.compile(r"(?P<proto>P25|DMR)\s+Affiliation,\s+releasing\s+channel\s+grant,\s*chNo\s*=\s*\d+(?:,\s*slot\s*=\s*(?P<slot>[12]))?,\s*dstId\s*=\s*(?P<dst>\d+)", re.I),
+    re.compile(r"DMR.*?(?:CSBK\s+Channel\s+Release|releasing\s+channel\s+grant).*?srcId\s*=\s*(?P<src>\d+)", re.I),
 ]
 
 _RSSI = re.compile(r"RSSI\s*[:=]\s*(?P<rssi>-?\d+)", re.I)
@@ -504,7 +512,7 @@ class TelemetryService:
         m = _first_match(_AFFIL_GRANT, line)
         if m:
             groups = m.groupdict()
-            proto = (groups.get("proto") or "P25").upper()
+            proto = (groups.get("proto") or ("DMR" if "dmr" in line.lower() else "P25")).upper()
             src_id = int(groups["src"])
             dst_id = int(groups["dst"])
             slot = int(groups["slot"]) if groups.get("slot") else None
@@ -535,7 +543,7 @@ class TelemetryService:
         m = _first_match(_AFFIL_GROUP, line)
         if m:
             groups = m.groupdict()
-            proto = (groups.get("proto") or "P25").upper()
+            proto = (groups.get("proto") or ("DMR" if "dmr" in line.lower() else "P25")).upper()
             src_id = int(groups["src"])
             dst_id = int(groups["dst"])
             slot = int(groups["slot"]) if groups.get("slot") else None
@@ -551,7 +559,7 @@ class TelemetryService:
         m = _first_match(_AFFIL_REG, line)
         if m:
             groups = m.groupdict()
-            proto = (groups.get("proto") or "P25").upper()
+            proto = (groups.get("proto") or ("DMR" if "dmr" in line.lower() else "P25")).upper()
             src_id = int(groups["src"])
             upsert_connected_radio(
                 radio_id=src_id,

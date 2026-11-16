@@ -702,6 +702,82 @@ def test_connected_radios_roster_and_3_zone_dashboard(client):
     assert not any(r["radio_id"] == 11 for r in telemetry_service.get_connected_radios())
 
 
+def test_dmr_connected_radios_roster_and_protocol_adaptive_ui(client):
+    """
+    Verify full DMR parity in Connected Radios & Active Subscribers:
+    1. DMR CSBK unit registration (CSBK_U_REG) puts DMR radio in Registered state.
+    2. DMR CSBK group affiliation (CSBK_GRP_AFF) associates RID with Talkgroup and Timeslot (TS1/TS2).
+    3. DMR RF voice calls update state to Active TX with Timeslot badge, and transition to Affiliated on call end.
+    4. Roster UI adapts dynamically to active protocol (DMR vs P25 subtitle, DMR CSBK empty state vs P25 TSBK).
+    """
+    from dvm_nexus.core.telemetry_service import telemetry_service
+    from dvm_nexus.config_engine.dvm_yaml import dvm_config_manager
+
+    # Clear roster first
+    resp_clear = client.post("/api/radios/clear")
+    assert resp_clear.status_code == 200
+
+    # Ensure DMR is the active protocol
+    dvm_config_manager.set_active_protocol("dmr")
+    telemetry_service._proto_cache = ("DMR", 0.0)
+
+    # 1. Empty state in DMR mode must explicitly reflect DMR CSBK and Timeslot 1/2
+    resp_roster = client.get("/components/connected-radios")
+    assert resp_roster.status_code == 200
+    assert "Live DMR Tier II/III CSBK Affiliation" in resp_roster.text
+    assert "No DMR Subscribers Currently Affiliated" in resp_roster.text
+    assert "Waiting for DMR subscriber unit registration / group affiliation (CSBK)" in resp_roster.text
+
+    # 2. Simulate DMR CSBK Unit Registration (RID 3120101)
+    telemetry_service.process_log_line(
+        "Nov 15 17:00:01 raspberrypi DVM[42591]: I: (RF) DMR CSBK Unit Registration, srcId = 3120101"
+    )
+    radios = telemetry_service.get_connected_radios()
+    assert any(r["radio_id"] == 3120101 and r["status"] == "Registered" and r["protocol"] == "DMR" for r in radios)
+
+    # 3. Simulate DMR CSBK Group Affiliation (RID 3120101 -> TG 3100 on Slot 1)
+    telemetry_service.process_log_line(
+        "Nov 15 17:00:03 raspberrypi DVM[42591]: I: (RF) DMR CSBK Group Affiliation, srcId = 3120101, dstId = 3100, slot = 1"
+    )
+    radios = telemetry_service.get_connected_radios()
+    r = next(r for r in radios if r["radio_id"] == 3120101)
+    assert r["status"] == "Affiliated"
+    assert r["talkgroup_id"] == 3100
+    assert r["slot"] == 1
+
+    # 4. DMR RF voice transmission start on TS1
+    telemetry_service.process_log_line(
+        "Nov 15 17:00:05 raspberrypi DVM[42591]: I: (RF) DMR Voice Call, slot = 1, srcId = 3120101, dstId = 3100"
+    )
+    radios = telemetry_service.get_connected_radios()
+    r_tx = next(r for r in radios if r["radio_id"] == 3120101)
+    assert r_tx["status"] == "Active TX"
+    assert r_tx["is_transmitting"] is True
+    assert r_tx["slot"] == 1
+
+    # 5. Verify HTML component shows DMR badge with TS1 tag and ACTIVE TX
+    resp_active = client.get("/components/connected-radios")
+    assert resp_active.status_code == 200
+    assert "ACTIVE TX" in resp_active.text
+    assert "DMR" in resp_active.text
+    assert "TS1" in resp_active.text
+    assert "TG 3100" in resp_active.text
+
+    # 6. DMR End of Voice Transmission transitions back to Affiliated
+    telemetry_service.process_log_line(
+        "Nov 15 17:00:15 raspberrypi DVM[42591]: A: DMR Slot 1, RF end of voice transmission, 10.0 seconds, BER: 0.1%"
+    )
+    radios_after = telemetry_service.get_connected_radios()
+    r_ended = next(r for r in radios_after if r["radio_id"] == 3120101)
+    assert r_ended["status"] == "Affiliated"
+    assert r_ended["is_transmitting"] is False
+    assert r_ended["ber_percent"] == 0.1
+
+    # 7. Clean up by clearing roster
+    client.post("/api/radios/clear")
+    assert not any(r["radio_id"] == 3120101 for r in telemetry_service.get_connected_radios())
+
+
 def test_pending_restart_banner_clears_after_restart_and_never_triggers_on_read(client):
     """Verify config_pending_restart never triggers on read polls and clears immediately on restart."""
     from dvm_nexus.core.service_controller import service_controller

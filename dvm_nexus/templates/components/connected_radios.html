@@ -1,4 +1,5 @@
 <div id="connected-radios-panel" class="roster-subpanel">
+  {% set proto = active_protocol or (hud.protocol if hud and hud.protocol else 'DMR') %}
   <div class="roster-header">
     <div class="roster-title-group">
       <div class="roster-title">
@@ -6,7 +7,15 @@
         <span>Connected Radios &amp; Active Subscribers</span>
         <span class="roster-count-pill">{{ connected_radios|length if connected_radios else 0 }}</span>
       </div>
-      <div class="roster-subtitle">Live P25 TSBK / DMR Affiliation &amp; Voice Activity Roster</div>
+      <div class="roster-subtitle">
+        {% if proto == 'DMR' %}
+          Live DMR Tier II/III CSBK Affiliation &amp; Timeslot Voice Activity Roster
+        {% elif proto == 'P25' %}
+          Live P25 Phase 1 TSBK Unit Registration &amp; Affiliation Roster
+        {% else %}
+          Live {{ proto }} Subscriber Affiliation &amp; Voice Activity Roster
+        {% endif %}
+      </div>
     </div>
 
     <div class="roster-actions">
@@ -15,7 +24,7 @@
               hx-target="#connected-radios-container"
               hx-swap="innerHTML"
               hx-disabled-elt="this"
-              title="Poll DVMHost affiliation table and refresh roster">
+              title="Poll DVMHost {{ proto }} affiliation table and refresh roster">
         🔄 Refresh Roster
       </button>
       <button type="button" class="btn btn-secondary btn-xs"
@@ -24,7 +33,7 @@
               hx-swap="outerHTML"
               hx-on::after-request="htmx.ajax('GET', '/components/connected-radios', {target:'#connected-radios-container', swap:'innerHTML'}); htmx.ajax('GET', '/components/rf-hud', {target:'#rf-hud-container', swap:'innerHTML'});"
               hx-disabled-elt="this"
-              title="Simulate a test subscriber transmission">
+              title="Simulate a test {{ proto }} subscriber transmission">
         ⚡ Test Radio TX
       </button>
       <button type="button" class="btn btn-secondary btn-xs"
@@ -150,11 +159,25 @@
   {% else %}
   <div class="roster-empty-state">
     <div class="roster-empty-icon">📡</div>
-    <div class="roster-empty-title">No Subscriber Radios Currently Affiliated</div>
-    <div class="roster-empty-desc">
-      Waiting for P25 TSBK unit registration / group affiliation (`OSP_GRP_AFF_RSP`) or DMR voice activity.
-      Key up a radio or click <strong>⚡ Test Radio TX</strong> to verify live roster tracking.
-    </div>
+    {% if proto == 'DMR' %}
+      <div class="roster-empty-title">No DMR Subscribers Currently Affiliated</div>
+      <div class="roster-empty-desc">
+        Waiting for DMR subscriber unit registration / group affiliation (CSBK) or voice activity on Timeslot 1/2.
+        Key up a DMR radio (PTT) or click <strong>⚡ Test Radio TX</strong> to verify live roster tracking.
+      </div>
+    {% elif proto == 'P25' %}
+      <div class="roster-empty-title">No P25 Subscribers Currently Affiliated</div>
+      <div class="roster-empty-desc">
+        Waiting for P25 subscriber unit registration / group affiliation (TSBK <code>OSP_GRP_AFF_RSP</code>) or voice activity.
+        Key up a P25 radio (PTT) or click <strong>⚡ Test Radio TX</strong> to verify live roster tracking.
+      </div>
+    {% else %}
+      <div class="roster-empty-title">No Subscriber Radios Currently Affiliated</div>
+      <div class="roster-empty-desc">
+        Waiting for subscriber unit registration, group affiliation, or voice activity.
+        Key up a radio (PTT) or click <strong>⚡ Test Radio TX</strong> to verify live roster tracking.
+      </div>
+    {% endif %}
   </div>
   {% endif %}
 

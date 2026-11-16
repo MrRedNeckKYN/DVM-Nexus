@@ -84,13 +84,14 @@ protocols:
       interval: 300
       duration: 1
       notifyActiveTG: false
-      disableTSDUMBF: false
+      disableTSDUMBF: true
       enableTimeDateAnn: false
       disableGrantSourceIdCheck: false
       disableAdjSiteBroadcast: false
       explicitTDUGrantRelease: true
       redundantImmediate: true
-      redundantGrantTransmit: false
+      redundantGrantTransmit: true
+      voiceOnControl: true
     controlOnly: false
     disableNetworkHDU: false
     disableNetworkGrant: false
@@ -163,7 +164,7 @@ system:
     latitude: -83.689428
     longitude: -39.194973
     height: 1
-    power: 10
+    power: 100
     location: Repeater Site, Antarctica
   config:
     authoritative: true
@@ -279,6 +280,7 @@ system:
     file: talkgroup_rules.yml
     time: 2
     acl: false
+  protocol: dmr
 cwId:
   enable: true
   time: 15

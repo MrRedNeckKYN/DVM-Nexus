@@ -52,6 +52,7 @@ def dashboard_page(request: Request):
         if live_query.get("success"):
             live_rest = live_query.get("data")
 
+    active_proto = (dvm_config_manager.get_active_protocol() or "dmr").upper()
     return render_template(
         request,
         "dashboard.html",
@@ -69,6 +70,7 @@ def dashboard_page(request: Request):
             "last_heard": last_heard,
             "connected_radios": connected_radios,
             "net": net_status,
+            "active_protocol": active_proto,
         }
     )
 
@@ -78,10 +80,11 @@ def connected_radios_component(request: Request):
     """HTMX polling fragment for the live Connected Radios / Active Subscribers roster."""
     radios = telemetry_service.get_connected_radios(limit=50)
     hud_status = telemetry_service.get_hud_status()
+    active_proto = (dvm_config_manager.get_active_protocol() or "dmr").upper()
     return render_template(
         request,
         "components/connected_radios.html",
-        {"connected_radios": radios, "hud": hud_status}
+        {"connected_radios": radios, "hud": hud_status, "active_protocol": active_proto}
     )
 
 
@@ -91,10 +94,11 @@ def refresh_connected_radios(request: Request):
     telemetry_service.sync_affiliations_now()
     radios = telemetry_service.get_connected_radios(limit=50)
     hud_status = telemetry_service.get_hud_status()
+    active_proto = (dvm_config_manager.get_active_protocol() or "dmr").upper()
     return render_template(
         request,
         "components/connected_radios.html",
-        {"connected_radios": radios, "hud": hud_status}
+        {"connected_radios": radios, "hud": hud_status, "active_protocol": active_proto}
     )
 
 
@@ -104,10 +108,11 @@ def clear_connected_radios_endpoint(request: Request):
     telemetry_service.clear_roster(simulated_only=False)
     radios = telemetry_service.get_connected_radios(limit=50)
     hud_status = telemetry_service.get_hud_status()
+    active_proto = (dvm_config_manager.get_active_protocol() or "dmr").upper()
     return render_template(
         request,
         "components/connected_radios.html",
-        {"connected_radios": radios, "hud": hud_status}
+        {"connected_radios": radios, "hud": hud_status, "active_protocol": active_proto}
     )
 
 
@@ -123,10 +128,11 @@ def update_radio_alias_endpoint(
     log_audit("ROSTER", "SET_ALIAS", f"Updated alias for RID {radio_id} -> '{callsign.strip()}'")
     radios = telemetry_service.get_connected_radios(limit=50)
     hud_status = telemetry_service.get_hud_status()
+    active_proto = (dvm_config_manager.get_active_protocol() or "dmr").upper()
     return render_template(
         request,
         "components/connected_radios.html",
-        {"connected_radios": radios, "hud": hud_status}
+        {"connected_radios": radios, "hud": hud_status, "active_protocol": active_proto}
     )
 
 
@@ -212,11 +218,11 @@ def last_heard_rows_component(request: Request):
 @router.post("/api/telemetry/simulate-call", response_class=HTMLResponse)
 def simulate_call_endpoint(request: Request):
     """Inject a clearly-flagged simulated RF voice call to test live HUD and Last Heard feeds."""
-    proto = dvm_config_manager.get_active_protocol() or "dmr"
+    proto = (dvm_config_manager.get_active_protocol() or "dmr").lower()
     src_id = random.choice([3120101, 3108842, 1234567, 1001, 44209])
     dest_id = 3100 if proto == "dmr" else 101
     slot = random.choice([1, 2]) if proto == "dmr" else None
-    direction = random.choice(["rf_rx", "net_rx"])
+    direction = "rf_rx"  # Simulate RF subscriber keying up over air
     duration = round(random.uniform(2.1, 7.8), 1)
     ber = round(random.uniform(0.1, 1.4), 1)
     rssi = random.randint(-92, -68)
